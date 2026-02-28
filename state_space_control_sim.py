@@ -6,14 +6,15 @@ from matplotlib.animation import FFMpegWriter
 import control as ct
 import os
 from datetime import datetime
+from contextlib import nullcontext
 
 # -----------------------------
 # PHYSICAL PARAMETERS
 # -----------------------------
 
-g = 9.81           # gravity
-L = 0.2            # pencil length
-l = L / 2          # distance from pivot to center of mass
+g = 9.81                    # gravity
+L = 0.2                     # pencil length
+com_length = L / 2          # distance from pivot to center of mass
 
 tau = 0.04         # actuator time constant
 zeta = 0.7         # actuator damping ratio
@@ -25,7 +26,7 @@ num_states = 8     # number of states for the pencil
 # -----------------------------
     
 @dataclass
-class PencilState:
+class SystemState:
     x: float
     x_dot: float
     alpha_x: float
@@ -47,6 +48,21 @@ class PencilState:
             self.alpha_y_dot
         ])
 
+@dataclass
+class TableCommand:
+    x_des: float
+    y_des: float
+
+@dataclass
+class TableAccel:
+    x_ddot: float
+    y_ddot: float
+    
+    def as_vector(self) -> np.ndarray:
+        return np.array([
+            self.x_ddot,
+            self.y_ddot
+        ])
 
 # -----------------------------
 # Filters
@@ -56,7 +72,7 @@ class PencilState:
     
 
 # -----------------------------
-# Pure P Controller (position + slope only)
+# State Space Controller
 # -----------------------------
     
 class StateFeedbackController:
@@ -68,10 +84,14 @@ class StateFeedbackController:
         """
         self.K = K
 
-    def compute(self, state: PencilState) -> tuple[float, float]:
-        x_vec = state.as_vector()
+    def compute(self, state_x: SystemState) -> TableCommand:
+        x_vec = state_x.as_vector()
         u = -self.K @ x_vec
-        return u[0], u[1]
+        
+        return TableCommand(
+            x_des=u[0],
+            y_des=u[1]
+        )
     
 
 
@@ -79,57 +99,64 @@ class StateFeedbackController:
 # Simulation Plant
 # -----------------------------
 
-class PencilPlant:
+class BalancerPlant:
 
-    def __init__(self):
+    def __init__(self, com_length, tau, zeta):
         self.g = 9.81
-        self.l = l
-
-        # pencil states
-        self.alpha_x = 0.3  # small initial tilt
-        self.alpha_y = -0.2
-        self.alpha_x_dot = 0.0
-        self.alpha_y_dot = 0.0
-
-        # table states
-        self.x = 0.04
-        self.y = 0.08
-        self.x_dot = 0.0
-        self.y_dot = 0.0
-
-        # table dynamics params
+        self.l = com_length
         self.tau = tau
         self.zeta = zeta
 
-    def step(self, x_des, y_des, dt):
+    def step(self, state_x: SystemState, command_u: TableCommand, dt):
+
+        # ---- unpack state ----
+        x = state_x.x
+        x_dot = state_x.x_dot
+        alpha_x = state_x.alpha_x
+        alpha_x_dot = state_x.alpha_x_dot
+
+        y = state_x.y
+        y_dot = state_x.y_dot
+        alpha_y = state_x.alpha_y
+        alpha_y_dot = state_x.alpha_y_dot
+        
+        # ---- unpack command ----
+        x_des = command_u.x_des
+        y_des = command_u.y_des
 
         # ---- table dynamics ----
-        x_ddot = (1/self.tau**2)*(x_des - self.x) - (2*self.zeta/self.tau)*self.x_dot
-        y_ddot = (1/self.tau**2)*(y_des - self.y) - (2*self.zeta/self.tau)*self.y_dot
-
-        self.x_dot += x_ddot * dt
-        self.y_dot += y_ddot * dt
-        self.x += self.x_dot * dt
-        self.y += self.y_dot * dt
+        x_ddot = (1/self.tau**2)*(x_des - x) - (2*self.zeta/self.tau)*x_dot
+        y_ddot = (1/self.tau**2)*(y_des - y) - (2*self.zeta/self.tau)*y_dot
 
         # ---- pencil dynamics ----
-        alpha_x_ddot = (self.g/self.l)*self.alpha_x - (1/self.l)*x_ddot
-        alpha_y_ddot = (self.g/self.l)*self.alpha_y - (1/self.l)*y_ddot
+        alpha_x_ddot = (self.g/self.l)*alpha_x - (1/self.l)*x_ddot
+        alpha_y_ddot = (self.g/self.l)*alpha_y - (1/self.l)*y_ddot
 
-        self.alpha_x_dot += alpha_x_ddot * dt
-        self.alpha_y_dot += alpha_y_ddot * dt
-        self.alpha_x += self.alpha_x_dot * dt
-        self.alpha_y += self.alpha_y_dot * dt
+        # ---- integrate ----
+        x_dot += x_ddot * dt
+        x += x_dot * dt
 
-        return PencilState(
-            x=self.x,
-            x_dot=self.x_dot,
-            alpha_x=self.alpha_x,
-            alpha_x_dot=self.alpha_x_dot,
-            y=self.y,
-            y_dot=self.y_dot,
-            alpha_y=self.alpha_y,
-            alpha_y_dot=self.alpha_y_dot
+        y_dot += y_ddot * dt
+        y += y_dot * dt
+
+        alpha_x_dot += alpha_x_ddot * dt
+        alpha_x += alpha_x_dot * dt
+
+        alpha_y_dot += alpha_y_ddot * dt
+        alpha_y += alpha_y_dot * dt
+
+        return SystemState(
+            x=x,
+            x_dot=x_dot,
+            alpha_x=alpha_x,
+            alpha_x_dot=alpha_x_dot,
+            y=y,
+            y_dot=y_dot,
+            alpha_y=alpha_y,
+            alpha_y_dot=alpha_y_dot
+        ), TableAccel(
+            x_ddot=x_ddot,
+            y_ddot=y_ddot
         )
     
         
@@ -144,22 +171,19 @@ class Simulator:
         self.controller = controller
         self.dt = dt
 
-        self.x_des = 0.0
-        self.y_des = 0.0
+    def step(self, state_x: SystemState, command_u:TableCommand):
 
-    def step(self):
-
-        # advance plant using last control
-        state = self.plant.step(
-            self.x_des,
-            self.y_des,
+        # advance plant using last command
+        state_x, table_acc = self.plant.step(
+            state_x,
+            command_u,
             self.dt
         )
 
-        # compute new control from updated state
-        self.x_des, self.y_des = self.controller.compute(state)
+        # compute new command from updated state
+        command_u = self.controller.compute(state_x)
 
-        return state
+        return state_x, command_u, table_acc
 
 
 # -----------------------------
@@ -191,6 +215,17 @@ class Visualizer3D:
 
         self.table_plot, = self.ax.plot([], [], [], 'k-', linewidth=2)
         self.pencil_plot, = self.ax.plot([], [], [], 'r-', linewidth=3)
+        
+        # --- Pencil tip trail ---
+        self.trail_length = 120   # number of frames to keep
+        self.tip_history = []
+
+        self.trail_plot, = self.ax.plot(
+            [], [], [],
+            linestyle=':',
+            linewidth=1,
+            color='gray'
+        )
 
         self.info_text = self.ax.text2D(
             0.02, 0.95,
@@ -213,6 +248,7 @@ class Visualizer3D:
 
         size = 0.05
 
+        # --- Table ---
         corners_x = [x - size, x + size, x + size, x - size, x - size]
         corners_y = [y - size, y - size, y + size, y + size, y - size]
         corners_z = [0, 0, 0, 0, 0]
@@ -220,9 +256,11 @@ class Visualizer3D:
         self.table_plot.set_data(corners_x, corners_y)
         self.table_plot.set_3d_properties(corners_z)
 
+        # --- Pencil ---
         base = np.array([x, y, 0.0])
         direction = np.array([alpha_x, alpha_y, 1.0])
         direction /= np.linalg.norm(direction)
+
         tip = base + direction * self.L
 
         self.pencil_plot.set_data(
@@ -233,6 +271,23 @@ class Visualizer3D:
             [base[2], tip[2]]
         )
 
+        # --- Update Trail ---
+        self.tip_history.append(tip)
+
+        if len(self.tip_history) > self.trail_length:
+            self.tip_history.pop(0)
+
+        trail_array = np.array(self.tip_history)
+
+        self.trail_plot.set_data(
+            trail_array[:, 0],
+            trail_array[:, 1]
+        )
+        self.trail_plot.set_3d_properties(
+            trail_array[:, 2]
+        )
+
+        # --- Text ---
         self.info_text.set_text(
             f"Sim Time: {sim_time:.3f} s\n"
             f"x: {x:.3f}\n"
@@ -247,33 +302,42 @@ class Visualizer3D:
     # -------------------------------------------------
     # Playback
     # -------------------------------------------------
-    def render_video(self, video_speed=1.0, filename=None):
+    def render_video(self, video_speed=1.0, filename=None, save_video=True):
         """
         video_speed:
             1.0 → real time
             2.0 → 2x faster
             0.5 → half speed
+
+        save_video:
+            True  → saves MP4 file
+            False → just plays animation live
         """
 
-        os.makedirs("simulation_video", exist_ok=True)
+        if save_video:
+            os.makedirs("simulation_video", exist_ok=True)
 
-        if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"simulation_video/pencil_sim_{timestamp}.mp4"
+            if filename is None:
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"simulation_video/pencil_sim_{timestamp}.mp4"
 
-        writer = FFMpegWriter(fps=self.fps)
+            writer = FFMpegWriter(fps=self.fps)
 
         total_sim_time = self.history.shape[0] * self.dt
 
-        print("Rendering video...")
+        print("Rendering...")
 
-        with writer.saving(self.fig, filename, dpi=100):
+        frame_number = 0
 
-            frame_number = 0
+        if save_video:
+            context = writer.saving(self.fig, filename, dpi=100)
+        else:
+            context = nullcontext()
+    
+        with context:
 
             while True:
 
-                # simulated time for this frame
                 sim_time = frame_number * self.frame_period * video_speed
 
                 if sim_time >= total_sim_time:
@@ -286,17 +350,21 @@ class Visualizer3D:
 
                 state = self.history[sim_index]
 
-                # render frame
                 self.render_frame(state, sim_time)
 
-                writer.grab_frame()
+                if save_video:
+                    writer.grab_frame()
 
                 frame_number += 1
 
-        print(f"Video saved to: {filename}")
+        if save_video:
+            print(f"Video saved to: {filename}")
+        else:
+            print("Playback finished.")
  
 
-def BuildLinearModel():
+def BuildLinearModel(com_length, tau, zeta):
+    l = com_length
     # -----------------------------
     # STATE VECTOR DEFINITION (ONE AXIS)
     # -----------------------------
@@ -444,10 +512,32 @@ def BuildLinearModel():
 # Main Simulation Entry Point
 # -----------------------------
 if __name__ == "__main__":
-
-    plant = PencilPlant()
     
-    A, B = BuildLinearModel()
+    # initial state
+    state_x = SystemState(
+        x=0.0,
+        x_dot=0.0,
+        alpha_x=0.2,
+        alpha_x_dot=0.0,
+        y=0.0,
+        y_dot=0.0,
+        alpha_y=0.2,
+        alpha_y_dot=0.0
+    )
+    
+    command_u = TableCommand(
+        x_des=0.0,
+        y_des=0.0
+    )
+    
+    table_acc = TableAccel(
+        x_ddot=0.0,
+        y_ddot=0.0
+    )
+
+    plant = BalancerPlant(com_length, tau, zeta)
+    
+    A, B = BuildLinearModel(com_length, tau, zeta)
     Crank = np.linalg.matrix_rank(ct.ctrb(A, B))
     print(f"Is the system controllable (full rank)? {Crank==num_states}")    
     
@@ -477,26 +567,33 @@ if __name__ == "__main__":
         dt=0.001
     )
 
-    total_time = 3.0
+    total_time = 1.0
     steps = int(total_time / sim.dt)
 
 
     # RUN SIMULATION
 
-    history = np.zeros((steps, 8))
+    history = np.zeros((steps + 1, 8))
+    history[0, :] = state_x.as_vector() # save first condition
+    acc_history = np.zeros((steps, 2))
 
     print("Running simulation...")
 
     for i in range(steps):
-        state = sim.step()
-        history[i, :] = state.as_vector()
+        state_x, command_u, table_acc = sim.step(state_x, command_u)
+        
+        history[i + 1, :] = state_x.as_vector()
+        acc_history[i, :] = table_acc.as_vector()
 
-        if abs(state.alpha_x) > 0.5 or abs(state.alpha_y) > 0.5:
+        if abs(state_x.alpha_x) > 0.5 or abs(state_x.alpha_y) > 0.5:
             print(f"Pencil fell at step {i}")
-            history = history[:i+1]
+            history = history[:i+2]
+            acc_history = acc_history[:i+1]
             break
 
     print("Simulation complete.")
+    max_acc = np.max(np.abs(acc_history))
+    print(f"Max table acceleration: {max_acc}")
 
     # SAVE TO simulations/ FOLDER
     
@@ -527,6 +624,8 @@ if __name__ == "__main__":
     '''
 
     viz = Visualizer3D(history, sim.dt)
-    viz.render_video(video_speed=1)   # 5x slower than real time
+    viz.render_video(video_speed=1, save_video=False)
+    print("Initial state:", history[0])
+    print("Final state:", history[-1])
     
     
