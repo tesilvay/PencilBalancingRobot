@@ -4,24 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-# -----------------------------
-# 2D line as seen by a camera
-# -----------------------------
-
-@dataclass
-class LineObservation:
-    slope: float      # s
-    offset: float     # b (z_intercept)
-
-
-# -----------------------------
-# Camera geometry
-# -----------------------------
-
-@dataclass
-class CameraPosition:
-    x: float
-    y: float
 
 
 # -----------------------------
@@ -35,45 +17,6 @@ class PencilState:
     alpha_x: float    # tilt in x-direction
     alpha_y: float    # tilt in y-direction
 
-
-# -----------------------------
-# Reconstruction engine
-# -----------------------------
-
-class PencilReconstructor:
-
-    def __init__(self, cam1_pos: CameraPosition, cam2_pos: CameraPosition):
-        self.cam1 = cam1_pos
-        self.cam2 = cam2_pos
-
-    def reconstruct(
-        self,
-        cam1_obs: LineObservation,
-        cam2_obs: LineObservation
-    ) -> PencilState:
-
-        b1 = cam1_obs.offset
-        s1 = cam1_obs.slope
-
-        b2 = cam2_obs.offset
-        s2 = cam2_obs.slope
-
-        xr = self.cam2.x
-        yr = self.cam1.y
-
-        denom = b1 * b2 + 1.0
-
-        if abs(denom) < 1e-8:
-            raise ValueError("Degenerate configuration: b1 * b2 + 1 ≈ 0")
-
-        X = (b1 * yr + b1 * b2 * xr) / denom
-        Y = (b2 * xr - b1 * b2 * yr) / denom
-
-        alpha_x = (s1 + b1 * s2) / denom
-        alpha_y = (s2 - b2 * s1) / denom
-
-        return PencilState(X, Y, alpha_x, alpha_y)
-    
 
 # -----------------------------
 # Filters
@@ -195,57 +138,6 @@ class PencilPlant:
 
         return X, Y, self.alpha_x, self.alpha_y
     
-    
-# -----------------------------
-# Control Loop
-# -----------------------------
-
-class ControlLoop:
-
-    def __init__(
-        self,
-        reconstructor: PencilReconstructor,
-        table_controller: TableController,
-        loop_dt: float = 0.002  # 2 ms loop (500 Hz)
-    ):
-        self.reconstructor = reconstructor
-        self.table_controller = table_controller
-        self.loop_dt = loop_dt
-        self.running = False
-
-    def step(
-        self,
-        cam1_obs: LineObservation,
-        cam2_obs: LineObservation
-    ) -> tuple[float, float]:
-
-        # 1. Reconstruct 3D pencil state
-        pencil_state = self.reconstructor.reconstruct(cam1_obs, cam2_obs)
-
-        # 2. Compute desired table position
-        x_des, y_des = self.table_controller.update(pencil_state)
-
-        # 3. Assume table moves instantly
-        return x_des, y_des
-
-    def run(self, observation_source):
-
-        self.running = True
-
-        while self.running:
-
-            cam1_obs, cam2_obs = observation_source()
-
-            x_des, y_des = self.step(cam1_obs, cam2_obs)
-
-            # Here x_des and y_des go to the hardware
-            # For now we just print
-            print(f"Commanded table position: {x_des:.3f}, {y_des:.3f}")
-
-            time.sleep(self.loop_dt)
-
-    def stop(self):
-        self.running = False
         
         
 # -----------------------------
