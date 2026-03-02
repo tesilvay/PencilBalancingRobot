@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 import numpy as np
 
+# -----------------------------
+# Core State Types
+# -----------------------------
+
 @dataclass
 class SystemState:
     x: float
@@ -39,6 +43,41 @@ class TableAccel:
             self.x_ddot,
             self.y_ddot
         ])
+
+
+# -----------------------------
+# Vision Types
+# -----------------------------
+
+@dataclass
+class CameraParams:
+    xr: float  # camera 2 x-offset
+    yr: float  # camera 1 y-offset
+
+
+@dataclass
+class CameraObservation:
+    slope: float
+    intercept: float
+
+
+@dataclass
+class CameraPair:
+    cam1: CameraObservation
+    cam2: CameraObservation
+
+
+@dataclass
+class PoseMeasurement:
+    X: float
+    Y: float
+    alpha_x: float
+    alpha_y: float
+    
+    
+# -----------------------------
+# Simulation Result
+# -----------------------------
 
 @dataclass
 class PhysicalParams:

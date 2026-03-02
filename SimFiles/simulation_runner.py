@@ -14,7 +14,9 @@ def run_simulation(
     initial_state: SystemState,
     total_time: float,
     dt: float,
-    K: np.ndarray
+    K: np.ndarray,
+    vision=None,
+    estimator=None,
 ) -> SimulationResult:
 
     plant = BalancerPlant(params)
@@ -23,6 +25,8 @@ def run_simulation(
     sim = Simulator(
         plant=plant,
         controller=controller,
+        vision=vision,
+        estimator=estimator,
         dt=dt
     )
 

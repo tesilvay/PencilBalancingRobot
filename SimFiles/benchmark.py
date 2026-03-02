@@ -17,7 +17,16 @@ def evaluate_stability(result, dt, tol=0.02, hold_time=0.2):
 
     return False, None
 
-def region_mapping(params, K, dt=0.001, total_time=2.0, n_trials=200):
+
+def region_mapping(
+    params,
+    K,
+    dt=0.001,
+    total_time=2.0,
+    n_trials=200,
+    vision=None,
+    estimator_class=None
+):
 
     results = []
 
@@ -25,11 +34,16 @@ def region_mapping(params, K, dt=0.001, total_time=2.0, n_trials=200):
         
         print(f"Trial #{_}")
 
-        alpha_x = np.random.uniform(-0.5, 0.5)
-        alpha_x_dot = np.random.uniform(-0.5, 0.5)
+        alpha_x = np.random.uniform(-0.2, 0.2)
+        alpha_x_dot = np.random.uniform(-0.4, 0.4)
 
-        alpha_y = np.random.uniform(-0.5, 0.5)
-        alpha_y_dot = np.random.uniform(-0.5, 0.5)
+        alpha_y = np.random.uniform(-0.2, 0.2)
+        alpha_y_dot = np.random.uniform(-0.4, 0.4)
+        
+        if estimator_class is not None:
+            estimator = estimator_class()
+        else:
+            estimator = None
 
         initial_state = SystemState(
             x=0.0,
@@ -47,7 +61,9 @@ def region_mapping(params, K, dt=0.001, total_time=2.0, n_trials=200):
             initial_state=initial_state,
             total_time=total_time,
             dt=dt,
-            K=K
+            K=K,
+            vision=vision,
+            estimator=estimator
         )
 
         stabilized, settling_time = evaluate_stability(result, dt)

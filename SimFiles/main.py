@@ -4,11 +4,14 @@ import control as ct
 import argparse
 from simulation_runner import run_simulation
 from benchmark import region_mapping
+from vision import VisionSystem
+from estimator import FiniteDifferenceEstimator, KalmanEstimator, LowPassFiniteDifferenceEstimator
 from visualization import Visualizer3D
 from model import BuildLinearModel
 from sim_types import (
     SystemState,
     PhysicalParams,
+    CameraParams,
 )
 
 
@@ -22,6 +25,18 @@ def main(mode="single"):
         zeta=0.7,
         num_states=8
     )
+    
+    camera_params = CameraParams(xr=0.3, yr=0.3)
+    vision = VisionSystem(camera_params, noise_std=0.01, delay_steps=10) # delay steps * dt = time delay
+    estimator = LowPassFiniteDifferenceEstimator()
+    
+    '''
+    # Kalman Filter
+    Q = np.eye(8) * 1e-5
+    R = np.eye(4) * 1e-4
+
+    estimator = KalmanEstimator(A, dt=0.001, Q=Q, R=R)
+    '''
 
     A, B = BuildLinearModel(params)
 
@@ -48,9 +63,11 @@ def main(mode="single"):
         result = run_simulation(
             params=params,
             initial_state=initial_state,
-            total_time=2.0,
+            total_time=5.0,
             dt=0.001,
-            K=K
+            K=K,
+            vision=vision,
+            estimator=estimator
         )
 
         max_acc = np.max(np.abs(result.acc_history))
@@ -66,7 +83,9 @@ def main(mode="single"):
             K=K,
             dt=0.001,
             total_time=2.0,
-            n_trials=200
+            n_trials=200,
+            vision=vision,
+            estimator_class=FiniteDifferenceEstimator
         )
         
         stability_rate = sum(r["stabilized"] for r in results) / len(results)
