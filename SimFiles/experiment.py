@@ -138,6 +138,7 @@ def run_benchmark_all(params, camera_params):
 
                     all_results.append(
                         BenchmarkResult(
+                            params=params,
                             config=config,
                             summary=metrics
                         )

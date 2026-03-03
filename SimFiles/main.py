@@ -2,6 +2,8 @@
 import argparse
 from experiment import run_single, run_benchmark_single, run_benchmark_all, format_summary
 from sim_types import PhysicalParams, CameraParams, ExperimentConfig
+from graphing import run_full_analysis
+from io_utils import save_benchmark_results, load_benchmark_results
 
 
 def main(mode):
@@ -39,21 +41,12 @@ def main(mode):
     elif mode == "benchmark_all_configs":
 
         results = run_benchmark_all(params, camera_params)
+        
+        filepath = save_benchmark_results(results)
 
-        print("\n=== Full Benchmark Sweep ===\n")
-
-        for i, result in enumerate(results, 1):
-
-            config = result.config
-            summary = result.summary
-
-            print(f"--- Configuration {i} ---")
-            print(f"  Controller        : {config.controller_type}")
-            print(f"  Estimator         : {config.estimator_type}")
-            print(f"  Noise std         : {config.noise_std}")
-            print(f"  Delay steps       : {config.delay_steps}")
-            print(format_summary(summary))
-            print()
+    elif mode == "graph_results":
+        
+        run_full_analysis()
 
     else:
         raise ValueError("Unknown mode")
@@ -65,7 +58,8 @@ if __name__ == "__main__":
                         default="single",
                         choices=["single",
                                  "benchmark_single",
-                                 "benchmark_all_configs"])
+                                 "benchmark_all_configs",
+                                 "graph_results"])
     args = parser.parse_args()
 
     main(args.mode)

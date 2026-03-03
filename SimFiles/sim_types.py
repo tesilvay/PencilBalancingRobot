@@ -117,5 +117,6 @@ class BenchmarkSummary:
 
 @dataclass
 class BenchmarkResult:
+    params: PhysicalParams
     config: ExperimentConfig
     summary: BenchmarkSummary
