@@ -166,8 +166,8 @@ def run_estimator_monte_carlo(
 
 def sweep_estimators(params, camera_params, dt=0.001):
 
-    noise_levels = [0, 1e-5, 5e-5, 1e-4, 5e-4, 1e-3, 1e-2, 1e-2]
-    delay_levels = [0, 1, 2, 3, 5, 10, 15, 50]
+    noise_levels = [0, 5e-5, 1e-4, 5e-4, 1e-3, 1e-2]
+    delay_levels = [0, 2, 3, 5, 10, 15]
 
     estimators = [
         FiniteDifferenceEstimator,
@@ -248,7 +248,8 @@ if __name__ == "__main__":
         com_length=0.1,
         tau=0.04,
         zeta=0.7,
-        num_states=8
+        num_states=8,
+        max_acc=30,
     )
 
     results, noise_levels, delay_levels = sweep_estimators(

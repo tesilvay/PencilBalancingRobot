@@ -31,7 +31,7 @@ def build_system(config, params, camera_params):
 
     # Controller
     if config.controller_type == "pole":
-        poles = [-8, -10, -12, -14] * 2
+        poles = [-10, -12, -14 ,-16] * 2
         controller = PolePlacementController(A, B, poles)
 
     elif config.controller_type == "lqr":

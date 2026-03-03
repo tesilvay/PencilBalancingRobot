@@ -1,4 +1,5 @@
 from sim_types import SystemState, TableCommand, TableAccel
+import numpy as np
 
 class Simulator:
 

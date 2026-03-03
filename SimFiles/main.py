@@ -13,16 +13,21 @@ def main(mode):
         com_length=0.1,
         tau=0.04,
         zeta=0.7,
-        num_states=8
+        num_states=8,
+        max_acc=9.81*4,
+        x_min=-40/1000,
+        x_max=20/1000,
+        y_min=-40/1000,
+        y_max=20/1000
     )
 
     camera_params = CameraParams(xr=0.3, yr=0.3)
 
     default_config = ExperimentConfig(
         controller_type="pole",
-        estimator_type=None,
-        noise_std=0.0,
-        delay_steps=0
+        estimator_type="lpf",
+        noise_std=0.001,
+        delay_steps=2
     )
 
     if mode == "single":

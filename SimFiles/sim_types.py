@@ -86,6 +86,11 @@ class PhysicalParams:
     tau: float
     zeta: float
     num_states: int
+    max_acc: float | None = None
+    x_min: float | None = None
+    x_max: float | None = None
+    y_min: float | None = None
+    y_max: float | None = None
 
 @dataclass
 class SimulationResult:

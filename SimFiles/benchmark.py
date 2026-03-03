@@ -93,9 +93,6 @@ def run_region_trials(
             bar.update(trial + 1)
         
         if n_trials == 1: # only render if we use the single mode
-            max_acc = np.max(np.abs(sim_result.acc_history))
-            print(f"Max table acceleration: {max_acc}")
-
             viz = Visualizer3D(sim_result.state_history, dt=0.001)
             viz.render_video(video_speed=1, save_video=False)
 
