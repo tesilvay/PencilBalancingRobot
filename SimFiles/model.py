@@ -47,7 +47,7 @@ def BuildLinearModel(param: PhysicalParams):
 
         x_ddot = (1/tau^2)*(u - x) - (2*zeta/tau)*x_dot
 
-    Pencil dynamics:
+    Pencil dynamics: sin(theta)=theta approx
 
         alpha_ddot = (g/l)*alpha - (1/l)*x_ddot
 

@@ -91,3 +91,31 @@ class PhysicalParams:
 class SimulationResult:
     state_history: np.ndarray
     acc_history: np.ndarray
+
+@dataclass
+class ExperimentConfig:
+    controller_type: str
+    estimator_type: str | None
+    noise_std: float
+    delay_steps: int
+    angle_importance: float = 1.0
+    effort_scale: float = 100.0
+
+@dataclass
+class TrialMetrics:
+    stabilized: bool
+    settling_time: float | None
+    max_acc: float
+
+
+@dataclass
+class BenchmarkSummary:
+    stability_rate: float
+    avg_settling_time: float | None
+    max_acc: float
+    avg_acc: float
+
+@dataclass
+class BenchmarkResult:
+    config: ExperimentConfig
+    summary: BenchmarkSummary

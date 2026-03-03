@@ -1,7 +1,7 @@
 import numpy as np
 from simulator import Simulator
 from plant import BalancerPlant
-from controller import StateFeedbackController
+from controller import NullController
 from sim_types import (
     SystemState,
     TableCommand,
@@ -14,13 +14,14 @@ def run_simulation(
     initial_state: SystemState,
     total_time: float,
     dt: float,
-    K: np.ndarray,
+    controller=None,
     vision=None,
     estimator=None,
 ) -> SimulationResult:
 
     plant = BalancerPlant(params)
-    controller = StateFeedbackController(K)
+    if controller is None:
+        controller = NullController()
 
     sim = Simulator(
         plant=plant,

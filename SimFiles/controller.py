@@ -1,20 +1,61 @@
 from sim_types import SystemState, TableCommand
 import numpy as np
+import control as ct
 
-class StateFeedbackController:
-    def __init__(self, K: np.ndarray):
-        """
-        K must be shape (2, 8)
-        First row -> x_des
-        Second row -> y_des
-        """
-        self.K = K
 
-    def compute(self, state_x: SystemState) -> TableCommand:
-        x_vec = state_x.as_vector()
+class BaseController:
+    def compute(self, state):
+        raise NotImplementedError
+    
+class PolePlacementController(BaseController):
+
+    def __init__(self, A, B, desired_poles):
+        self.K = ct.place(A, B, desired_poles)
+
+    def compute(self, state):
+        x_vec = state.as_vector()
         u = -self.K @ x_vec
-        
-        return TableCommand(
-            x_des=u[0],
-            y_des=u[1]
-        )
+        return TableCommand(u[0], u[1])
+    
+class LQRController(BaseController):
+
+    def __init__(self, A, B, Q, R):
+        self.K, _, _ = ct.lqr(A, B, Q, R)
+
+    def compute(self, state):
+        x_vec = state.as_vector()
+        u = -self.K @ x_vec
+        return TableCommand(u[0], u[1])
+
+def build_lqr_weights(
+    x_max,
+    xdot_max,
+    alpha_max,
+    alphadot_max,
+    u_max,
+    angle_importance=1.0,
+    effort_scale=1.0
+):
+
+    Q_single_axis = np.diag([
+        1/x_max**2,
+        1/xdot_max**2,
+        angle_importance * (1/alpha_max**2),
+        angle_importance * (1/alphadot_max**2)
+    ])
+
+    # Symmetric block diagonal for x and y axes
+    Q = np.block([
+        [Q_single_axis, np.zeros((4,4))],
+        [np.zeros((4,4)), Q_single_axis]
+    ])
+
+    R = np.eye(2) * effort_scale * (1/u_max**2)
+
+    return Q, R
+
+
+class NullController:
+    def compute(self, state):
+        # no actuation
+        return TableCommand(0.0, 0.0)

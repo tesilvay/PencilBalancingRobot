@@ -23,7 +23,12 @@ class Simulator:
         )
         
         # 2. Measurement 
-        if self.vision is not None and self.estimator is not None: # estimate states
+        
+        # Enforce configuration
+        if (self.vision is None) != (self.estimator is None):
+            raise ValueError("Vision and estimator must both be set or both be None.")
+        
+        if self.vision is not None: # estimate states
             # Vision measures pose
             # Estimator measures full state (calculates derivatives, which vision can't do)
             measurement = self.vision.project(state_x_true) # Generates camera povs

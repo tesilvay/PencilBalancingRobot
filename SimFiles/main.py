@@ -1,22 +1,10 @@
-import numpy as np
-import control as ct
-
+# main.py
 import argparse
-from simulation_runner import run_simulation
-from benchmark import region_mapping
-from vision import VisionSystem
-from estimator import FiniteDifferenceEstimator, KalmanEstimator, LowPassFiniteDifferenceEstimator
-from visualization import Visualizer3D
-from model import BuildLinearModel
-from sim_types import (
-    SystemState,
-    PhysicalParams,
-    CameraParams,
-)
+from experiment import run_single, run_benchmark_single, run_benchmark_all, format_summary
+from sim_types import PhysicalParams, CameraParams, ExperimentConfig
 
 
-
-def main(mode="single"):
+def main(mode):
 
     params = PhysicalParams(
         g=9.81,
@@ -25,87 +13,47 @@ def main(mode="single"):
         zeta=0.7,
         num_states=8
     )
-    
+
     camera_params = CameraParams(xr=0.3, yr=0.3)
-    vision = VisionSystem(camera_params, noise_std=0.01, delay_steps=10) # delay steps * dt = time delay
-    estimator = LowPassFiniteDifferenceEstimator()
-    
-    '''
-    # Kalman Filter
-    Q = np.eye(8) * 1e-5
-    R = np.eye(4) * 1e-4
 
-    estimator = KalmanEstimator(A, dt=0.001, Q=Q, R=R)
-    '''
-
-    A, B = BuildLinearModel(params)
-
-    desired_poles = [
-        -8, -10, -12, -14,
-        -8, -10, -12, -14
-    ]
-
-    K = ct.place(A, B, desired_poles)
+    default_config = ExperimentConfig(
+        controller_type="pole",
+        estimator_type=None,
+        noise_std=0.0,
+        delay_steps=0
+    )
 
     if mode == "single":
+        summary = run_single(default_config, params, camera_params)
 
-        initial_state = SystemState(
-            x=0.0,
-            x_dot=0.0,
-            alpha_x=0.2,
-            alpha_x_dot=0.0,
-            y=0.0,
-            y_dot=0.0,
-            alpha_y=0.2,
-            alpha_y_dot=0.0
-        )
+        print("\n=== Single Trial ===")
+        print(format_summary(summary))
 
-        result = run_simulation(
-            params=params,
-            initial_state=initial_state,
-            total_time=5.0,
-            dt=0.001,
-            K=K,
-            vision=vision,
-            estimator=estimator
-        )
 
-        max_acc = np.max(np.abs(result.acc_history))
-        print(f"Max table acceleration: {max_acc}")
+    elif mode == "benchmark_single":
+        summary = run_benchmark_single(default_config, params, camera_params)
 
-        viz = Visualizer3D(result.state_history, dt=0.001)
-        viz.render_video(video_speed=1, save_video=False)
+        print("\n=== Monte Carlo Benchmark ===")
+        print(format_summary(summary))
 
-    elif mode == "benchmark":
+    elif mode == "benchmark_all_configs":
 
-        results = region_mapping(
-            params=params,
-            K=K,
-            dt=0.001,
-            total_time=2.0,
-            n_trials=200,
-            vision=vision,
-            estimator_class=FiniteDifferenceEstimator
-        )
-        
-        stability_rate = sum(r["stabilized"] for r in results) / len(results)
-        
-        settling_times = [r["settling_time"] for r in results if r["stabilized"]]
-        max_settling_time = max(settling_times) if settling_times else None
-        avg_settling_time = sum(settling_times) / len(settling_times) if settling_times else None
+        results = run_benchmark_all(params, camera_params)
 
-        max_accs = [r["max_acc"] for r in results]
-        max_acc_overall = max(max_accs)
-        avg_acc = sum(max_accs) / len(max_accs)
-        
-        print(f"Stability rate: {stability_rate:.2%}")
+        print("\n=== Full Benchmark Sweep ===\n")
 
-        if settling_times:
-            print(f"Max settling time: {max_settling_time:.3f} s")
-            print(f"Avg settling time: {avg_settling_time:.3f} s")
+        for i, result in enumerate(results, 1):
 
-        print(f"Max acceleration across trials: {max_acc_overall:.3f} m/s^2")
-        print(f"Average peak acceleration: {avg_acc:.3f} m/s^2")
+            config = result.config
+            summary = result.summary
+
+            print(f"--- Configuration {i} ---")
+            print(f"  Controller        : {config.controller_type}")
+            print(f"  Estimator         : {config.estimator_type}")
+            print(f"  Noise std         : {config.noise_std}")
+            print(f"  Delay steps       : {config.delay_steps}")
+            print(format_summary(summary))
+            print()
 
     else:
         raise ValueError("Unknown mode")
@@ -113,7 +61,11 @@ def main(mode="single"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", default="single", choices=["single", "benchmark"])
+    parser.add_argument("--mode",
+                        default="single",
+                        choices=["single",
+                                 "benchmark_single",
+                                 "benchmark_all_configs"])
     args = parser.parse_args()
 
-    main(mode=args.mode)
+    main(args.mode)

@@ -152,6 +152,11 @@ class Visualizer3D:
 
             while True:
 
+                # Stop if window was closed
+                if not plt.fignum_exists(self.fig.number):
+                    print("Window closed. Stopping simulation.")
+                    break
+    
                 sim_time = frame_number * self.frame_period * video_speed
 
                 if sim_time >= total_sim_time:

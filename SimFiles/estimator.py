@@ -10,6 +10,8 @@ from sim_types import SystemState, PoseMeasurement
 class BaseEstimator:
     def update(self, pose: PoseMeasurement, dt: float) -> SystemState:
         raise NotImplementedError
+    def reset(self):
+        pass
 
 
 class FiniteDifferenceEstimator(BaseEstimator):
@@ -43,6 +45,9 @@ class FiniteDifferenceEstimator(BaseEstimator):
             alpha_y=pose.alpha_y,
             alpha_y_dot=alpha_y_dot
         )
+    
+    def reset(self):
+        self.prev_pose = None
 
 
 class LowPassFiniteDifferenceEstimator(BaseEstimator):
@@ -80,6 +85,9 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
             alpha_y_dot=vel[3]
         )
 
+    def reset(self):
+        self.prev_pose = None
+
 
 class KalmanEstimator(BaseEstimator):
 
@@ -106,6 +114,7 @@ class KalmanEstimator(BaseEstimator):
 
         self.P = np.eye(8) * 0.01
         self.x_hat = np.zeros((8, 1))
+        
 
     def update(self, pose: PoseMeasurement, dt: float) -> SystemState:
 
@@ -139,3 +148,7 @@ class KalmanEstimator(BaseEstimator):
             alpha_y=self.x_hat[6, 0],
             alpha_y_dot=self.x_hat[7, 0]
         )
+
+    def reset(self):
+        self.P = np.eye(8) * 0.01
+        self.x_hat = np.zeros((8, 1))
