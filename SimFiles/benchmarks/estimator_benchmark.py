@@ -1,11 +1,11 @@
 import numpy as np
-from simulation_runner import run_simulation  # if needed for plant
-from plant import BalancerPlant
-from vision import VisionSystem
-from model import BuildLinearModel
+from simulation.simulation_runner import run_simulation  # if needed for plant
+from core.plant import BalancerPlant
+from perception.vision import VisionSystem
+from core.model import BuildLinearModel
 import matplotlib.pyplot as plt
-from estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
-from sim_types import (
+from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
+from core.sim_types import (
     SystemState,
     PhysicalParams,
     CameraParams

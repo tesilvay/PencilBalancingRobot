@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
-from io_utils import load_benchmark_results
+from utils.io_utils import load_benchmark_results
 import os
 import json
 
@@ -266,3 +266,43 @@ def run_full_analysis():
     plot_effort_vs_stability(rows)
     plot_settling_time(rows)
     plot_max_acceleration(rows)
+    
+    
+
+
+def plot_state_history(state_history, x_ref, dt=0.001):
+    """
+    Plot all 8 state variables over time with reference lines.
+
+    state_history : (N,8) numpy array
+    x_ref         : SystemState
+    dt            : timestep (seconds)
+    """
+
+    x_ref_vec = x_ref.as_vector()
+    steps = state_history.shape[0]
+    t = np.arange(steps) * dt
+
+    state_names = [
+        "x",
+        "x_dot",
+        "alpha_x",
+        "alpha_x_dot",
+        "y",
+        "y_dot",
+        "alpha_y",
+        "alpha_y_dot"
+    ]
+
+    fig, axes = plt.subplots(8, 1, figsize=(8, 14), sharex=True)
+
+    for i in range(8):
+        axes[i].plot(t, state_history[:, i], label="state")
+        axes[i].axhline(x_ref_vec[i], linestyle="--", label="ref")
+        axes[i].set_ylabel(state_names[i])
+        axes[i].grid(True)
+
+    axes[-1].set_xlabel("Time (s)")
+
+    plt.tight_layout()
+    plt.show()

@@ -2,9 +2,10 @@
 import numpy as np
 import sys
 import time
-from simulation_runner import run_simulation
-from visualization import Visualizer3D
-from sim_types import TrialMetrics, BenchmarkSummary, SystemState
+from simulation.simulation_runner import run_simulation
+from visualization.visualizer import Visualizer3D
+from core.sim_types import TrialMetrics, BenchmarkSummary, SystemState
+from analysis.graphing import plot_state_history
 
 
 class ProgressBar:
@@ -97,8 +98,11 @@ def run_region_trials(
             bar.update(trial + 1)
         
         if n_trials == 1: # only render if we use the single mode
+            plot_state_history(sim_result.state_history, x_ref)
             viz = Visualizer3D(sim_result.state_history, dt=0.001, mech=mech)
-            viz.render_video(video_speed=1, save_video=False)
+            #viz.render_video(video_speed=1, save_video=False)
+            
+            
 
         stabilized, settling_time = evaluate_stability(sim_result, dt)
         max_acc = np.max(np.abs(sim_result.acc_history))

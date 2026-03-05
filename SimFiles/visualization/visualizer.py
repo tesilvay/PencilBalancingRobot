@@ -174,11 +174,11 @@ class Visualizer3D:
         """
 
         if save_video:
-            os.makedirs("simulation_video", exist_ok=True)
+            os.makedirs("simulation_videos", exist_ok=True)
 
             if filename is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"simulation_video/pencil_sim_{timestamp}.mp4"
+                filename = f"simulation_videos/pencil_sim_{timestamp}.mp4"
 
             writer = FFMpegWriter(fps=self.fps)
 

@@ -1,5 +1,5 @@
 import numpy as np
-from sim_types import PhysicalParams
+from core.sim_types import PhysicalParams
 
 def BuildLinearModel(param: PhysicalParams):
     g = param.g

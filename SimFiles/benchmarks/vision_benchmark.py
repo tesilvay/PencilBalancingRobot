@@ -1,6 +1,6 @@
 import numpy as np
-from vision import VisionSystem
-from sim_types import CameraParams, SystemState
+from perception.vision import VisionSystem
+from core.sim_types import CameraParams, SystemState
 
 def compare_states(state_true, pose_est):
 

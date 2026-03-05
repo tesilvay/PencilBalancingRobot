@@ -1,4 +1,4 @@
-from sim_types import SystemState, TableCommand, TableAccel, PhysicalParams
+from core.sim_types import SystemState, TableCommand, TableAccel, PhysicalParams
 import numpy as np
 
 

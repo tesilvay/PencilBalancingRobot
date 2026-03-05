@@ -1,6 +1,6 @@
 import numpy as np
 import control as ct
-from sim_types import SystemState, PoseMeasurement
+from core.sim_types import SystemState, PoseMeasurement
 
 
 # -------------------------------------------------

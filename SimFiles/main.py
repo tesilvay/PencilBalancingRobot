@@ -1,9 +1,9 @@
 # main.py
 import argparse
-from experiment import run_single, run_benchmark_single, run_benchmark_all, format_summary, sweep_workspace
-from sim_types import PhysicalParams, CameraParams, ExperimentConfig, SystemState
-from graphing import run_full_analysis
-from io_utils import save_benchmark_results, load_benchmark_results
+from experiments.experiments import run_single, run_benchmark_single, run_benchmark_all, format_summary, sweep_workspace
+from core.sim_types import PhysicalParams, CameraParams, ExperimentConfig, SystemState
+from analysis.graphing import run_full_analysis
+from utils.io_utils import save_benchmark_results, load_benchmark_results
 
 
 def main(mode):
@@ -32,15 +32,17 @@ def main(mode):
         controller_type="pole",
         estimator_type="lpf",
         noise_std=0.001,
-        delay_steps=2
+        delay_steps=10
     )
 
     x_ref = SystemState(
         x=-0.00993,
+        #x=0.0,
         x_dot=0.0,
         alpha_x=0.0,
         alpha_x_dot=0.0,
-        y=0.001553,
+        y=0.01553,
+        #y=0.0,
         y_dot=0.0,
         alpha_y=0.0,
         alpha_y_dot=0.0

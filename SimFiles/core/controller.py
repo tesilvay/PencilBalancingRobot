@@ -1,4 +1,4 @@
-from sim_types import SystemState, TableCommand
+from core.sim_types import SystemState, TableCommand
 import numpy as np
 import control as ct
 
@@ -11,11 +11,17 @@ class PolePlacementController(BaseController):
 
     def __init__(self, A, B, desired_poles, x_ref=None):
         self.K = ct.place(A, B, desired_poles)
+
         self.x_ref = np.zeros(A.shape[0]) if x_ref is None else x_ref.as_vector()
 
+        # compute steady-state feedforward
+        self.u_ref = -np.linalg.pinv(B) @ (A @ self.x_ref)
+
     def compute(self, state):
-        x_vec = state.as_vector()
-        u = -self.K @ (x_vec - self.x_ref)
+        x = state.as_vector()
+
+        u = -self.K @ (x - self.x_ref) + self.u_ref
+
         return TableCommand(u[0], u[1])
     
 class LQRController(BaseController):

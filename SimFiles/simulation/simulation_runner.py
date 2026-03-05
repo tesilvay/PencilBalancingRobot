@@ -1,8 +1,8 @@
 import numpy as np
-from simulator import Simulator
-from plant import BalancerPlant
-from controller import NullController
-from sim_types import (
+from simulation.simulator import Simulator
+from core.plant import BalancerPlant
+from core.controller import NullController
+from core.sim_types import (
     SystemState,
     TableCommand,
     PhysicalParams,
