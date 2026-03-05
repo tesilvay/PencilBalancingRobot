@@ -113,3 +113,6 @@ class VisionSystem:
             alpha_x=alpha_x,
             alpha_y=alpha_y
         )
+    
+    def reset(self):
+        self.buffer.clear()

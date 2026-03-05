@@ -67,16 +67,18 @@ def run_region_trials(
 
         if estimator is not None:
             estimator.reset()
+        if vision is not None:
+            vision.reset()
 
         initial_state = SystemState(
             x=0.0,
             x_dot=0.0,
             alpha_x=np.random.uniform(-0.2, 0.2),
-            alpha_x_dot=np.random.uniform(-0.4, 0.4),
+            alpha_x_dot=0.0,
             y=0.0,
             y_dot=0.0,
             alpha_y=np.random.uniform(-0.2, 0.2),
-            alpha_y_dot=np.random.uniform(-0.4, 0.4)
+            alpha_y_dot=0.0
         )
 
         sim_result = run_simulation(
@@ -98,6 +100,9 @@ def run_region_trials(
 
         stabilized, settling_time = evaluate_stability(sim_result, dt)
         max_acc = np.max(np.abs(sim_result.acc_history))
+        
+        if max_acc > 200:
+            print("Large acc trial initial state:", initial_state)
 
         results.append(
             TrialMetrics(

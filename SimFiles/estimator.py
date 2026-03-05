@@ -87,6 +87,7 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
 
     def reset(self):
         self.prev_pose = None
+        self.prev_vel = np.zeros(4)
 
 
 class KalmanEstimator(BaseEstimator):

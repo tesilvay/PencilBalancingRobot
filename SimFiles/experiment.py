@@ -7,8 +7,16 @@ from vision import VisionSystem
 from model import BuildLinearModel
 from benchmark import run_region_trials, summarize_results
 from sim_types import PhysicalParams, CameraParams, BenchmarkSummary, BenchmarkResult, ExperimentConfig
+from graphing_files.workspace_plotter import plot_workspace_results
 
-def format_summary(summary):
+def format_summary(summary, config, params):
+    
+
+    
+    # Workspace size
+    r_cm = min((params.x_max - params.x_min), (params.y_max - params.y_min)) * 100
+    
+    
     stability_pct = summary.stability_rate * 100
 
     settling = (
@@ -18,6 +26,12 @@ def format_summary(summary):
     )
 
     return (
+        f"  Controller         : {config.controller_type}\n"
+        f"  Estimator          : {config.estimator_type}\n"
+        f"  Noise              : {config.noise_std}\n"
+        f"  Delay              : {config.delay_steps}\n"
+        f"  Workspace diameter : {r_cm:.1f} cm\n"
+        f"\n"
         f"  Stability rate     : {stability_pct:.1f}%\n"
         f"  Avg settling time  : {settling}\n"
         f"  Max acceleration   : {summary.max_acc:.2f} m/s²\n"
@@ -31,7 +45,7 @@ def build_system(config, params, camera_params):
 
     # Controller
     if config.controller_type == "pole":
-        poles = [-10, -12, -14 ,-16] * 2
+        poles = [-14 ,-16, -18, -20] * 2
         controller = PolePlacementController(A, B, poles)
 
     elif config.controller_type == "lqr":
@@ -145,3 +159,50 @@ def run_benchmark_all(params, camera_params):
                     )
 
     return all_results
+
+
+def sweep_workspace(
+    config,
+    params,
+    camera_params,
+    workspace_min_diameter_mm,
+    workspace_max_diameter_mm,
+    n_sizes=5
+):
+    """
+    Sweep workspace sizes and benchmark controller performance.
+    """
+
+    diameters_mm = np.linspace(workspace_min_diameter_mm,
+                               workspace_max_diameter_mm,
+                               n_sizes)
+
+    radii_mm = diameters_mm / 2
+
+    stability_rates = []
+    avg_accs = []
+
+    for r_mm in radii_mm:
+
+        r_m = r_mm / 1000.0
+
+        # Update workspace limits
+        params.x_min = -r_m
+        params.x_max = r_m
+        params.y_min = -r_m
+        params.y_max = r_m
+
+        summary = run_benchmark_single(config, params, camera_params)
+
+        stability_rates.append(summary.stability_rate * 100)
+        avg_accs.append(summary.avg_acc)
+
+        print(f"Radius {r_mm:.1f} mm -> "
+              f"Stability {summary.stability_rate*100:.1f}% | "
+              f"Avg Acc {summary.avg_acc:.2f}")
+
+    data = np.column_stack((radii_mm, stability_rates, avg_accs))
+
+    plot_workspace_results(data, config)
+
+    return data

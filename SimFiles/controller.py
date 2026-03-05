@@ -34,15 +34,17 @@ def build_lqr_weights(
     alphadot_max,
     u_max,
     angle_importance=1.0,
-    effort_scale=1.0
+    effort_scale=0.1
 ):
 
-    Q_single_axis = np.diag([
-        1/x_max**2,
-        1/xdot_max**2,
-        angle_importance * (1/alpha_max**2),
-        angle_importance * (1/alphadot_max**2)
-    ])
+#    Q_single_axis = np.diag([
+#        1/x_max**2,
+#        1/xdot_max**2,
+#        angle_importance * (1/alpha_max**2),
+#        angle_importance * (1/alphadot_max**2)
+#    ])
+    
+    Q_single_axis = np.diag([10, 0.1, 10, 1]) # x, x_dot, alpha, alpha_dot
 
     # Symmetric block diagonal for x and y axes
     Q = np.block([
