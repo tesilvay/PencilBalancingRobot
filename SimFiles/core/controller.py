@@ -19,8 +19,10 @@ class PolePlacementController(BaseController):
 
     def compute(self, state):
         x = state.as_vector()
+        
+        error = x - self.x_ref
 
-        u = -self.K @ (x - self.x_ref) + self.u_ref
+        u = self.u_ref - self.K @ (error)
 
         return TableCommand(u[0], u[1])
     
@@ -29,10 +31,17 @@ class LQRController(BaseController):
     def __init__(self, A, B, Q, R, x_ref=None):
         self.K, _, _ = ct.lqr(A, B, Q, R)
         self.x_ref = np.zeros(A.shape[0]) if x_ref is None else x_ref.as_vector()
+        
+        # compute steady-state feedforward
+        self.u_ref = -np.linalg.pinv(B) @ (A @ self.x_ref)
 
     def compute(self, state):
-        x_vec = state.as_vector()
-        u = -self.K @ (x_vec - self.x_ref)
+        x = state.as_vector()
+        
+        error = x - self.x_ref
+
+        u = self.u_ref - self.K @ (error)
+
         return TableCommand(u[0], u[1])
 
 def build_lqr_weights(

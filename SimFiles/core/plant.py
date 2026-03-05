@@ -1,6 +1,11 @@
 from core.sim_types import SystemState, TableCommand, TableAccel, PhysicalParams
 import numpy as np
 
+# We could use the linear state-space model (A,B) for the plant dynamics
+# The issue is that our plant is not actually linear
+# We need to account for acc saturation, workspace limits, etc
+# The controller should use A, B regardless
+# But the plant should model the real physics with the nonlinear constraints
 
 class BalancerPlant:
 

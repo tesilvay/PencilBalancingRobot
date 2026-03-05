@@ -54,7 +54,7 @@ def run_region_trials(
     estimator=None,
     mech=None,
     dt=0.001,
-    total_time=2.0,
+    total_time=3.0,
     n_trials=100,
     show_progress=False,
     progress_prefix="",
@@ -100,7 +100,7 @@ def run_region_trials(
         if n_trials == 1: # only render if we use the single mode
             plot_state_history(sim_result.state_history, x_ref)
             viz = Visualizer3D(sim_result.state_history, dt=0.001, mech=mech)
-            #viz.render_video(video_speed=1, save_video=False)
+            viz.render_video(video_speed=1, save_video=False)
             
             
 

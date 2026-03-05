@@ -29,7 +29,7 @@ def main(mode):
     camera_params = CameraParams(xr=0.3, yr=0.3)
 
     default_config = ExperimentConfig(
-        controller_type="pole",
+        controller_type="lqr",
         estimator_type="lpf",
         noise_std=0.001,
         delay_steps=10
