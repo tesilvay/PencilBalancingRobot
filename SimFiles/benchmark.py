@@ -52,6 +52,7 @@ def run_region_trials(
     controller,
     vision=None,
     estimator=None,
+    mech=None,
     dt=0.001,
     total_time=2.0,
     n_trials=100,
@@ -95,7 +96,7 @@ def run_region_trials(
             bar.update(trial + 1)
         
         if n_trials == 1: # only render if we use the single mode
-            viz = Visualizer3D(sim_result.state_history, dt=0.001)
+            viz = Visualizer3D(sim_result.state_history, dt=0.001, mech=mech)
             viz.render_video(video_speed=1, save_video=False)
 
         stabilized, settling_time = evaluate_stability(sim_result, dt)

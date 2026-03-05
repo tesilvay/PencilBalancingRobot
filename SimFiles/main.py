@@ -18,7 +18,12 @@ def main(mode):
         x_min=-33/1000,
         x_max=33/1000,
         y_min=-33/1000,
-        y_max=33/1000
+        y_max=33/1000,
+        # mech params in mm
+        O=(83, 57),
+        B=(61, 88),
+        la=77,
+        lb=69.6
     )
 
     camera_params = CameraParams(xr=0.3, yr=0.3)

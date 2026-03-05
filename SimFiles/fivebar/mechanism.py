@@ -41,7 +41,7 @@ class FiveBarMechanism:
 
         return theta1, theta4
 
-    def fk(self, theta1, theta4):
+    def fk(self, theta1, theta4): #local only
 
         la = self.la
         lb = self.lb
@@ -97,13 +97,17 @@ class FiveBarMechanism:
 
         theta1, theta4 = self.ik(target_global)
 
-        A, C, P1, P2 = self.fk(theta1, theta4)
+        A_l, C_l, P1_l, P2_l = self.fk(theta1, theta4)
 
         O_l, B_l = self.tf.bases_local()
 
-        if self.valid_config(O_l, B_l, A, C, P1):
-            P = P1
+        if self.valid_config(O_l, B_l, A_l, C_l, P1_l):
+            P_l = P1_l
         else:
-            P = P2
+            P_l = P2_l
 
-        return theta1, theta4, A, C, P
+        A_g = self.tf.l2g(A_l)
+        C_g = self.tf.l2g(C_l)
+        P_g = self.tf.l2g(P_l)
+        
+        return theta1, theta4, A_g, C_g, P_g

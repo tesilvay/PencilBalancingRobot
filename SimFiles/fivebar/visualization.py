@@ -40,7 +40,7 @@ class FiveBarVisualizer:
         ax.set_ylim(-75, 145)
 
         # ---- workspace points ----
-        ax.scatter(points[:,0], points[:,1], s=6, color='red')
+        # ax.scatter(points[:,0], points[:,1], s=6, color='red')
 
         # ---- workspace boundary ----
         poly = self.workspace.alpha_shape(points, alpha=0.02)

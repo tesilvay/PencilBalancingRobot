@@ -8,6 +8,9 @@ from model import BuildLinearModel
 from benchmark import run_region_trials, summarize_results
 from sim_types import PhysicalParams, CameraParams, BenchmarkSummary, BenchmarkResult, ExperimentConfig
 from graphing_files.workspace_plotter import plot_workspace_results
+from fivebar.transform import FiveBarTransform
+from fivebar.mechanism import FiveBarMechanism
+
 
 def format_summary(summary, config, params):
     
@@ -85,19 +88,33 @@ def build_system(config, params, camera_params):
             Qk = np.eye(8) * 1e-6
             Rk = np.eye(4) * config.noise_std**2
             estimator = KalmanEstimator(A, dt=0.001, Q=Qk, R=Rk)
+    
+    # --- Five-bar mechanism ---
+    mech = None
 
-    return controller, vision, estimator
+    if params.O is not None:
+
+        tf = FiveBarTransform(params.O, params.B)
+
+        mech = FiveBarMechanism(
+            tf,
+            la=params.la,
+            lb=params.lb
+        )
+
+    return controller, vision, estimator, mech
 
 
 def run_single(config, params, camera_params):
 
-    controller, vision, estimator = build_system(config, params, camera_params)
+    controller, vision, estimator, mech = build_system(config, params, camera_params)
 
     results = run_region_trials(
         params=params,
         controller=controller,
         vision=vision,
         estimator=estimator,
+        mech=mech,
         n_trials=1
     )
 
@@ -106,13 +123,14 @@ def run_single(config, params, camera_params):
 
 def run_benchmark_single(config, params, camera_params):
 
-    controller, vision, estimator = build_system(config, params, camera_params)
+    controller, vision, estimator, mech = build_system(config, params, camera_params)
 
     results = run_region_trials(
         params=params,
         controller=controller,
         vision=vision,
         estimator=estimator,
+        mech=mech,
         n_trials=200,
         show_progress=True,
         progress_prefix="Trial"

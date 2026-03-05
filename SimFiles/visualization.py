@@ -7,7 +7,7 @@ import numpy as np
 
 class Visualizer3D:
 
-    def __init__(self, history, dt, L=0.2, fps=60):
+    def __init__(self, history, dt, L=0.2, fps=60, mech=None):
 
         self.history = history
         self.dt = dt
@@ -15,6 +15,8 @@ class Visualizer3D:
         self.fps = fps
         self.frame_period = 1.0 / fps
         self.total_sim_time = history.shape[0] * dt
+        
+        self.mech = mech
 
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -29,6 +31,13 @@ class Visualizer3D:
 
         self.table_plot, = self.ax.plot([], [], [], 'k-', linewidth=2)
         self.pencil_plot, = self.ax.plot([], [], [], 'r-', linewidth=3)
+        
+        # Mechanism plot
+        self.link_OA, = self.ax.plot([], [], [], 'b-', linewidth=3)
+        self.link_AP, = self.ax.plot([], [], [], 'b--', linewidth=2)
+
+        self.link_BC, = self.ax.plot([], [], [], 'm-', linewidth=3)
+        self.link_CP, = self.ax.plot([], [], [], 'm--', linewidth=2)
         
         # --- Pencil tip trail ---
         self.trail_length = 120   # number of frames to keep
@@ -60,7 +69,7 @@ class Visualizer3D:
         y = state[4]
         alpha_y = state[6]
 
-        size = 0.05
+        size = 0.01
 
         # --- Table ---
         corners_x = [x - size, x + size, x + size, x - size, x - size]
@@ -100,6 +109,42 @@ class Visualizer3D:
         self.trail_plot.set_3d_properties(
             trail_array[:, 2]
         )
+        
+        # --- Mechanism ---
+        if self.mech is not None:
+
+            try:
+
+                target_mm = np.array([x, y]) * 1000.0
+
+                _, _, A_mm, C_mm, P_mm = self.mech.solve(target_mm)
+
+                scale = 1/1000.0
+
+                O = np.array(self.mech.tf.O_g) * scale
+                B = np.array(self.mech.tf.B_g) * scale
+                A = A_mm * scale
+                C = C_mm * scale
+                P = P_mm * scale
+
+                # OA
+                self.link_OA.set_data([O[0], A[0]], [O[1], A[1]])
+                self.link_OA.set_3d_properties([0, 0])
+
+                # AP
+                self.link_AP.set_data([A[0], P[0]], [A[1], P[1]])
+                self.link_AP.set_3d_properties([0, 0])
+
+                # BC
+                self.link_BC.set_data([B[0], C[0]], [B[1], C[1]])
+                self.link_BC.set_3d_properties([0, 0])
+
+                # CP
+                self.link_CP.set_data([C[0], P[0]], [C[1], P[1]])
+                self.link_CP.set_3d_properties([0, 0])
+
+            except Exception:
+                pass
 
         # --- Text ---
         self.info_text.set_text(

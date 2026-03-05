@@ -91,6 +91,11 @@ class PhysicalParams:
     x_max: float | None = None
     y_min: float | None = None
     y_max: float | None = None
+    # mech params
+    O: tuple[float, float] | None = None
+    B: tuple[float, float] | None = None
+    la: float | None = None
+    lb: float | None = None
 
 @dataclass
 class SimulationResult:
