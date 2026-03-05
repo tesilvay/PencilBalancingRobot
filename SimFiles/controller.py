@@ -9,22 +9,24 @@ class BaseController:
     
 class PolePlacementController(BaseController):
 
-    def __init__(self, A, B, desired_poles):
+    def __init__(self, A, B, desired_poles, x_ref=None):
         self.K = ct.place(A, B, desired_poles)
+        self.x_ref = np.zeros(A.shape[0]) if x_ref is None else x_ref.as_vector()
 
     def compute(self, state):
         x_vec = state.as_vector()
-        u = -self.K @ x_vec
+        u = -self.K @ (x_vec - self.x_ref)
         return TableCommand(u[0], u[1])
     
 class LQRController(BaseController):
 
-    def __init__(self, A, B, Q, R):
+    def __init__(self, A, B, Q, R, x_ref=None):
         self.K, _, _ = ct.lqr(A, B, Q, R)
+        self.x_ref = np.zeros(A.shape[0]) if x_ref is None else x_ref.as_vector()
 
     def compute(self, state):
         x_vec = state.as_vector()
-        u = -self.K @ x_vec
+        u = -self.K @ (x_vec - self.x_ref)
         return TableCommand(u[0], u[1])
 
 def build_lqr_weights(

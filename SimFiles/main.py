@@ -1,7 +1,7 @@
 # main.py
 import argparse
 from experiment import run_single, run_benchmark_single, run_benchmark_all, format_summary, sweep_workspace
-from sim_types import PhysicalParams, CameraParams, ExperimentConfig
+from sim_types import PhysicalParams, CameraParams, ExperimentConfig, SystemState
 from graphing import run_full_analysis
 from io_utils import save_benchmark_results, load_benchmark_results
 
@@ -15,10 +15,10 @@ def main(mode):
         zeta=0.7,
         num_states=8,
         max_acc=9.81*9,
-        x_min=-33/1000,
-        x_max=33/1000,
-        y_min=-33/1000,
-        y_max=33/1000,
+        x_min=-50/1000.0,
+        x_max=30/1000.0,
+        y_min=-24.5/1000.0,
+        y_max=55.5/1000.0,
         # mech params in mm
         O=(83, 57),
         B=(61, 88),
@@ -35,14 +35,25 @@ def main(mode):
         delay_steps=2
     )
 
+    x_ref = SystemState(
+        x=-0.00993,
+        x_dot=0.0,
+        alpha_x=0.0,
+        alpha_x_dot=0.0,
+        y=0.001553,
+        y_dot=0.0,
+        alpha_y=0.0,
+        alpha_y_dot=0.0
+    )
+
     if mode == "single":
-        summary = run_single(default_config, params, camera_params)
+        summary = run_single(default_config, params, camera_params, x_ref=x_ref)
 
         print("\n=== Single Trial ===")
         print(format_summary(summary, default_config, params))
 
     elif mode == "benchmark_single":
-        summary = run_benchmark_single(default_config, params, camera_params)
+        summary = run_benchmark_single(default_config, params, camera_params, x_ref=x_ref)
 
         print("\n=== Monte Carlo Benchmark ===")
         print(format_summary(summary, default_config, params))
@@ -59,7 +70,7 @@ def main(mode):
 
     elif mode == "benchmark_all_configs":
 
-        results = run_benchmark_all(params, camera_params)
+        results = run_benchmark_all(params, camera_params, x_ref=x_ref)
         
         filepath = save_benchmark_results(results)
 

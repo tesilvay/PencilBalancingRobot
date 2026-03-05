@@ -3,9 +3,8 @@ import numpy as np
 import sys
 import time
 from simulation_runner import run_simulation
-from sim_types import SystemState
 from visualization import Visualizer3D
-from sim_types import TrialMetrics, BenchmarkSummary
+from sim_types import TrialMetrics, BenchmarkSummary, SystemState
 
 
 class ProgressBar:
@@ -57,7 +56,8 @@ def run_region_trials(
     total_time=2.0,
     n_trials=100,
     show_progress=False,
-    progress_prefix=""
+    progress_prefix="",
+    x_ref=None
 ):
     results = []
 
@@ -72,15 +72,16 @@ def run_region_trials(
             vision.reset()
 
         initial_state = SystemState(
-            x=0.0,
+            x=x_ref.x,
             x_dot=0.0,
             alpha_x=np.random.uniform(-0.2, 0.2),
             alpha_x_dot=0.0,
-            y=0.0,
+            y=x_ref.y,
             y_dot=0.0,
             alpha_y=np.random.uniform(-0.2, 0.2),
             alpha_y_dot=0.0
         )
+
 
         sim_result = run_simulation(
             params=params,

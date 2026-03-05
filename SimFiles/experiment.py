@@ -42,14 +42,14 @@ def format_summary(summary, config, params):
     )
 
 
-def build_system(config, params, camera_params):
+def build_system(config, params, camera_params, x_ref=None):
 
     A, B = BuildLinearModel(params)
 
     # Controller
     if config.controller_type == "pole":
         poles = [-14 ,-16, -18, -20] * 2
-        controller = PolePlacementController(A, B, poles)
+        controller = PolePlacementController(A, B, poles, x_ref)
 
     elif config.controller_type == "lqr":
         Q, R = build_lqr_weights(
@@ -61,7 +61,7 @@ def build_system(config, params, camera_params):
             angle_importance=config.angle_importance,
             effort_scale=config.effort_scale
         )
-        controller = LQRController(A, B, Q, R)
+        controller = LQRController(A, B, Q, R, x_ref)
 
     else:
         controller = NullController()
@@ -105,9 +105,9 @@ def build_system(config, params, camera_params):
     return controller, vision, estimator, mech
 
 
-def run_single(config, params, camera_params):
+def run_single(config, params, camera_params, x_ref=None):
 
-    controller, vision, estimator, mech = build_system(config, params, camera_params)
+    controller, vision, estimator, mech = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,
@@ -115,15 +115,16 @@ def run_single(config, params, camera_params):
         vision=vision,
         estimator=estimator,
         mech=mech,
-        n_trials=1
+        n_trials=1,
+        x_ref=x_ref
     )
 
     return summarize_results(results)
 
 
-def run_benchmark_single(config, params, camera_params):
+def run_benchmark_single(config, params, camera_params, x_ref=None):
 
-    controller, vision, estimator, mech = build_system(config, params, camera_params)
+    controller, vision, estimator, mech = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,
@@ -133,13 +134,14 @@ def run_benchmark_single(config, params, camera_params):
         mech=mech,
         n_trials=200,
         show_progress=True,
-        progress_prefix="Trial"
+        progress_prefix="Trial",
+        x_ref=x_ref
     )
 
     return summarize_results(results)
 
 
-def run_benchmark_all(params, camera_params):
+def run_benchmark_all(params, camera_params, x_ref=None):
 
     controllers = ["pole", "lqr"]
     estimators = [None, "fd", "lpf", "kalman"]
@@ -166,7 +168,7 @@ def run_benchmark_all(params, camera_params):
                         delay_steps=d
                     )
 
-                    metrics = run_benchmark_single(config, params, camera_params)
+                    metrics = run_benchmark_single(config, params, camera_params, x_ref=x_ref)
 
                     all_results.append(
                         BenchmarkResult(
