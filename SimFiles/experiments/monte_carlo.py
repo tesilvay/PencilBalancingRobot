@@ -53,6 +53,7 @@ def run_region_trials(
     vision=None,
     estimator=None,
     mech=None,
+    actuator=None,
     dt=0.001,
     total_time=3.0,
     n_trials=100,
@@ -91,7 +92,8 @@ def run_region_trials(
             dt=dt,
             controller=controller,
             vision=vision,
-            estimator=estimator
+            estimator=estimator,
+            actuator=actuator,
         )
         
         if show_progress:

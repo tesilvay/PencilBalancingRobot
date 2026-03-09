@@ -121,6 +121,7 @@ class Visualizer3D:
 
                 scale = 1/1000.0
 
+                # mechanism points come in mm, so convert to m
                 O = np.array(self.mech.tf.O_g) * scale
                 B = np.array(self.mech.tf.B_g) * scale
                 A = A_mm * scale

@@ -2,6 +2,7 @@ import numpy as np
 from simulation.simulator import Simulator
 from core.plant import BalancerPlant
 from core.controller import NullController
+from hardware.servo_actuator import ServoActuator
 from core.sim_types import (
     SystemState,
     TableCommand,
@@ -17,6 +18,7 @@ def run_simulation(
     controller=None,
     vision=None,
     estimator=None,
+    actuator=None
 ) -> SimulationResult:
 
     plant = BalancerPlant(params)
@@ -43,6 +45,9 @@ def run_simulation(
 
     for i in range(steps):
         state, command, table_acc = sim.step(state, command)
+        
+        if actuator is not None:
+            actuator.send(command)
 
         state_history[i + 1, :] = state.as_vector()
         acc_history[i, :] = table_acc.as_vector()
