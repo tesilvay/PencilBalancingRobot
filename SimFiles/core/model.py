@@ -1,5 +1,6 @@
 import numpy as np
 from core.sim_types import PhysicalParams
+import control as ct
 
 def BuildLinearModel(param: PhysicalParams):
     g = param.g
@@ -46,5 +47,25 @@ def BuildLinearModel(param: PhysicalParams):
         [B_x, Z4x1],
         [Z4x1, B_x]
     ])
+    
+    # This shows which states are actually observable
+    C = np.array([
+        [1,0,0,0,0,0,0,0],  # x
+        [0,0,0,0,1,0,0,0],  # y
+        [0,0,1,0,0,0,0,0],  # alpha_x
+        [0,0,0,0,0,0,1,0],  # alpha_y
+    ])
+    
+    
+    # # Controllability / Observability
+ 
+    Co = ct.ctrb(A, B)
+    Ob = ct.obsv(A, C)
+
+    controllable = np.linalg.matrix_rank(Co) == A.shape[0]
+    observable  = np.linalg.matrix_rank(Ob) == A.shape[0]
+
+    # print(f"Controllable: {controllable} (rank {np.linalg.matrix_rank(Co)}/{A.shape[0]})")
+    # print(f"Observable : {observable} (rank {np.linalg.matrix_rank(Ob)}/{A.shape[0]})")
     
     return A, B

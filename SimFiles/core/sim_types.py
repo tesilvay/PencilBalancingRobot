@@ -108,8 +108,6 @@ class ExperimentConfig:
     estimator_type: str | None
     noise_std: float
     delay_steps: int
-    angle_importance: float = 1.0
-    effort_scale: float = 100.0
 
 @dataclass
 class TrialMetrics:

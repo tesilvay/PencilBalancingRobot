@@ -72,10 +72,10 @@ def run_benchmark_single(config, params, camera_params, x_ref=None):
 
 def run_benchmark_all(params, camera_params, x_ref=None):
 
-    controllers = ["pole", "lqr"]
-    estimators = [None, "lpf", "kalman"]
-    noises = [0, 0.001, 0.005]
-    delays = [0, 2, 10]
+    controllers = ["pole"]
+    estimators = ["lpf"]
+    noises = [0, 1e-3, 5e-3, 1e-2, 5e-2]
+    delays = [0, 2, 10, 15]
 
     all_results = []
     total_configs = len(controllers) * len(estimators) * len(noises) * len(delays)

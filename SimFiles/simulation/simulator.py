@@ -32,8 +32,12 @@ class Simulator:
         if self.vision is not None: # estimate states
             # Vision measures pose
             # Estimator measures full state (calculates derivatives, which vision can't do)
+            
+            # Compute measurable states y_vector
             measurement = self.vision.project(state_x_true) # Generates camera povs
             pose = self.vision.reconstruct(measurement)     # Reconstructs pose
+            
+            # Estimate x_hat
             state_x_est = self.estimator.update(pose, self.dt)       # Estimates state variables
         else: # use ground truth
             state_x_est = state_x_true

@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     workspace = FiveBarWorkspace(mech)
 
-    angles, points = workspace.sweep_joint_space(100)
+    angles, points = workspace.sweep_joint_space(200)
 
     viz = FiveBarVisualizer(mech, workspace)
 

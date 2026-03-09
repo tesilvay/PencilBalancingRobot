@@ -98,7 +98,7 @@ def run_region_trials(
             bar.update(trial + 1)
         
         if n_trials == 1: # only render if we use the single mode
-            plot_state_history(sim_result.state_history, x_ref)
+            #plot_state_history(sim_result.state_history, x_ref)
             viz = Visualizer3D(sim_result.state_history, dt=0.001, mech=mech)
             viz.render_video(video_speed=1, save_video=False)
             

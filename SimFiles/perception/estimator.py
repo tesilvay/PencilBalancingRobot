@@ -89,7 +89,7 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
         self.prev_pose = None
         self.prev_vel = np.zeros(4)
 
-
+# Class 1, original
 class KalmanEstimator(BaseEstimator):
 
     def __init__(self, A: np.ndarray, dt: float,
@@ -153,3 +153,56 @@ class KalmanEstimator(BaseEstimator):
     def reset(self):
         self.P = np.eye(8) * 0.01
         self.x_hat = np.zeros((8, 1))
+        
+# Class 2, improved 
+class KalmanEstimator(BaseEstimator):
+
+    def __init__(self, A: np.ndarray, dt: float, Q: np.ndarray, R: np.ndarray):
+
+        # Discretize the continuous dynamics
+        sys_c = ct.ss(A, np.zeros((8, 1)), np.eye(8), np.zeros((8, 1)))
+        sys_d = ct.c2d(sys_c, dt)
+
+        self.A = np.array(sys_d.A)
+
+        # Measurement matrix
+        # z = [X, alpha_x, Y, alpha_y]
+        self.H = np.zeros((4, 8))
+        self.H[0, 0] = 1.0
+        self.H[1, 2] = 1.0
+        self.H[2, 4] = 1.0
+        self.H[3, 6] = 1.0
+
+        # Compute steady-state Kalman gain
+        # LQE solves the Riccati equation once
+        self.L, _, _ = ct.lqe(self.A, np.eye(8), self.H, Q, R)
+
+        self.x_hat = np.zeros((8, 1))
+
+
+    def update(self, pose: PoseMeasurement, dt: float) -> SystemState:
+
+        z = np.array([
+            pose.X,
+            pose.alpha_x,
+            pose.Y,
+            pose.alpha_y
+        ]).reshape(-1, 1)
+
+        # Steady-state observer update
+        self.x_hat = self.A @ self.x_hat + self.L @ (z - self.H @ self.x_hat)
+
+        return SystemState(
+            x=self.x_hat[0,0],
+            x_dot=self.x_hat[1,0],
+            alpha_x=self.x_hat[2,0],
+            alpha_x_dot=self.x_hat[3,0],
+            y=self.x_hat[4,0],
+            y_dot=self.x_hat[5,0],
+            alpha_y=self.x_hat[6,0],
+            alpha_y_dot=self.x_hat[7,0]
+        )
+
+
+    def reset(self):
+        self.x_hat = np.zeros((8,1))

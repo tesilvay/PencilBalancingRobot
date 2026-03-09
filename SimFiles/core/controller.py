@@ -44,35 +44,6 @@ class LQRController(BaseController):
 
         return TableCommand(u[0], u[1])
 
-def build_lqr_weights(
-    x_max,
-    xdot_max,
-    alpha_max,
-    alphadot_max,
-    u_max,
-    angle_importance=1.0,
-    effort_scale=0.1
-):
-
-#    Q_single_axis = np.diag([
-#        1/x_max**2,
-#        1/xdot_max**2,
-#        angle_importance * (1/alpha_max**2),
-#        angle_importance * (1/alphadot_max**2)
-#    ])
-    
-    Q_single_axis = np.diag([10, 0.1, 10, 1]) # x, x_dot, alpha, alpha_dot
-
-    # Symmetric block diagonal for x and y axes
-    Q = np.block([
-        [Q_single_axis, np.zeros((4,4))],
-        [np.zeros((4,4)), Q_single_axis]
-    ])
-
-    R = np.eye(2) * effort_scale * (1/u_max**2)
-
-    return Q, R
-
 
 class NullController:
     def compute(self, state):

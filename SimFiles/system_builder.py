@@ -1,5 +1,5 @@
 import numpy as np
-from core.controller import NullController, PolePlacementController, LQRController, build_lqr_weights
+from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import VisionSystem
 from core.model import BuildLinearModel
@@ -17,15 +17,20 @@ def build_system(config, params, camera_params, x_ref=None):
         controller = PolePlacementController(A, B, poles, x_ref)
 
     elif config.controller_type == "lqr":
-        Q, R = build_lqr_weights(
-            x_max=0.05,
-            xdot_max=0.5,
-            alpha_max=0.2,
-            alphadot_max=2.0,
-            u_max=0.05,
-            angle_importance=config.angle_importance,
-            effort_scale=config.effort_scale
-        )
+        Q_single_axis = np.diag([10, 0.1, 10, 1]) # x, x_dot, alpha, alpha_dot
+        Z4 = np.zeros((4, 4))
+
+        # Symmetric block diagonal for x and y axes
+        Q = np.block([
+            [Q_single_axis, Z4],
+            [Z4, Q_single_axis]
+        ])
+        
+        
+        # Empirically, R > 1e5 keeps the poles in a reasonable range.
+        R = np.eye(2) * 1e5
+               
+        
         controller = LQRController(A, B, Q, R, x_ref)
 
     else:
