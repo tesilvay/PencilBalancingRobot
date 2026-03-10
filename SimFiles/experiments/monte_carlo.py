@@ -3,7 +3,7 @@ import numpy as np
 import sys
 import time
 from simulation.simulation_runner import run_simulation
-from visualization.visualizer import Visualizer3D
+from visualization.visualizer3d import Visualizer3D
 from core.sim_types import TrialMetrics, BenchmarkSummary, SystemState
 from analysis.graphing import plot_state_history
 
@@ -60,7 +60,8 @@ def run_region_trials(
     n_trials=100,
     show_progress=False,
     progress_prefix="",
-    x_ref=None
+    x_ref=None,
+    realtime=False,
 ):
     results = []
 
@@ -96,6 +97,7 @@ def run_region_trials(
             vision=vision,
             estimator=estimator,
             actuator=actuator,
+            realtime=realtime,
         )
         
         if show_progress:

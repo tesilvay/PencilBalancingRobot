@@ -1,5 +1,4 @@
 import numpy as np
-from simulation.simulation_runner import run_simulation  # if needed for plant
 from core.plant import BalancerPlant
 from perception.vision import VisionSystem
 from core.model import BuildLinearModel

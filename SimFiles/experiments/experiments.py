@@ -47,7 +47,8 @@ def run_single(config, params, camera_params, x_ref=None):
         mech=mech,
         actuator=actuator,
         n_trials=1,
-        x_ref=x_ref
+        x_ref=x_ref,
+        realtime=True,
     )
 
     return summarize_results(results)
@@ -67,7 +68,8 @@ def run_benchmark_single(config, params, camera_params, x_ref=None):
         n_trials=200,
         show_progress=True,
         progress_prefix="Trial",
-        x_ref=x_ref
+        x_ref=x_ref,
+        realtime=False,
     )
 
     return summarize_results(results)
