@@ -102,13 +102,11 @@ def build_mechanism(params):
     return mech
 
 def build_actuator(params, mech):
-    
-    if params.servo:
-        actuator = ServoSystem(mech)
-    else:
-        actuator = None
-    
-    return actuator
+
+    if not params.servo:
+        return None
+
+    return ServoSystem(mech, port=params.servo_port)
 
 def build_visualizer(params):
     if params.realtimerender:

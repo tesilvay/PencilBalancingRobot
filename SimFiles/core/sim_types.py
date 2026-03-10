@@ -96,6 +96,7 @@ class PhysicalParams:
     la: float | None = None
     lb: float | None = None
     servo: bool = False
+    servo_port: str | None = None
     dvs_cam: bool = False
     save_video: bool = False
     realtimerender: bool = False

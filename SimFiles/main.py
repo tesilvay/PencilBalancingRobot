@@ -25,6 +25,7 @@ def main(mode):
         lb=69.6,
         # servo
         servo=True,
+        servo_port=None,#"/dev/ttyUSB1",
         dvs_cam=False,
         save_video = False,
         realtimerender = False,

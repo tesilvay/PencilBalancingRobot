@@ -59,7 +59,11 @@ class ServoSystem:
     def __init__(self, mechanism, port="/dev/ttyUSB1"):
 
         self.adapter = MechanismAdapter(mechanism)
-        self.controller = MockServoController() #ServoController(port)
+        
+        if port == None:
+            self.controller = MockServoController()
+        else:
+            self.controller = ServoController(port)
 
         self.last_send = 0.0
         self.period = 0.01   # 100 Hz
