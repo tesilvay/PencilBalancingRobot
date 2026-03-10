@@ -1,192 +1,103 @@
-from dataclasses import dataclass
-import time
+# main.py
+import argparse
+from experiments.experiments import run_single, run_benchmark_single, run_benchmark_all, format_summary, sweep_workspace
+from core.sim_types import PhysicalParams, CameraParams, ExperimentConfig, SystemState
+from analysis.graphing import run_full_analysis
+from utils.io_utils import save_benchmark_results, load_benchmark_results
 
 
-# -----------------------------
-# 2D line as seen by a camera
-# -----------------------------
+def main(mode):
 
-@dataclass
-class LineObservation:
-    slope: float      # s
-    offset: float     # b (z_intercept)
+    params = PhysicalParams(
+        g=9.81,
+        com_length=0.1,
+        tau=0.04,
+        zeta=0.7,
+        num_states=8,
+        max_acc=9.81*9,
+        x_ref=-0.00993,
+        y_ref=0.01553,
+        safe_radius=0.040, #min is 0.031 for 100% stability
+        # mech params in mm
+        O=(83, 57),
+        B=(61, 88),
+        la=77,
+        lb=69.6,
+        # servo
+        servo=True,
+        servo_port=None,#"/dev/ttyUSB1",
+        dvs_cam=False,
+        save_video = False,
+        realtimerender = False,
+    )
 
+    camera_params = CameraParams(xr=0.3, yr=0.3)
 
-# -----------------------------
-# Camera geometry
-# -----------------------------
+    default_config = ExperimentConfig(
+        controller_type="lqr",
+        estimator_type="lpf",
+        noise_std=0.001,
+        delay_steps=10
+    )
 
-@dataclass
-class CameraPosition:
-    x: float
-    y: float
+    x_ref = SystemState(
+        x=params.x_ref,
+        #x=0.0,
+        x_dot=0.0,
+        alpha_x=0.0,
+        alpha_x_dot=0.0,
+        y=params.y_ref,
+        #y=0.0,
+        y_dot=0.0,
+        alpha_y=0.0,
+        alpha_y_dot=0.0
+    )
 
+    if mode == "single":
+        summary = run_single(default_config, params, camera_params, x_ref=x_ref)
 
-# -----------------------------
-# Reconstructed 3D pencil state
-# -----------------------------
+        print("\n=== Single Trial ===")
+        print(format_summary(summary, default_config, params))
 
-@dataclass
-class PencilState:
-    X: float          # position at camera height
-    Y: float
-    alpha_x: float    # tilt in x-direction
-    alpha_y: float    # tilt in y-direction
+    elif mode == "benchmark_single":
+        summary = run_benchmark_single(default_config, params, camera_params, x_ref=x_ref)
 
-
-# -----------------------------
-# Reconstruction engine
-# -----------------------------
-
-class PencilReconstructor:
-
-    def __init__(self, cam1_pos: CameraPosition, cam2_pos: CameraPosition):
-        self.cam1 = cam1_pos
-        self.cam2 = cam2_pos
-
-    def reconstruct(
-        self,
-        cam1_obs: LineObservation,
-        cam2_obs: LineObservation
-    ) -> PencilState:
-
-        b1 = cam1_obs.offset
-        s1 = cam1_obs.slope
-
-        b2 = cam2_obs.offset
-        s2 = cam2_obs.slope
-
-        xr = self.cam2.x
-        yr = self.cam1.y
-
-        denom = b1 * b2 + 1.0
-
-        if abs(denom) < 1e-8:
-            raise ValueError("Degenerate configuration: b1 * b2 + 1 ≈ 0")
-
-        X = (b1 * yr + b1 * b2 * xr) / denom
-        Y = (b2 * xr - b1 * b2 * yr) / denom
-
-        alpha_x = (s1 + b1 * s2) / denom
-        alpha_y = (s2 - b2 * s1) / denom
-
-        return PencilState(X, Y, alpha_x, alpha_y)
+        print("\n=== Monte Carlo Benchmark ===")
+        print(format_summary(summary, default_config, params))
     
-
-# -----------------------------
-# Filters
-# -----------------------------
-
-class LowPassFilter:
-    def __init__(self, smoothing_factor: float):
-        if not 0 < smoothing_factor <= 1: # 0 is very smooth / 1 means no filter
-            raise ValueError("smoothing_factor must be in (0,1]")
-        self.smoothing_factor = smoothing_factor
-        self.state = None
-
-    def update(self, measurement: float) -> float:
-        if self.state is None:
-            self.state = measurement
-        else:
-            self.state = (
-                self.smoothing_factor * measurement
-                + (1 - self.smoothing_factor) * self.state
-            )
-        return self.state
-    
-
-# -----------------------------
-# Pure P Controller (position + slope only)
-# -----------------------------
-    
-class PController2D:
-
-    def __init__(self, g_position: float, g_alpha: float):
-        self.g_position = g_position
-        self.g_alpha = g_alpha
-
-    def compute(self, state: PencilState) -> tuple[float, float]:
-
-        x_desired = self.g_position * state.X + self.g_alpha * state.alpha_x
-        y_desired = self.g_position * state.Y + self.g_alpha * state.alpha_y
-
-        return x_desired, y_desired
-
-
-class TableController:
-
-    def __init__(
-        self,
-        controller: PController2D,
-        filter_smoothing_factor: float = 0.2
-    ):
-        self.controller = controller
-
-        # One LPF per state variable
-        self.f_X = LowPassFilter(filter_smoothing_factor)
-        self.f_Y = LowPassFilter(filter_smoothing_factor)
-        self.f_alpha_x = LowPassFilter(filter_smoothing_factor)
-        self.f_alpha_y = LowPassFilter(filter_smoothing_factor)
-
-    def update(self, raw_state: PencilState) -> tuple[float, float]:
-
-        filtered = PencilState(
-            X=self.f_X.update(raw_state.X),
-            Y=self.f_Y.update(raw_state.Y),
-            alpha_x=self.f_alpha_x.update(raw_state.alpha_x),
-            alpha_y=self.f_alpha_y.update(raw_state.alpha_y),
+    elif mode == "sweep_workspace":
+        data = sweep_workspace(
+            config=default_config,
+            params=params,
+            camera_params=camera_params,
+            workspace_min_diameter_mm=40,
+            workspace_max_diameter_mm=80,
+            n_sizes=20
         )
 
-        return self.controller.compute(filtered)
-    
-    
-# -----------------------------
-# Control Loop
-# -----------------------------
+    elif mode == "benchmark_all_configs":
 
-class ControlLoop:
+        results = run_benchmark_all(params, camera_params, x_ref=x_ref)
+        
+        filepath = save_benchmark_results(results)
 
-    def __init__(
-        self,
-        reconstructor: PencilReconstructor,
-        table_controller: TableController,
-        loop_dt: float = 0.002  # 2 ms loop (500 Hz)
-    ):
-        self.reconstructor = reconstructor
-        self.table_controller = table_controller
-        self.loop_dt = loop_dt
-        self.running = False
+    elif mode == "graph_results":
+        
+        run_full_analysis()
 
-    def step(
-        self,
-        cam1_obs: LineObservation,
-        cam2_obs: LineObservation
-    ) -> tuple[float, float]:
+    else:
+        raise ValueError("Unknown mode")
 
-        # 1. Reconstruct 3D pencil state
-        pencil_state = self.reconstructor.reconstruct(cam1_obs, cam2_obs)
 
-        # 2. Compute desired table position
-        x_desired, y_desired = self.table_controller.update(pencil_state)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--mode",
+                        default="single",
+                        choices=["single",
+                                 "benchmark_single",
+                                 "benchmark_all_configs",
+                                 "graph_results",
+                                 "sweep_workspace"])
+    args = parser.parse_args()
 
-        # 3. Assume table moves instantly
-        return x_desired, y_desired
-
-    def run(self, observation_source):
-
-        self.running = True
-
-        while self.running:
-
-            cam1_obs, cam2_obs = observation_source()
-
-            x_desired, y_desired = self.step(cam1_obs, cam2_obs)
-
-            # Here x_desired and y_desired go to the hardware
-            # For now we just print
-            print(f"Commanded table position: {x_desired:.3f}, {y_desired:.3f}")
-
-            time.sleep(self.loop_dt)
-
-    def stop(self):
-        self.running = False
+    main(args.mode)
