@@ -34,9 +34,13 @@ class Simulator:
         
         if self.vision is not None:
             measurement = self.vision.get_observation(state_x_true)
-            pose = self.vision.reconstruct(measurement)
-            
-            state_x_est = self.estimator.update(pose, self.dt)
+            if measurement is None:
+                # estimator cannot update yet, use ground truth. we should estimate instead
+                state_x_est = state_x_true
+                pose = None
+            else:
+                pose = self.vision.reconstruct(measurement)
+                state_x_est = self.estimator.update(pose, self.dt)
         else:
             state_x_est = state_x_true
             measurement = None

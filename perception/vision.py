@@ -142,14 +142,28 @@ class SimEventCameraInterface(VisionModelBase):
         a_px, b_px = self.cam.normalized_to_pixel(b, s)
 
         cam_height = self.cam.height
+        cam_width = self.cam.width
 
+        # sample points along the line
         ys = np.random.uniform(0, cam_height, n)
         xs = a_px * ys + b_px
 
         # add pixel noise
         xs += np.random.normal(0, 1.0, n)
 
-        return xs.astype(int), ys.astype(int)
+        # keep only events inside the image
+        mask = (xs >= 0) & (xs < cam_width)
+        xs = xs[mask]
+        ys = ys[mask]
+
+        xs = xs.astype(np.int16)
+        ys = ys.astype(np.int16)
+
+        events = np.zeros(len(xs), dtype=[("x", np.int16), ("y", np.int16)])
+        events["x"] = xs
+        events["y"] = ys
+
+        return events
 
     def get_observation(self, state_true):
 
@@ -158,16 +172,15 @@ class SimEventCameraInterface(VisionModelBase):
 
         b1, s1, b2, s2 = get_measurements(cams)
 
-        # generate events
-        xs1, ys1 = self.generate_events(b1, s1)
-        xs2, ys2 = self.generate_events(b2, s2)
+        events1 = self.generate_events(b1, s1)
+        events2 = self.generate_events(b2, s2)
 
-        # update tracker
-        self.cam1_algo.update(xs1, ys1)
-        self.cam2_algo.update(xs2, ys2)
+        b1_est_pix, s1_est_pix = self.cam1_algo.update(events1)
+        b2_est_pix, s2_est_pix = self.cam2_algo.update(events2)
 
-        s1_est_pix, b1_est_pix = self.cam1_algo.get_line()
-        s2_est_pix, b2_est_pix = self.cam2_algo.get_line()
+        # tracker not ready yet
+        if s1_est_pix is None or s2_est_pix is None:
+            return None
 
         b1_est, s1_est = self.cam.pixel_to_normalized(b1_est_pix, s1_est_pix)
         b2_est, s2_est = self.cam.pixel_to_normalized(b2_est_pix, s2_est_pix)

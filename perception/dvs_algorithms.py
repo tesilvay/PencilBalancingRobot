@@ -116,7 +116,7 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
         b = (self.D * self.B - 2 * self.A * self.E) / q
         m = (self.B * self.E - 2 * self.C * self.D) / q
 
-        return m, b
+        return b, m
 
     def reset(self):
         self.A = self.B = self.C = self.D = self.E = 0.0
