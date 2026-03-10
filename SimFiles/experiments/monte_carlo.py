@@ -49,6 +49,7 @@ def evaluate_stability(result, dt, tol=0.02, hold_time=0.2):
 
 def run_region_trials(
     params,
+    plant,
     controller,
     vision=None,
     estimator=None,
@@ -90,6 +91,7 @@ def run_region_trials(
             initial_state=initial_state,
             total_time=total_time,
             dt=dt,
+            plant=plant,
             controller=controller,
             vision=vision,
             estimator=estimator,

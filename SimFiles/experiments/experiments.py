@@ -36,10 +36,11 @@ def format_summary(summary, config, params):
 
 def run_single(config, params, camera_params, x_ref=None):
 
-    controller, vision, estimator, mech, actuator = build_system(config, params, camera_params, x_ref=x_ref)
+    plant,controller, vision, estimator, mech, actuator = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,
+        plant=plant,
         controller=controller,
         vision=vision,
         estimator=estimator,
@@ -54,10 +55,11 @@ def run_single(config, params, camera_params, x_ref=None):
 
 def run_benchmark_single(config, params, camera_params, x_ref=None):
 
-    controller, vision, estimator, mech = build_system(config, params, camera_params, x_ref=x_ref)
+    plant, controller, vision, estimator, mech, _ = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,
+        plant=plant,
         controller=controller,
         vision=vision,
         estimator=estimator,

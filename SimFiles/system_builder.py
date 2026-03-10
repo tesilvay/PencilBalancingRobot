@@ -3,12 +3,17 @@ from core.controller import NullController, PolePlacementController, LQRControll
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import SimVisionModel, RealEventCameraInterface
 from core.model import BuildLinearModel
+from core.plant import BalancerPlant
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
 from hardware.Servo_System import ServoSystem
+from perception.dvs_algorithms import PaperHoughLineAlgorithm, SurfaceRegressionAlgorithm
 
+def build_plant(params):
+    plant = BalancerPlant(params)
+    return plant
 
-def build_controller(params, config, x_ref):
+def build_controller(config, params, x_ref):
     A, B = BuildLinearModel(params)
 
     if config.controller_type == "pole":
@@ -59,7 +64,15 @@ def build_vision(config, params, camera_params):
         
         if params.dvs_cam:
             print("Using DVS camera")
-            vision = RealEventCameraInterface()
+            
+            cam1_estimator = PaperHoughLineAlgorithm()
+            cam2_estimator = PaperHoughLineAlgorithm()
+            
+            vision = RealEventCameraInterface(
+                        camera_params=camera_params, 
+                        cam1_estimator=cam1_estimator,
+                        cam2_estimator=cam2_estimator,
+            )
         else:
             vision = SimVisionModel(
                 camera_params,
@@ -99,6 +112,8 @@ def build_actuator(params, mech):
 
 def build_system(config, params, camera_params, x_ref=None):
 
+    plant = build_plant(params)
+
     controller = build_controller(config, params, x_ref)
 
     estimator = build_estimator(config, params)
@@ -109,4 +124,4 @@ def build_system(config, params, camera_params, x_ref=None):
     
     actuator = build_actuator(params, mech)
 
-    return controller, vision, estimator, mech, actuator
+    return plant, controller, vision, estimator, mech, actuator

@@ -29,20 +29,17 @@ class Simulator:
         if (self.vision is None) != (self.estimator is None):
             raise ValueError("Vision and estimator must both be set or both be None.")
         
-        if self.vision is not None: # estimate states
-            # Vision measures pose
-            # Estimator measures full state (calculates derivatives, which vision can't do)
+        if self.vision is not None:
+            measurement = self.vision.get_observation(state_x_true)
+            pose = self.vision.reconstruct(measurement)
             
-            # Compute measurable states y_vector
-            measurement = self.vision.get_observation(state_x_true) # Generates camera povs
-            pose = self.vision.reconstruct(measurement)     # Reconstructs pose
-            
-            # Estimate x_hat
-            state_x_est = self.estimator.update(pose, self.dt)       # Estimates state variables
-        else: # use ground truth
+            state_x_est = self.estimator.update(pose, self.dt)
+        else:
             state_x_est = state_x_true
+            measurement = None
+            pose = None
 
         # 3. Controller uses estimate
         command_u = self.controller.compute(state_x_est)
 
-        return state_x_true, command_u, table_acc
+        return state_x_true, command_u, table_acc, measurement, pose

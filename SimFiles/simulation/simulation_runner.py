@@ -15,15 +15,12 @@ def run_simulation(
     initial_state: SystemState,
     total_time: float,
     dt: float,
+    plant,
     controller=None,
     vision=None,
     estimator=None,
     actuator=None
 ) -> SimulationResult:
-
-    plant = BalancerPlant(params)
-    if controller is None:
-        controller = NullController()
 
     sim = Simulator(
         plant=plant,
@@ -48,7 +45,7 @@ def run_simulation(
         next_time = time.perf_counter()
         
     for i in range(steps):
-        state, command, table_acc = sim.step(state, command)
+        state, command, table_acc, measurement, pose = sim.step(state, command)
         
         if actuator is not None:
             command_limited = plant.clamp_command(command)
