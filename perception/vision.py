@@ -38,6 +38,7 @@ class VisionModelBase:
         if abs(denom) < 1e-8:
             denom = 1e-8
 
+        # some sort of projection down to base height instead of camera height at b1, b2?
         X = (b1 * self.yr + b1 * b2 * self.xr) / denom
         Y = (b2 * self.xr - b1 * b2 * self.yr) / denom
         alpha_x = (s1 + b1 * s2) / denom

@@ -112,6 +112,11 @@ def run_simulation(
                 time.sleep(sleep_time)
 
             next_sim += dt
+        
+    if realtime:
+        wall_elapsed = time.perf_counter() - start_time
+        print(f"Wall time: {wall_elapsed:.3f}s")
+        print(f"Simulated time: {steps*dt:.3f}s")
 
     return SimulationResult(
         state_history=state_history,

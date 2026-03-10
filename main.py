@@ -28,7 +28,8 @@ def main(mode):
         servo_port=None,#"/dev/ttyUSB1",
         dvs_cam=False,
         save_video = False,
-        realtimerender = False,
+        realtimerender = True,
+        total_time = 5.0,
     )
 
     camera_params = CameraParams(xr=0.3, yr=0.3)

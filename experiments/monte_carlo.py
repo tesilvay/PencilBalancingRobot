@@ -57,7 +57,6 @@ def run_region_trials(
     actuator=None,
     visualizer=None,
     dt=0.001,
-    total_time=3.0,
     n_trials=100,
     show_progress=False,
     progress_prefix="",
@@ -90,7 +89,7 @@ def run_region_trials(
         sim_result = run_simulation(
             params=params,
             initial_state=initial_state,
-            total_time=total_time,
+            total_time=params.total_time,
             dt=dt,
             plant=plant,
             controller=controller,

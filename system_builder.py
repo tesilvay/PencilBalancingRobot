@@ -108,7 +108,7 @@ def build_actuator(params, mech):
 
     return ServoSystem(mech, port=params.servo_port)
 
-def build_visualizer(params):
+def build_visualizer(params): #should know whether I have sim cam or real cam
     if params.realtimerender:
         visualizer = PencilVisualizerRealtime()
     else:

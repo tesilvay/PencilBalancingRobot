@@ -100,6 +100,7 @@ class PhysicalParams:
     dvs_cam: bool = False
     save_video: bool = False
     realtimerender: bool = False
+    total_time: float | None = None
 
 @dataclass
 class SimulationResult:

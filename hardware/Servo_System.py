@@ -22,7 +22,6 @@ class ServoController:
     def send_angles(self, a, b): #degrees
         cmd_str = f"CMD,{a},{b}"
         self.send(cmd_str)
-        print(cmd_str)
 
 class MockServoController:
 
@@ -31,7 +30,7 @@ class MockServoController:
 
     def send(self, cmd):
         t = time.perf_counter() - self.start
-        print(f"{t:0.4f}s | {cmd}")
+        #print(f"{t:0.4f}s | {cmd}")
 
     def send_angles(self, theta1, theta2):
         cmd = f"CMD,{theta1:.1f},{theta2:.1f}"
