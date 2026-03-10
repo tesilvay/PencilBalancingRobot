@@ -36,7 +36,7 @@ def format_summary(summary, config, params):
 
 def run_single(config, params, camera_params, x_ref=None):
 
-    plant,controller, vision, estimator, mech, actuator = build_system(config, params, camera_params, x_ref=x_ref)
+    plant,controller, vision, estimator, mech, actuator, visualizer = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,
@@ -46,6 +46,7 @@ def run_single(config, params, camera_params, x_ref=None):
         estimator=estimator,
         mech=mech,
         actuator=actuator,
+        visualizer=visualizer,
         n_trials=1,
         x_ref=x_ref,
         realtime=True,
@@ -56,7 +57,7 @@ def run_single(config, params, camera_params, x_ref=None):
 
 def run_benchmark_single(config, params, camera_params, x_ref=None):
 
-    plant, controller, vision, estimator, mech, _ = build_system(config, params, camera_params, x_ref=x_ref)
+    plant, controller, vision, estimator, mech, _, _ = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,

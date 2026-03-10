@@ -1,4 +1,5 @@
 import numpy as np
+from visualization.realtime_visualizer import PencilVisualizerRealtime
 from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import SimVisionModel, RealEventCameraInterface
@@ -109,6 +110,9 @@ def build_actuator(params, mech):
     
     return actuator
 
+def build_visualizer():
+    
+    return PencilVisualizerRealtime()
 
 def build_system(config, params, camera_params, x_ref=None):
 
@@ -123,5 +127,7 @@ def build_system(config, params, camera_params, x_ref=None):
     mech = build_mechanism(params)
     
     actuator = build_actuator(params, mech)
+    
+    visualizer = build_visualizer()
 
-    return plant, controller, vision, estimator, mech, actuator
+    return plant, controller, vision, estimator, mech, actuator, visualizer

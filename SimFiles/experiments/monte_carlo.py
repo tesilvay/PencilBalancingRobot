@@ -55,6 +55,7 @@ def run_region_trials(
     estimator=None,
     mech=None,
     actuator=None,
+    visualizer=None,
     dt=0.001,
     total_time=3.0,
     n_trials=100,
@@ -97,6 +98,7 @@ def run_region_trials(
             vision=vision,
             estimator=estimator,
             actuator=actuator,
+            visualizer=visualizer,
             realtime=realtime,
         )
         

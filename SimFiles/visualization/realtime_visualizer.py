@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from perception.vision import get_measurements
 
 
 class PencilVisualizerRealtime:
@@ -36,8 +37,7 @@ class PencilVisualizerRealtime:
         img1 = np.zeros((self.height, self.width), dtype=np.uint8)
         img2 = np.zeros((self.height, self.width), dtype=np.uint8)
 
-        b1, s1 = measurement["cam1"]
-        b2, s2 = measurement["cam2"]
+        b1, s1, b2, s2 = get_measurements(measurement)
 
         self.draw_line(img1, b1, s1)
         self.draw_line(img2, b2, s2)

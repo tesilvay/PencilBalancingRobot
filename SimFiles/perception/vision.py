@@ -8,6 +8,15 @@ from core.sim_types import (
     PoseMeasurement
 )
 
+def get_measurements(cams: CameraPair):
+    b1 = cams.cam1.intercept
+    s1 = cams.cam1.slope
+
+    b2 = cams.cam2.intercept
+    s2 = cams.cam2.slope
+    
+    return b1, s1, b2, s2
+
 # ============================================================
 # Base Vision Model (shared math)
 # ============================================================
@@ -23,11 +32,7 @@ class VisionModelBase:
     # -------------------------------------------------
     def reconstruct(self, cams: CameraPair) -> PoseMeasurement:
 
-        b1 = cams.cam1.intercept
-        s1 = cams.cam1.slope
-
-        b2 = cams.cam2.intercept
-        s2 = cams.cam2.slope
+        b1, s1, b2, s2 = get_measurements(cams)
 
         denom = b1 * b2 + 1.0
         if abs(denom) < 1e-8:
