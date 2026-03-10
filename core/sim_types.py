@@ -101,6 +101,7 @@ class PhysicalParams:
     save_video: bool = False
     realtimerender: bool = False
     total_time: float | None = None
+    stability_tolerance: float | None = None
 
 @dataclass
 class SimulationResult:

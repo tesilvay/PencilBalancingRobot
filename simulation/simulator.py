@@ -9,11 +9,14 @@ class Simulator:
         self.vision = vision
         self.estimator=estimator
         self.dt = dt
+        self.servo_timer=0
 
     def step(
         self,
         state_x_true: SystemState,
-        command_u: TableCommand
+        command_u: TableCommand,
+        realtime: bool,
+        actuator_dt: float,
     ) -> tuple[SystemState, TableCommand, TableAccel]:
 
         # 1. Plant evolves using last command
@@ -39,7 +42,13 @@ class Simulator:
             measurement = None
             pose = None
 
-        # 3. Controller uses estimate
-        command_u = self.controller.compute(state_x_est)
+        # 3. Controller at servo speed if we have one
+       
+        if self.servo_timer >= actuator_dt:
+            command_u = self.controller.compute(state_x_est)
+            self.servo_timer = 0
+
+        self.servo_timer += self.dt
+
 
         return state_x_true, command_u, table_acc, measurement, pose

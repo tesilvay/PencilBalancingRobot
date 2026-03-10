@@ -56,6 +56,9 @@ def run_single(config, params, camera_params, x_ref=None):
 
 
 def run_benchmark_single(config, params, camera_params, x_ref=None):
+    
+    # prevents dvs from starting in the benchmark
+    params.realtimerender = False
 
     plant, controller, vision, estimator, mech, _, _ = build_system(config, params, camera_params, x_ref=x_ref)
 

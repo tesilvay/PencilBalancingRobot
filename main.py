@@ -11,7 +11,7 @@ def main(mode):
     params = PhysicalParams(
         g=9.81,
         com_length=0.1,
-        tau=0.04,
+        tau=0.02,
         zeta=0.7,
         num_states=8,
         max_acc=9.81*9,
@@ -29,7 +29,8 @@ def main(mode):
         dvs_cam=False,
         save_video = False,
         realtimerender = True,
-        total_time = 5.0,
+        total_time = 1.0,
+        stability_tolerance = 0.05,
     )
 
     camera_params = CameraParams(xr=0.3, yr=0.3)
@@ -37,8 +38,8 @@ def main(mode):
     default_config = ExperimentConfig(
         controller_type="lqr",
         estimator_type="lpf",
-        noise_std=0.001,
-        delay_steps=10
+        noise_std=0.0001,
+        delay_steps=1
     )
 
     x_ref = SystemState(

@@ -76,7 +76,7 @@ def run_simulation(
     for i in range(steps):
 
         # ---- Simulation step ----
-        state, command, table_acc, measurement, pose = sim.step(state, command)
+        state, command, table_acc, measurement, pose = sim.step(state, command, realtime, actuator_dt)
 
         # ---- Optional real-time scheduling ----
         if realtime:

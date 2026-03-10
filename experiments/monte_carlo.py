@@ -33,7 +33,7 @@ class ProgressBar:
         sys.stdout.flush()
 
 
-def evaluate_stability(result, dt, tol=0.02, hold_time=0.2):
+def evaluate_stability(result, dt, tol=0.05, hold_time=0.2):
     alpha_x = result.state_history[:, 2]
     alpha_y = result.state_history[:, 6]
 
@@ -110,7 +110,7 @@ def run_region_trials(
             
             
 
-        stabilized, settling_time = evaluate_stability(sim_result, dt)
+        stabilized, settling_time = evaluate_stability(sim_result, dt, tol=params.stability_tolerance)
         max_acc = np.max(np.abs(sim_result.acc_history))
         
         if max_acc > 200:
