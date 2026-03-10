@@ -98,6 +98,7 @@ class PhysicalParams:
     servo: bool = False
     dvs_cam: bool = False
     save_video: bool = False
+    realtimerender: bool = False
 
 @dataclass
 class SimulationResult:

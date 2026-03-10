@@ -110,9 +110,13 @@ def build_actuator(params, mech):
     
     return actuator
 
-def build_visualizer():
+def build_visualizer(params):
+    if params.realtimerender:
+        visualizer = PencilVisualizerRealtime()
+    else:
+        visualizer = None
     
-    return PencilVisualizerRealtime()
+    return visualizer
 
 def build_system(config, params, camera_params, x_ref=None):
 
@@ -128,6 +132,6 @@ def build_system(config, params, camera_params, x_ref=None):
     
     actuator = build_actuator(params, mech)
     
-    visualizer = build_visualizer()
+    visualizer = build_visualizer(params)
 
     return plant, controller, vision, estimator, mech, actuator, visualizer

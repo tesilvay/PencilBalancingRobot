@@ -26,7 +26,8 @@ def main(mode):
         # servo
         servo=True,
         dvs_cam=False,
-        save_video = False
+        save_video = False,
+        realtimerender = False,
     )
 
     camera_params = CameraParams(xr=0.3, yr=0.3)

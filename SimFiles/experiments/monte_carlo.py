@@ -87,7 +87,6 @@ def run_region_trials(
             alpha_y_dot=0.0
         )
 
-
         sim_result = run_simulation(
             params=params,
             initial_state=initial_state,
