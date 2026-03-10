@@ -17,10 +17,9 @@ class BalancerPlant:
 
         self.max_acc = param.max_acc
 
-        self.x_min = param.x_min
-        self.x_max = param.x_max
-        self.y_min = param.y_min
-        self.y_max = param.y_max
+        self.x_ref = param.x_ref
+        self.y_ref = param.y_ref
+        self.safe_radius = param.safe_radius
 
     # ------------------------------------------------------------------
     # Public API
@@ -40,8 +39,8 @@ class BalancerPlant:
         alpha_y_dot = state_x.alpha_y_dot
 
         # ---- clamp command (servo limits) ----
-        x_des, y_des = self._clamp_command(command_u.x_des,
-                                           command_u.y_des)
+        command_u_limited = self.clamp_command(command_u)
+        x_des, y_des = command_u_limited.x_des, command_u_limited.y_des
 
         # ---- table dynamics ----
         x_ddot = (1 / self.tau**2) * (x_des - x) \
@@ -100,22 +99,27 @@ class BalancerPlant:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _clamp_command(self, x_des, y_des):
-        """
-        Clamp desired position if workspace limits exist.
-        If limits are None, leave unchanged.
-        """
-        if self.x_min is not None:
-            x_des = max(self.x_min, x_des)
-        if self.x_max is not None:
-            x_des = min(self.x_max, x_des)
+    def clamp_command(self, command_u):
 
-        if self.y_min is not None:
-            y_des = max(self.y_min, y_des)
-        if self.y_max is not None:
-            y_des = min(self.y_max, y_des)
+        x_des = command_u.x_des
+        y_des = command_u.y_des
+    
+        # vector from workspace center
+        dx = x_des - self.x_ref
+        dy = y_des - self.y_ref
 
-        return x_des, y_des
+        dist = np.sqrt(dx*dx + dy*dy)
+
+        # radial projection
+        if self.safe_radius is not None and dist > self.safe_radius and dist > 0:
+            scale = self.safe_radius / dist
+            dx *= scale
+            dy *= scale
+
+            x_des = self.x_ref + dx
+            y_des = self.y_ref + dy
+
+        return TableCommand(x_des, y_des)
 
     def _clamp_acceleration(self, x_ddot, y_ddot):
         """
@@ -135,31 +139,35 @@ class BalancerPlant:
 
     def _apply_workspace_limits(self, x, x_dot, y, y_dot):
         """
-        Enforce hard position limits.
-        If a limit is None, that direction is unbounded.
-        Outward velocity is zeroed at boundary.
+        Enforce circular workspace limits.
+
+        If the table state exits the safe radius, it is projected back
+        onto the boundary and outward velocity is removed.
         """
 
-        # X limits
-        if self.x_min is not None and x < self.x_min:
-            x = self.x_min
-            if x_dot < 0:
-                x_dot = 0.0
+        dx = x - self.x_ref
+        dy = y - self.y_ref
 
-        if self.x_max is not None and x > self.x_max:
-            x = self.x_max
-            if x_dot > 0:
-                x_dot = 0.0
+        dist = np.sqrt(dx*dx + dy*dy)
 
-        # Y limits
-        if self.y_min is not None and y < self.y_min:
-            y = self.y_min
-            if y_dot < 0:
-                y_dot = 0.0
+        if self.safe_radius is None or dist <= self.safe_radius:
+            return x, x_dot, y, y_dot
 
-        if self.y_max is not None and y > self.y_max:
-            y = self.y_max
-            if y_dot > 0:
-                y_dot = 0.0
+        # ---- project position to boundary ----
+        scale = self.safe_radius / dist
+        dx *= scale
+        dy *= scale
 
-        return x, x_dot, y, y_dot
+        x = self.x_ref + dx
+        y = self.y_ref + dy
+
+        # ---- remove outward velocity component ----
+        normal = np.array([dx, dy]) / self.safe_radius
+        vel = np.array([x_dot, y_dot])
+
+        v_out = np.dot(vel, normal)
+
+        if v_out > 0:
+            vel = vel - v_out * normal
+
+        return x, vel[0], y, vel[1]

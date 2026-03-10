@@ -9,7 +9,7 @@ from system_builder import build_system
 def format_summary(summary, config, params):
     
     # Workspace size
-    r_cm = min((params.x_max - params.x_min), (params.y_max - params.y_min)) * 100
+    diameter_cm = params.safe_radius * 2 * 100
     
     
     stability_pct = summary.stability_rate * 100
@@ -25,7 +25,7 @@ def format_summary(summary, config, params):
         f"  Estimator          : {config.estimator_type}\n"
         f"  Noise              : {config.noise_std}\n"
         f"  Delay              : {config.delay_steps}\n"
-        f"  Workspace diameter : {r_cm:.1f} cm\n"
+        f"  Workspace diameter : {diameter_cm:.1f} cm\n"
         f"\n"
         f"  Stability rate     : {stability_pct:.1f}%\n"
         f"  Avg settling time  : {settling}\n"
@@ -36,7 +36,7 @@ def format_summary(summary, config, params):
 
 def run_single(config, params, camera_params, x_ref=None):
 
-    controller, vision, estimator, mech = build_system(config, params, camera_params, x_ref=x_ref)
+    controller, vision, estimator, mech, actuator = build_system(config, params, camera_params, x_ref=x_ref)
 
     results = run_region_trials(
         params=params,
@@ -44,6 +44,7 @@ def run_single(config, params, camera_params, x_ref=None):
         vision=vision,
         estimator=estimator,
         mech=mech,
+        actuator=actuator,
         n_trials=1,
         x_ref=x_ref
     )

@@ -15,15 +15,18 @@ def main(mode):
         zeta=0.7,
         num_states=8,
         max_acc=9.81*9,
-        x_min=-50/1000.0,
-        x_max=30/1000.0,
-        y_min=-24.5/1000.0,
-        y_max=55.5/1000.0,
+        x_ref=-0.00993,
+        y_ref=0.01553,
+        safe_radius=0.040, #min is 0.031 for 100% stability
         # mech params in mm
         O=(83, 57),
         B=(61, 88),
         la=77,
-        lb=69.6
+        lb=69.6,
+        # servo
+        servo=True,
+        dvs_cam=False,
+        save_video = False
     )
 
     camera_params = CameraParams(xr=0.3, yr=0.3)
@@ -36,12 +39,12 @@ def main(mode):
     )
 
     x_ref = SystemState(
-        x=-0.00993,
+        x=params.x_ref,
         #x=0.0,
         x_dot=0.0,
         alpha_x=0.0,
         alpha_x_dot=0.0,
-        y=0.01553,
+        y=params.y_ref,
         #y=0.0,
         y_dot=0.0,
         alpha_y=0.0,

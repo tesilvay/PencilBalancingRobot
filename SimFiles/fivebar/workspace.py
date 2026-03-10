@@ -104,3 +104,11 @@ class FiveBarWorkspace:
                         best_center=(x,y)
 
         return best_center,best_r
+    
+    def safe_workspace_circle(self, poly, buffer=0.7):
+
+        center, r = self.largest_inscribed_circle(poly)
+        
+        r_safe = r * buffer
+
+        return center, r_safe

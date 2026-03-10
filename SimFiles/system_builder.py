@@ -1,10 +1,11 @@
 import numpy as np
 from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
-from perception.vision import VisionSystem
+from perception.vision import SimVisionModel, RealEventCameraInterface
 from core.model import BuildLinearModel
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
+from hardware.Servo_System import ServoSystem
 
 
 def build_system(config, params, camera_params, x_ref=None):
@@ -41,12 +42,16 @@ def build_system(config, params, camera_params, x_ref=None):
     vision = None
 
     if config.estimator_type is not None:
-
-        vision = VisionSystem(
-            camera_params,
-            noise_std=config.noise_std,
-            delay_steps=config.delay_steps
-        )
+        
+        if params.dvs_cam:
+            print("Using DVS camera")
+            #vision = RealEventCameraInterface()
+        else:
+            vision = SimVisionModel(
+                camera_params,
+                noise_std=config.noise_std,
+                delay_steps=config.delay_steps
+            )
 
         if config.estimator_type == "fd":
             estimator = FiniteDifferenceEstimator()
@@ -71,5 +76,11 @@ def build_system(config, params, camera_params, x_ref=None):
             la=params.la,
             lb=params.lb
         )
+    
+    actuator = None
+    if params.servo:
+        actuator = ServoSystem(mech)
+        
+    
 
-    return controller, vision, estimator, mech
+    return controller, vision, estimator, mech, actuator

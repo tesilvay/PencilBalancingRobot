@@ -1,8 +1,8 @@
 import numpy as np
+import time
 from simulation.simulator import Simulator
 from core.plant import BalancerPlant
 from core.controller import NullController
-from hardware.servo_actuator import ServoActuator
 from core.sim_types import (
     SystemState,
     TableCommand,
@@ -43,11 +43,26 @@ def run_simulation(
 
     state_history[0, :] = state.as_vector()
 
+    # real-time scheduler
+    if actuator is not None:
+        next_time = time.perf_counter()
+        
     for i in range(steps):
         state, command, table_acc = sim.step(state, command)
         
         if actuator is not None:
-            actuator.send(command)
+            command_limited = plant.clamp_command(command)
+            actuator.send(command_limited)
+            
+            sleep_time = next_time - time.perf_counter()
+
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            else:
+                # optional: track missed deadlines
+                pass
+            
+            next_time += dt
 
         state_history[i + 1, :] = state.as_vector()
         acc_history[i, :] = table_acc.as_vector()

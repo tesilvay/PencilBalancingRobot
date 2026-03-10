@@ -7,7 +7,7 @@ import numpy as np
 
 class Visualizer3D:
 
-    def __init__(self, history, dt, L=0.2, fps=60, mech=None):
+    def __init__(self, history, dt, L=0.2, fps=60, mech=None, params=None):
 
         self.history = history
         self.dt = dt
@@ -17,6 +17,10 @@ class Visualizer3D:
         self.total_sim_time = history.shape[0] * dt
         
         self.mech = mech
+        
+        self.x_ref = params.x_ref
+        self.y_ref = params.y_ref
+        self.safe_radius = params.safe_radius
 
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')
@@ -50,6 +54,35 @@ class Visualizer3D:
             color='gray'
         )
 
+        # --- Safe workspace circle ---
+        if self.safe_radius is not None:
+
+            theta = np.linspace(0, 2*np.pi, 200)
+
+            circle_x = self.x_ref + self.safe_radius * np.cos(theta)
+            circle_y = self.y_ref + self.safe_radius * np.sin(theta)
+            circle_z = np.zeros_like(circle_x)
+
+            self.safe_circle, = self.ax.plot(
+                circle_x,
+                circle_y,
+                circle_z,
+                linestyle=':',
+                color='gray',
+                linewidth=1.5
+            )
+
+        # --- Reference point ---
+        self.ref_point, = self.ax.plot(
+            [self.x_ref],
+            [self.y_ref],
+            [0],
+            marker='*',
+            markersize=3,
+            color='black'
+        )
+
+        # Legend
         self.info_text = self.ax.text2D(
             0.02, 0.95,
             "",

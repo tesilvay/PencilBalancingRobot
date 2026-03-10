@@ -34,7 +34,7 @@ class Simulator:
             # Estimator measures full state (calculates derivatives, which vision can't do)
             
             # Compute measurable states y_vector
-            measurement = self.vision.project(state_x_true) # Generates camera povs
+            measurement = self.vision.get_observation(state_x_true) # Generates camera povs
             pose = self.vision.reconstruct(measurement)     # Reconstructs pose
             
             # Estimate x_hat

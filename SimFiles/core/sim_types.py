@@ -87,15 +87,17 @@ class PhysicalParams:
     zeta: float
     num_states: int
     max_acc: float | None = None
-    x_min: float | None = None
-    x_max: float | None = None
-    y_min: float | None = None
-    y_max: float | None = None
+    x_ref: float | None = None
+    y_ref: float | None = None
+    safe_radius: float | None = None
     # mech params
     O: tuple[float, float] | None = None
     B: tuple[float, float] | None = None
     la: float | None = None
     lb: float | None = None
+    servo: bool = False
+    dvs_cam: bool = False
+    save_video: bool = False
 
 @dataclass
 class SimulationResult:

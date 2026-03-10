@@ -49,7 +49,7 @@ class FiveBarVisualizer:
         ax.plot(x, y, 'k', linewidth=2)
 
         # ---- largest inscribed circle ----
-        center, radius = self.workspace.largest_inscribed_circle(poly)
+        center, radius = self.workspace.safe_workspace_circle(poly)
         
         # ---- show that in a legend ----
         diameter = 2 * radius
