@@ -98,6 +98,8 @@ class PhysicalParams:
     servo: bool = False
     servo_port: str | None = None
     dvs_cam: bool = False
+    dvs_cam_x_port: str | None = None
+    dvs_cam_y_port: str | None = None
     save_video: bool = False
     realtimerender: bool = False
     total_time: float | None = None

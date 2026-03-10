@@ -120,3 +120,4 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
 
     def reset(self):
         self.A = self.B = self.C = self.D = self.E = 0.0
+

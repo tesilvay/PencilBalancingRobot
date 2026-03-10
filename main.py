@@ -26,10 +26,12 @@ def main(mode):
         # servo
         servo=True,
         servo_port=None,#"/dev/ttyUSB1",
-        dvs_cam=False,
+        dvs_cam=True,
+        dvs_cam_x_port=None,#"/dev/ttyUSB1",
+        dvs_cam_y_port=None,#"/dev/ttyUSB1",
         save_video = False,
         realtimerender = True,
-        total_time = 1.0,
+        total_time = 5.0,
         stability_tolerance = 0.05,
     )
 

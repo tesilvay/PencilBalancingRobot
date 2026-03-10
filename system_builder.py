@@ -2,7 +2,7 @@ import numpy as np
 from visualization.realtime_visualizer import PencilVisualizerRealtime
 from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
-from perception.vision import SimVisionModel, RealEventCameraInterface
+from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface
 from core.model import BuildLinearModel
 from core.plant import BalancerPlant
 from fivebar.transform import FiveBarTransform
@@ -60,20 +60,32 @@ def build_estimator(config, params):
     
     return estimator
 
+def dvs_cams_connected(params):
+    return params.dvs_cam_y_port is not None and params.dvs_cam_x_port is not None
+
 def build_vision(config, params, camera_params):
     if config.estimator_type is not None:
         
         if params.dvs_cam:
-            print("Using DVS camera")
-            
-            cam1_estimator = PaperHoughLineAlgorithm()
-            cam2_estimator = PaperHoughLineAlgorithm()
-            
-            vision = RealEventCameraInterface(
-                        camera_params=camera_params, 
-                        cam1_estimator=cam1_estimator,
-                        cam2_estimator=cam2_estimator,
-            )
+
+            cam1_algo = PaperHoughLineAlgorithm()
+            cam2_algo = PaperHoughLineAlgorithm()
+
+
+            if dvs_cams_connected(params):
+                vision = RealEventCameraInterface(
+                            camera_params=camera_params, 
+                            cam1_algo=cam1_algo,
+                            cam2_algo=cam2_algo,
+                )
+                
+            else:
+                vision = SimEventCameraInterface(
+                            camera_params=camera_params, 
+                            cam1_algo=cam1_algo,
+                            cam2_algo=cam2_algo,
+                )
+
         else:
             vision = SimVisionModel(
                 camera_params,
