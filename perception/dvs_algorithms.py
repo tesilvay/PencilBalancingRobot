@@ -118,8 +118,7 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
 
         # convert centered intercept back to pixel intercept
         b_pixel = b_center + self.cx - m * self.cy
-        
-        
+
         return CameraObservation(
             slope=m,
             intercept=b_pixel

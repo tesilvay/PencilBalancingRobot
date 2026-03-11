@@ -36,12 +36,15 @@ class CameraModel:
 
     def pixel_to_normalized(self, obs_px: CameraObservation):
 
-        s = obs_px.slope
-        b = obs_px.intercept
+        s_px = obs_px.slope
+        b_px = obs_px.intercept
 
-        s = s * self.fy / self.fx
+        s = s_px * self.fy / self.fx
 
-        b = (b - self.cx) / self.fx
+        # Expected inverse if normalized_to_pixel is correct:
+        # b_expected = (b_px - cx + s_px*cy)/fx
+        b_expected = (b_px - self.cx + s_px * self.cy) / self.fx
+        b = b_expected
 
         return CameraObservation(
             slope=s,

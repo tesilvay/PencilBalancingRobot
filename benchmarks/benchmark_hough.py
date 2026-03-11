@@ -17,17 +17,21 @@ def generate_events(cam, obs: CameraObservation, n=500, noise_px=1.0):
     s_px = obs_px.slope
     b_px = obs_px.intercept
 
-    # sample across image width instead
-    xs = np.random.uniform(0, cam.width, n)
+    # Sample uniform in y for x = s*y + b, then filter to valid pixel bounds.
+    ys = np.random.uniform(0, cam.height, n)
+    xs = s_px * ys + b_px
 
-    ys = (xs - b_px) / s_px if abs(s_px) > 1e-6 else np.full(n, cam.height/2)
-
+    xs += np.random.normal(0, noise_px, n)
     ys += np.random.normal(0, noise_px, n)
+
+    mask = (xs >= 0) & (xs < cam.width) & (ys >= 0) & (ys < cam.height)
+    xs = xs[mask]
+    ys = ys[mask]
 
     xs = xs.astype(np.int16)
     ys = ys.astype(np.int16)
 
-    events = np.zeros(n, dtype=[("x", np.int16), ("y", np.int16)])
+    events = np.zeros(len(xs), dtype=[("x", np.int16), ("y", np.int16)])
     events["x"] = xs
     events["y"] = ys
 
