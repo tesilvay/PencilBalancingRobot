@@ -58,6 +58,7 @@ This split keeps components decoupled and makes it easy to swap implementations 
   - `SystemState` (8D state)
   - `TableCommand`, `TableAccel`
   - `PhysicalParams` (composition of `PlantParams`, `WorkspaceParams`, `MechanismParams`, `HardwareParams`, `RunParams`)
+  - `HardwareParams.dvs_algo`: `"sam"` or `"hough"` — selects DVS line algorithm
   - `BenchmarkVariant` (controller/estimator/noise/delay for benchmark sweeps)
   - `ExperimentSetup` (bundles params, camera_params, default_variant)
   - benchmark result/summary types
@@ -74,38 +75,46 @@ This split keeps components decoupled and makes it easy to swap implementations 
   - shared projection/reconstruction math (`VisionModelBase`)
   - simulated measurement model (`SimVisionModel`) with optional noise + delay buffering
   - simulated event camera interface (`SimEventCameraInterface`)
-  - real event camera interface (`RealEventCameraInterface`) — opens two DAVIS346 via dv-processing, background threads read events and run Hough, `get_observation(None)` returns latest line estimate
-- **`perception/dvs_camera_reader.py`**: `DVSReader` — wraps dv-processing, opens DAVIS346 by serial, `get_event_batch()`, `close()`
-- **`perception/dvs_algorithms.py`**: event-to-line estimation algorithms
-  - `PaperHoughLineAlgorithm` (paper-inspired event-driven tracker)
-  - `SurfaceRegressionAlgorithm` (activity surface + regression)
+  - real event camera interface (`RealEventCameraInterface`) — opens two DAVIS346 via dv-processing, background threads read events and run the selected line algorithm, `get_observation(None)` returns latest line estimate
+- **`perception/dvs_camera_reader.py`**: `DVSReader` — wraps dv-processing, opens DAVIS346 by serial, `get_event_batch()`, `close()`. Optional `BackgroundActivityNoiseFilter` (30 ms) when `use_noise_filter=True`.
+- **`perception/dvs_algorithms.py`**: event-to-line estimation algorithms (selected via `HardwareParams.dvs_algo`):
+  - **`SamLineAlgorithm`** (default for real DVS) — see below
+  - **`PaperHoughLineAlgorithm`** — paper-inspired quadratic Hough tracker
+  - **`SurfaceRegressionAlgorithm`** — activity surface + regression (not used in main pipeline)
 - **`perception/estimator.py`**: state estimators (pose → 8D `SystemState`)
   - `FiniteDifferenceEstimator`, `LowPassFiniteDifferenceEstimator`, `KalmanEstimator`
 - **`perception/camera_model.py`**: camera geometry + pixel/normalized conversions.
 
-#### Current Hough / camera-line pipeline (2026-03)
+#### DVS line algorithms and camera-line pipeline (2026-03)
 
-- **Line model**: A camera line is represented as \(x = s\,y + b\) in both normalized and pixel coordinates.
+- **Line model**: A camera line is represented as \(x = s\,y + b\) in both normalized and pixel coordinates (slope \(s\), intercept \(b\)).
 - **Camera conversion**:
   - `CameraModel.normalized_to_pixel()` applies
     - \(s_{px} = \frac{f_x}{f_y}\, s\)
     - \(b_{px} = f_x\, b - \frac{f_x}{f_y}\, s\, c_y + c_x\)
-  - `CameraModel.pixel_to_normalized()` now uses the **consistent inverse**
+  - `CameraModel.pixel_to_normalized()` uses the **consistent inverse**
     - \(b = \frac{b_{px} - c_x + s_{px} c_y}{f_x}\)
     - \(s = s_{px}\,\frac{f_y}{f_x}\)
-  - This fixes a prior bug where the \(+s_{px} c_y\) term was missing, which biased the intercept while leaving the slope mostly correct.
-- **Hough tracker (`PaperHoughLineAlgorithm`)**:
-  - Maintains quadratic accumulators over centered pixel coordinates \((x - c_x, y - c_y)\).
-  - On each event batch, decays the accumulators, integrates the new events, and solves a small quadratic form to recover slope \(m\) and a centered intercept, which is converted back to a pixel-space intercept \(b_{px}\).
-- **Benchmark (`benchmarks/benchmark_hough.py`)**:
-  - Generates synthetic DVS-like events by:
-    - sampling \(y \sim U(0, H)\),
-    - computing \(x = s_{px} y + b_{px}\),
-    - adding pixel noise and **filtering to in-frame points**.
-  - Runs many trials of `PaperHoughLineAlgorithm` and measures:
-    - pixel-space line tracking quality,
-    - normalized-space slope and intercept errors via the camera model.
-  - With the fixed conversion and event generation, typical mean normalized intercept error is now \(\mathcal{O}(10^{-3})\) while slope error remains \(\mathcal{O}(10^{-4})\), which is accurate enough for the downstream pose reconstruction experiments.
+
+**Sam algorithm (`SamLineAlgorithm`)** — primary algorithm for real DVS:
+
+- **What it is**: Ordinary least-squares (OLS) line fit on event coordinates. Originated from the standalone `sam_cam.py` script. Fits directly to each event batch; no surface accumulation or temporal decay.
+- **How it works**: Given events \((x_i, y_i)\), fits \(x = \text{slope} \cdot y + \text{intercept}\) via closed-form OLS. Requires `min_points=50` events per batch. Returns `CameraObservation(slope, intercept)` in pixel space.
+- **How we use it**: Selected when `HardwareParams.dvs_algo="sam"` (default in `main.py`). Used with real DAVIS346 cameras via `RealEventCameraInterface`. When Sam is selected, `DVSReader` uses `BackgroundActivityNoiseFilter` (30 ms) to reject transient noise before events reach the algorithm. The filtered event batch is passed to `SamLineAlgorithm.update()`; the resulting pixel-space line is converted to normalized coordinates and fed into the standard pipeline: reconstruction → estimator → controller.
+- **Integration**: Same interface as other algorithms (`update(events_np)` → `CameraObservation`). Works with both `RealEventCameraInterface` (real hardware) and `SimEventCameraInterface` (synthetic events). Lower latency than surface-based methods because it fits per batch without accumulation.
+
+**Hough algorithm (`PaperHoughLineAlgorithm`)** — paper-inspired tracker:
+
+- Maintains quadratic accumulators over centered pixel coordinates \((x - c_x, y - c_y)\).
+- On each event batch, decays the accumulators, integrates the new events, and solves a small quadratic form to recover slope \(m\) and intercept \(b_{px}\).
+- Selected when `dvs_algo="hough"`. No noise filter. Used in `benchmarks/benchmark_hough.py` for static/falling pencil and decay sweeps.
+
+**Surface algorithm (`SurfaceRegressionAlgorithm`)** — not used:
+
+- Activity surface with decay; thresholds and morphology; OLS on surface points. Available but not wired into the main pipeline. For low latency, per-batch OLS (Sam) is preferred over surface accumulation.
+
+**Benchmark (`benchmarks/benchmark_hough.py`)**:
+- Generates synthetic DVS-like events, runs `PaperHoughLineAlgorithm`, measures pixel and normalized-space errors. Typical mean normalized intercept error \(\mathcal{O}(10^{-3})\), slope error \(\mathcal{O}(10^{-4})\).
 
 ### `simulation/` — loop integration and scheduling
 
@@ -143,8 +152,8 @@ If enabled via `PhysicalParams` (e.g., base points `O`, `B`, link lengths `la`, 
 - **`analysis/graphing.py`**: load latest benchmark JSON and generate plots (robustness curves, heatmaps, tradeoffs).
 - **`analysis/workspace_plotter.py`**: plot stability/effort vs workspace radius.
 - **`benchmarks/`**: focused tests for subcomponents
-  - `benchmark_hough.py` — static / falling pencil / decay sweep
-  - `visualize_dvs_cams.py` — real DAVIS346 init, events + Hough line overlay (verify before HIL)
+  - `benchmark_hough.py` — static / falling pencil / decay sweep (Hough only)
+  - `visualize_dvs_cams.py` — real DAVIS346 init, events + line overlay (Sam or Hough via `--mode`; verify before HIL)
 
 ---
 
@@ -154,7 +163,7 @@ The system swaps implementations while keeping the same high-level contracts:
 
 - **Vision**
   - Simulated: `SimVisionModel` (direct projection) or `SimEventCameraInterface` (event-like batches)
-  - Real events: `RealEventCameraInterface` — DAVIS346 via `DVSReader`, background Hough, `get_observation(None)` returns latest
+  - Real events: `RealEventCameraInterface` — DAVIS346 via `DVSReader`, background line algorithm (Sam or Hough per `dvs_algo`), `get_observation(None)` returns latest
 - **Execution**
   - Sim: plant step → vision → estimator → controller
   - Real DVS (HIL): vision → estimator → controller (plant skipped)
@@ -163,4 +172,12 @@ The system swaps implementations while keeping the same high-level contracts:
   - Hardware: `ServoSystem` (optionally using `fivebar/` kinematics)
 
 The selection logic is in `system_builder.py`; `simulation_runner` checks `dvs_cams_connected(params)` to set `real_mode`.
+
+---
+
+## References
+
+- Conradt et al., "A Pencil Balancing Robot using a Pair of AER Dynamic Vision Sensors," IEEE, 2009
+- `sam_cam.py` — standalone DVS line-tracking script (Sam OLS pipeline)
+- `docs/TASKS/DVS_FULL_SIM.md` — DVS task status, latency notes, Hough vs Sam comparison
 
