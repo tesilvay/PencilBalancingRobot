@@ -2,6 +2,8 @@
 
 Based on: *A Pencil Balancing Robot using a Pair of AER Dynamic Vision Sensors* 
 
+the code that they used is in the folder Conradt/
+
 ---
 
 # 1. Overview
