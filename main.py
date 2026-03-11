@@ -49,7 +49,7 @@ def main(mode):
             run=RunParams(
                 save_video=False,
                 realtimerender=True,
-                total_time=5.0,
+                total_time=1.0,
                 stability_tolerance=0.05,
             ),
         ),
