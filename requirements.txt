@@ -10,3 +10,6 @@ pynput>=1.8
 
 # Visualization (realtime_visualizer uses cv2)
 opencv-python>=4.5
+
+# DVS event cameras (DAVIS346)
+dv-processing>=2.0

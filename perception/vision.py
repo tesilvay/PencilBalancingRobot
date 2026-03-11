@@ -1,3 +1,5 @@
+import threading
+import time
 import numpy as np
 from collections import deque
 from perception.camera_model import CameraModel
@@ -85,43 +87,85 @@ class VisionModelBase:
 
 class RealEventCameraInterface(VisionModelBase):
 
-    def __init__(self, camera_params, cam1_algo, cam2_algo):
+    def __init__(
+        self,
+        camera_params,
+        cam1_algo,
+        cam2_algo,
+        cam1_serial: str,
+        cam2_serial: str,
+    ):
         super().__init__(camera_params)
-
-        # algorithms are pluggable
         self.cam1_algo = cam1_algo
         self.cam2_algo = cam2_algo
+        self.cam = CameraModel()
 
-    # -------------------------------------------------
-    # Algorithm for extracting line from events
-    # -------------------------------------------------
-    def process_events(self, algo, events):
-        events_np = events.numpy()
-        s, b = algo.update(events_np)
-        return s, b
+        from perception.dvs_camera_reader import DVSReader
 
-    # -------------------------------------------------
-    # Get camera pair observation from events
-    # -------------------------------------------------
-    def get_observation(self, events_cam1, events_cam2):
+        self._reader1 = DVSReader(cam1_serial)
+        self._reader2 = DVSReader(cam2_serial)
 
-        s1, b1 = self.process_events(self.cam1_algo, events_cam1)
-        s2, b2 = self.process_events(self.cam2_algo, events_cam2)
+        self._latest1: CameraObservation | None = None
+        self._latest2: CameraObservation | None = None
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread1 = threading.Thread(target=self._reader_loop, args=(self._reader1, self.cam1_algo, 1))
+        self._thread2 = threading.Thread(target=self._reader_loop, args=(self._reader2, self.cam2_algo, 2))
+        self._thread1.daemon = True
+        self._thread2.daemon = True
+        self._thread1.start()
+        self._thread2.start()
 
-        if s1 is None or s2 is None:
+    def _reader_loop(self, reader, algo, _cam_id: int):
+        """Background loop: read events, update Hough, store latest (pixel space)."""
+        while not self._stop.is_set() and reader.is_running():
+            events = reader.get_event_batch()
+            if events is not None and len(events) > 0:
+                result = algo.update(events)
+                if not isinstance(result, tuple):
+                    with self._lock:
+                        if _cam_id == 1:
+                            self._latest1 = result
+                        else:
+                            self._latest2 = result
+            else:
+                time.sleep(0.0001)
+
+    def get_observation(self, state_true=None) -> CameraPair | None:
+        """
+        Return latest CameraPair from Hough (same interface as sim).
+        state_true is ignored; real cams use background event stream.
+        """
+        with self._lock:
+            obs1_px = self._latest1
+            obs2_px = self._latest2
+
+        if obs1_px is None or obs2_px is None:
             return None
 
-        cam1 = CameraObservation(
-            slope=s1,
-            intercept=b1
+        obs1 = self.cam.pixel_to_normalized(obs1_px)
+        obs2 = self.cam.pixel_to_normalized(obs2_px)
+
+        return CameraPair(
+            CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
+            CameraObservation(slope=obs2.slope, intercept=obs2.intercept),
         )
 
-        cam2 = CameraObservation(
-            slope=s2,
-            intercept=b2
-        )
+    def reset(self):
+        """Reset both Hough algorithms."""
+        self.cam1_algo.reset()
+        self.cam2_algo.reset()
+        with self._lock:
+            self._latest1 = None
+            self._latest2 = None
 
-        return CameraPair(cam1=cam1, cam2=cam2)
+    def close(self):
+        """Stop reader threads and release cameras."""
+        self._stop.set()
+        self._thread1.join(timeout=1.0)
+        self._thread2.join(timeout=1.0)
+        self._reader1.close()
+        self._reader2.close()
 
 # ============================================================
 # Simulated DVS Camera Interface

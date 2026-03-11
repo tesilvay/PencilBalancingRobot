@@ -7,6 +7,7 @@ from core.sim_types import (
     PhysicalParams,
     SimulationResult
 )
+from system_builder import dvs_cams_connected
 
 
 def initialize_histories(steps, initial_state):
@@ -43,12 +44,14 @@ def run_simulation(
     realtime: bool = False
 ) -> SimulationResult:
 
+    real_mode = dvs_cams_connected(params)
     sim = Simulator(
         plant=plant,
         controller=controller,
         vision=vision,
         estimator=estimator,
-        dt=dt
+        dt=dt,
+        real_mode=real_mode,
     )
 
     steps = int(total_time / dt)

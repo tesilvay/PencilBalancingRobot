@@ -77,9 +77,11 @@ def build_vision(variant, params, camera_params):
 
             if dvs_cams_connected(params):
                 vision = RealEventCameraInterface(
-                            camera_params=camera_params, 
-                            cam1_algo=cam1_algo,
-                            cam2_algo=cam2_algo,
+                    camera_params=camera_params,
+                    cam1_algo=cam1_algo,
+                    cam2_algo=cam2_algo,
+                    cam1_serial=params.hardware.dvs_cam_x_port,
+                    cam2_serial=params.hardware.dvs_cam_y_port,
                 )
                 
             else:
