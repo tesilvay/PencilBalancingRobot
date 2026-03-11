@@ -28,13 +28,14 @@ class DVSReader:
     Opens by device (from discover_devices()), serial string, or first available if None.
     """
 
-    def __init__(self, device_or_serial: str | None = None, use_noise_filter: bool = False):
+    def __init__(self, device_or_serial: str | None = None, noise_filter_duration_ms: float | None = None):
         """
         Open a DAVIS346 camera.
         Args:
             device_or_serial: Either a device from discover_devices() (e.g. devices[0]),
                              a serial string (e.g. "00000499"), or None for first available.
-            use_noise_filter: If True, apply BackgroundActivityNoiseFilter before returning events.
+            noise_filter_duration_ms: None = no filter. > 0 = apply BackgroundActivityNoiseFilter
+                with that duration (ms) before returning events.
         """
         import dv_processing as dv
 
@@ -54,10 +55,10 @@ class DVSReader:
             )
 
         self._noise_filter = None
-        if use_noise_filter:
+        if noise_filter_duration_ms is not None and noise_filter_duration_ms > 0:
             self._noise_filter = dv.noise.BackgroundActivityNoiseFilter(
                 (self._width, self._height),
-                backgroundActivityDuration=datetime.timedelta(microseconds=30000),
+                backgroundActivityDuration=datetime.timedelta(microseconds=int(noise_filter_duration_ms * 1000)),
             )
 
     @property
@@ -78,7 +79,7 @@ class DVSReader:
         Get next event batch from the camera.
         Returns numpy array with 'x', 'y' fields (and optionally 't', 'p').
         Returns None if no events available.
-        If use_noise_filter was True, events are filtered before conversion to numpy.
+        If noise_filter_duration_ms was set, events are filtered before conversion to numpy.
         """
         events = self._capture.getNextEventBatch()
         if events is None:

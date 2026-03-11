@@ -76,7 +76,7 @@ This split keeps components decoupled and makes it easy to swap implementations 
   - simulated measurement model (`SimVisionModel`) with optional noise + delay buffering
   - simulated event camera interface (`SimEventCameraInterface`)
   - real event camera interface (`RealEventCameraInterface`) — opens two DAVIS346 via dv-processing, background threads read events and run the selected line algorithm, `get_observation(None)` returns latest line estimate
-- **`perception/dvs_camera_reader.py`**: `DVSReader` — wraps dv-processing, opens DAVIS346 by serial, `get_event_batch()`, `close()`. Optional `BackgroundActivityNoiseFilter` (30 ms) when `use_noise_filter=True`.
+- **`perception/dvs_camera_reader.py`**: `DVSReader` — wraps dv-processing, opens DAVIS346 by serial, `get_event_batch()`, `close()`. Optional `BackgroundActivityNoiseFilter` when `noise_filter_duration_ms` is set (e.g. 30 ms).
 - **`perception/dvs_algorithms.py`**: event-to-line estimation algorithms (selected via `HardwareParams.dvs_algo`):
   - **`SamLineAlgorithm`** (default for real DVS) — see below
   - **`PaperHoughLineAlgorithm`** — paper-inspired quadratic Hough tracker

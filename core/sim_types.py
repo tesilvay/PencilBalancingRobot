@@ -125,6 +125,7 @@ class HardwareParams:
     dvs_cam_x_port: str | None = None
     dvs_cam_y_port: str | None = None
     dvs_algo: str = "hough"  # "hough" | "sam"
+    dvs_noise_filter_duration_ms: float | None = 30  # None = no filter; > 0 = duration (Sam only)
 
 
 @dataclass
@@ -134,6 +135,7 @@ class RunParams:
     realtimerender: bool = False
     total_time: float = 5.0
     stability_tolerance: float = 0.05
+    estimator_lpf_alpha: float | None = None  # None = LPF default (0.95)
 
 
 @dataclass

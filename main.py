@@ -41,17 +41,19 @@ def main(mode):
             ),
             hardware=HardwareParams(
                 servo=True,
-                servo_port=None,
+                servo_port=None, # None uses a mock controller
                 dvs_cam=True,
                 dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
                 dvs_cam_y_port=None,
-                dvs_algo="sam",  # "hough" | "sam" (sam uses noise filter)
+                dvs_algo="sam",  # "hough" | "sam"
+                dvs_noise_filter_duration_ms=5,  # None = no filter; 5–10 for low-latency
             ),
             run=RunParams(
                 save_video=False,
                 realtimerender=True,
                 total_time=5.0,  # 5s for single-run validation
-                stability_tolerance=0.02,  # 5% stability
+                stability_tolerance=0.05,  # 5% stability should be possible
+                estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)
             ),
         ),
         camera_params=CameraParams(xr=0.170, yr=0.176),

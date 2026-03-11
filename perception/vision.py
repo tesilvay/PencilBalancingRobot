@@ -94,7 +94,7 @@ class RealEventCameraInterface(VisionModelBase):
         cam2_algo,
         cam1_device: str,
         cam2_device: str,
-        use_noise_filter: bool = False,
+        noise_filter_duration_ms: float | None = None,
     ):
         super().__init__(camera_params)
         self.cam1_algo = cam1_algo
@@ -103,8 +103,8 @@ class RealEventCameraInterface(VisionModelBase):
 
         from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
-        self._reader1 = DVSReader(cam1_device, use_noise_filter=use_noise_filter)
-        self._reader2 = DVSReader(cam2_device, use_noise_filter=use_noise_filter)
+        self._reader1 = DVSReader(cam1_device, noise_filter_duration_ms=noise_filter_duration_ms)
+        self._reader2 = DVSReader(cam2_device, noise_filter_duration_ms=noise_filter_duration_ms)
 
         self._latest1: CameraObservation | None = None
         self._latest2: CameraObservation | None = None

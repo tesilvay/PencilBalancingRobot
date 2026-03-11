@@ -103,32 +103,27 @@ The default `PaperHoughLineAlgorithm` decay=0.999 caused severe lag (~14° mean 
 
 1. **BackgroundActivityNoiseFilter (30 ms)** — Both use it. Events must persist for 30 ms before output. This is the largest single source of latency.
 
-2. **visualize_dvs_cams vs main.py** — `visualize_dvs_cams` does *not* use the noise filter (DVSReader default `use_noise_filter=False`). `main.py` with `dvs_algo="sam"` uses it. Standalone visualization can feel more responsive because it avoids the 30 ms filter.
+2. **visualize_dvs_cams vs main.py** — Use `--noise-filter-duration 30` to match main.py. Without it, standalone viz has no filter and feels more responsive.
 
 3. **Estimator phase lag** — `LowPassFiniteDifferenceEstimator` (alpha=0.9) smooths velocities and adds phase lag. The workspace shows the controller command `(x_des, y_des)`, which depends on this estimate.
 
 4. **Event batching** — `getNextEventBatch()` may buffer events; timing depends on dv-processing.
 
-### Recommended Fixes (in order of impact)
+### Recommended Fixes — Implemented
 
-1. **Reduce or disable noise filter for low-latency mode**
-   - Add `backgroundActivityDuration` as a configurable parameter (e.g. 5–10 ms instead of 30 ms).
-   - Or add a "low latency" mode that disables the filter when noise is acceptable.
+1. **Configurable noise filter duration** — `HardwareParams.dvs_noise_filter_duration_ms`: `None` = no filter; `> 0` = duration (ms). Set to 5–10 for low-latency, or `None` to disable. Sam only; Hough never uses the filter.
 
-2. **Align visualize_dvs_cams with main.py**
-   - When comparing behavior, run `visualize_dvs_cams` with the same filter settings as `main.py` (e.g. add `--noise-filter` flag).
+2. **Align visualize_dvs_cams with main.py** — Use `--noise-filter-duration 30` to match main.py. Omit for no filter (more responsive but incomparable).
 
-3. **Tune estimator for real-time**
-   - For real-time use, consider `FiniteDifferenceEstimator` (no smoothing) or a less aggressive low-pass (higher alpha, e.g. 0.95–0.99).
+3. **Configurable estimator alpha** — `RunParams.estimator_lpf_alpha`: `None` = LPF default (0.95); set to 0.99 for lower phase lag in real-time.
 
-4. **Optional: surface-based regression**
-   - The original `sam_cam.py` uses a surface (decay=0.5 every 5 frames) for display only; line fit is on raw events. `SurfaceRegressionAlgorithm` fits on surface points (threshold + morphology). For low latency, prefer per-batch OLS (`SamLineAlgorithm`) over surface accumulation.
+4. **Surface-based regression** — Already using per-batch OLS (`SamLineAlgorithm`); no change needed.
 
 ### References (Latency)
 
 - `sam_cam.py` — original standalone script
 - `perception/dvs_algorithms.py` — `SamLineAlgorithm`, `SurfaceRegressionAlgorithm`
-- `perception/dvs_camera_reader.py` — `DVSReader`, `use_noise_filter`
+- `perception/dvs_camera_reader.py` — `DVSReader`, `noise_filter_duration_ms`
 - `perception/vision.py` — `RealEventCameraInterface._reader_loop`
 
 ---

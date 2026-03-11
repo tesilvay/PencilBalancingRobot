@@ -51,7 +51,7 @@ def build_estimator(variant, params):
             estimator = FiniteDifferenceEstimator()
 
         elif variant.estimator_type == "lpf":
-            estimator = LowPassFiniteDifferenceEstimator()
+            estimator = LowPassFiniteDifferenceEstimator(alpha=params.run.estimator_lpf_alpha)
 
         elif variant.estimator_type == "kalman":
             Qk = np.eye(8) * 1e-6
@@ -78,11 +78,11 @@ def build_vision(variant, params, camera_params):
                 from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
                 cam1_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
                 cam2_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
-                use_noise_filter = True
+                noise_filter_duration_ms = hw.dvs_noise_filter_duration_ms
             else:
                 cam1_algo = PaperHoughLineAlgorithm(decay=0.95)
                 cam2_algo = PaperHoughLineAlgorithm(decay=0.95)
-                use_noise_filter = False
+                noise_filter_duration_ms = None
 
             if dvs_cams_connected(params):
                 from perception.dvs_camera_reader import discover_devices
@@ -99,7 +99,7 @@ def build_vision(variant, params, camera_params):
                     cam2_algo=cam2_algo,
                     cam1_device=cam1_device,
                     cam2_device=cam2_device,
-                    use_noise_filter=use_noise_filter,
+                    noise_filter_duration_ms=noise_filter_duration_ms,
                 )
                 
             else:

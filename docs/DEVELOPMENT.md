@@ -124,9 +124,12 @@ python -m benchmarks.visualize_dvs_cams
 
 # Or specify serials from dv-list-devices
 python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
+
+# Match main.py pipeline (Sam + noise filter 30 ms)
+python -m benchmarks.visualize_dvs_cams --mode sam --noise-filter-duration 30
 ```
 
-Shows accumulated events with Hough line overlay per camera. Press 'q' to quit.
+Shows accumulated events with line overlay per camera. Press 'q' to quit.
 
 ---
 
@@ -151,7 +154,9 @@ docs/                   # Architecture, tasks, this guide
 
 - **Real DVS + simulated servos**: Real DAVIS346 cameras measure the physical pencil; controller computes (x_des, y_des); servos stay disconnected. Run indefinitely until `q` or pencil fall.
 - **DVSWorkspaceVisualizer**: Three windows — Cam 1, Cam 2 (event footage + line overlay), Workspace (circle + desired point). Point clamped to circle edge when outside limits.
-- **`dvs_algo`**: Choose `"hough"` or `"sam"` in `HardwareParams`. Sam uses `BackgroundActivityNoiseFilter`.
+- **`dvs_algo`**: Choose `"hough"` or `"sam"` in `HardwareParams`.
+- **`dvs_noise_filter_duration_ms`**: `None` = no filter; `30` = default (Sam only). Use `5`–`10` for low-latency, or `None` to disable.
+- **`estimator_lpf_alpha`**: `None` = LPF default (0.95); `0.99` for lower phase lag in real-time.
 - **Device discovery**: Set both `dvs_cam_x_port` and `dvs_cam_y_port` to `None` to auto-discover cameras.
 - **Quit key**: Press `q` in any visualization window to exit indefinite real-DVS runs.
 
@@ -160,7 +165,7 @@ docs/                   # Architecture, tasks, this guide
 ## Key Configuration
 
 - **`main.py`**: `ExperimentSetup` — params, camera_params, default_variant
-- **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo), `BenchmarkVariant`, `ExperimentSetup`
+- **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo, dvs_noise_filter_duration_ms), `RunParams` (estimator_lpf_alpha), `BenchmarkVariant`, `ExperimentSetup`
 - **`system_builder.py`**: Vision selection (`dvs_cam`, `dvs_algo`), controller/estimator choice, DVSWorkspaceVisualizer when real DVS + realtime
 
 ---

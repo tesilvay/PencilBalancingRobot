@@ -12,6 +12,9 @@ Usage:
     # Sam's OLS algorithm:
     python -m benchmarks.visualize_dvs_cams --mode sam
 
+    # Match main.py pipeline (Sam + noise filter 30 ms):
+    python -m benchmarks.visualize_dvs_cams --mode sam --noise-filter-duration 30
+
     # Or specify serials explicitly:
     python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
 """
@@ -36,6 +39,13 @@ def main():
         help="Line algorithm: hough (paper tracker) or sam (OLS on events)",
     )
     parser.add_argument("--decay", type=float, default=0.95, help="Hough decay, only for --mode hough (default 0.95)")
+    parser.add_argument(
+        "--noise-filter-duration",
+        type=float,
+        default=None,
+        metavar="MS",
+        help="Noise filter duration (ms). Omit = no filter. Use 30 to match main.py with Sam.",
+    )
     args = parser.parse_args()
 
     if args.cam1 is not None and args.cam2 is not None:
@@ -53,8 +63,8 @@ def main():
         device1, device2 = devices[0], devices[1]
         print(f"Using devices[0] and devices[1] for x and y cams")
 
-    reader1 = DVSReader(device1)
-    reader2 = DVSReader(device2)
+    reader1 = DVSReader(device1, noise_filter_duration_ms=args.noise_filter_duration)
+    reader2 = DVSReader(device2, noise_filter_duration_ms=args.noise_filter_duration)
 
     if args.mode == "hough":
         algo1 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
