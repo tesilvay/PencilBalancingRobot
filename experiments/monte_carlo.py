@@ -33,7 +33,7 @@ class ProgressBar:
         sys.stdout.flush()
 
 
-def evaluate_stability(result, dt, tol=0.05, hold_time=0.2):
+def evaluate_stability(result, dt, tol=0.05, hold_time=1.0):
     alpha_x = result.state_history[:, 2]
     alpha_y = result.state_history[:, 6]
 
@@ -78,11 +78,11 @@ def run_region_trials(
         initial_state = SystemState(
             x=x_ref.x,
             x_dot=0.0,
-            alpha_x=np.random.uniform(-0.2, 0.2),
+            alpha_x=np.random.uniform(-0.02, 0.02),
             alpha_x_dot=0.0,
             y=x_ref.y,
             y_dot=0.0,
-            alpha_y=np.random.uniform(-0.2, 0.2),
+            alpha_y=np.random.uniform(-0.02, 0.02),
             alpha_y_dot=0.0
         )
 

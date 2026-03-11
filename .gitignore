@@ -6,3 +6,4 @@ venv/
 simulation_videos/
 simulations/
 docs/
+.cursor/
