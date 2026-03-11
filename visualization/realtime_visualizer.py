@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 from perception.vision import get_measurements
 from perception.camera_model import CameraModel
+from core.sim_types import CameraObservation
 
 
 class PencilVisualizerRealtime:
@@ -25,14 +26,15 @@ class PencilVisualizerRealtime:
 
     def draw_line(self, img, b, s):
 
-        # Convert normalized → pixel
-        a_px, b_px = self.cam.normalized_to_pixel(b, s)
+        # Convert normalized → pixel (line model x = s*y + b)
+        obs_px = self.cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
+        s_px, b_px = obs_px.slope, obs_px.intercept
 
         y0 = 0
         y1 = self.height - 1
 
-        x0 = int(a_px + b_px * y0)
-        x1 = int(a_px + b_px * y1)
+        x0 = int(s_px * y0 + b_px)
+        x1 = int(s_px * y1 + b_px)
 
         cv2.line(img, (x0, y0), (x1, y1), 255, 2)
 

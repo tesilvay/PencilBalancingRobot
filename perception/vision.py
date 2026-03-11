@@ -138,15 +138,16 @@ class SimEventCameraInterface(VisionModelBase):
 
     def generate_events(self, b, s, n=200):
 
-        # convert normalized line → pixel line
-        a_px, b_px = self.cam.normalized_to_pixel(b, s)
+        # convert normalized line → pixel line (x = s*y + b)
+        obs_px = self.cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
+        s_px, b_px = obs_px.slope, obs_px.intercept
 
         cam_height = self.cam.height
         cam_width = self.cam.width
 
         # sample points along the line
         ys = np.random.uniform(0, cam_height, n)
-        xs = a_px * ys + b_px
+        xs = s_px * ys + b_px
 
         # add pixel noise
         xs += np.random.normal(0, 1.0, n)
@@ -175,19 +176,19 @@ class SimEventCameraInterface(VisionModelBase):
         events1 = self.generate_events(b1, s1)
         events2 = self.generate_events(b2, s2)
 
-        b1_est_pix, s1_est_pix = self.cam1_algo.update(events1)
-        b2_est_pix, s2_est_pix = self.cam2_algo.update(events2)
+        result1 = self.cam1_algo.update(events1)
+        result2 = self.cam2_algo.update(events2)
 
-        # tracker not ready yet
-        if s1_est_pix is None or s2_est_pix is None:
+        # tracker not ready yet (returns (None, None) or CameraObservation)
+        if isinstance(result1, tuple) or isinstance(result2, tuple):
             return None
 
-        b1_est, s1_est = self.cam.pixel_to_normalized(b1_est_pix, s1_est_pix)
-        b2_est, s2_est = self.cam.pixel_to_normalized(b2_est_pix, s2_est_pix)
-        
+        obs1 = self.cam.pixel_to_normalized(result1)
+        obs2 = self.cam.pixel_to_normalized(result2)
+
         return CameraPair(
-            CameraObservation(s1_est, b1_est),
-            CameraObservation(s2_est, b2_est)
+            CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
+            CameraObservation(slope=obs2.slope, intercept=obs2.intercept)
         )
         
     def reset(self):
