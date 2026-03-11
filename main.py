@@ -7,6 +7,7 @@ from core.sim_types import (
     WorkspaceParams,
     MechanismParams,
     HardwareParams,
+    HoughTrackerParams,
     RunParams,
     CameraParams,
     BenchmarkVariant,
@@ -47,7 +48,11 @@ def main(mode):
                 dvs_cam_y_port=None,
                 dvs_algo="hough",  # "hough" | "sam"
                 dvs_noise_filter_duration_ms=5,  # None = no filter; 5–10 for low-latency
-                dvs_hough_decay=0.70,  # Hough only: 0.95 is a good default, 0.9-0.98 is typical
+                dvs_hough=HoughTrackerParams(
+                    mixing_factor=0.02,  # Hough only: higher tracks faster but gets noisier; 0.01-0.05 is a good starting range.
+                    inlier_stddev_px=4.0,  # Hough only: Gaussian inlier width in pixels; 3-6 px is typical, larger admits more background motion.
+                    min_determinant=1e-6,  # Hough only: reject unstable solves when the quadratic is near-singular; usually leave at 1e-6.
+                ),
             ),
             run=RunParams(
                 save_video=False,

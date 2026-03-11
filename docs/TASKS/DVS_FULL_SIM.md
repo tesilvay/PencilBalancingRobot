@@ -27,13 +27,15 @@
    - Wraps dv-processing. Opens camera by serial, `get_event_batch()`, `close()`.
 
 5. **`PaperHoughLineAlgorithm`** (`perception/dvs_algorithms.py`):
-   - Quadratic accumulators, decay=0.95 (responsive). Returns `CameraObservation` or `(None, None)`.
+   - Refactored to follow the original Java recursive event update more closely.
+   - Uses Java-style Hough tuneables (`mixing_factor`, `inlier_stddev_px`, `min_determinant`) instead of the old batch-level decay model.
+   - Returns `CameraObservation` or `(None, None)`.
 
 6. **Unified runner** (`simulation/simulation_runner.py`):
    - When `dvs_cams_connected(params)`: `real_mode=True`, Simulator skips `plant.step()`, returns `state_est`. Hardware-in-the-loop ready.
 
 7. **Standalone benchmarks**:
-   - `benchmarks/benchmark_hough.py`: Static / falling pencil / decay sweep.
+   - `benchmarks/benchmark_hough.py`: Static / falling pencil / mixing sweep, with optional event chunking to better mimic packetized camera delivery.
    - `benchmarks/visualize_dvs_cams.py`: Init both cams, render events + Hough line overlay. Use before HIL.
 
 ### Relevant Files
@@ -80,9 +82,21 @@ Most implementation is complete. Remaining work:
 
 ---
 
-## Resolved: Hough Lag
+## Hough Tracker Refactor Note
 
-The default `PaperHoughLineAlgorithm` decay=0.999 caused severe lag (~14° mean alpha error) on a falling pencil. The full sim uses **decay=0.95** for responsiveness (~3.8° mean error, 1.1° median). Run `python -m benchmarks.benchmark_hough --mode decay_sweep` to compare.
+The original Python Hough tracker was later found to be behaviorally different from the Java `PencilBalancer` implementation used as the reference.
+
+The important realization was:
+
+- the old Python code applied a fixed once-per-batch decay
+- the old Python code gave every event equal weight
+- the original Java code updated recursively per event using a Gaussian inlier weight and adaptive forgetting
+
+That mismatch is now documented in:
+
+- `docs/TASKS/HOUGH_PROGRESS.md`
+
+The code has been refactored to match the Java update rule more closely, but **real-hardware validation is still pending**, so this section should be treated as progress notes rather than a final performance claim.
 
 ---
 
@@ -132,3 +146,4 @@ The default `PaperHoughLineAlgorithm` decay=0.999 caused severe lag (~14° mean 
 
 - Conradt et al., "A Pencil Balancing Robot using a Pair of AER Dynamic Vision Sensors," IEEE, 2009
 - `docs/architecture.MD` — Hough / camera-line pipeline, real DVS
+- `docs/TASKS/HOUGH_PROGRESS.md` — diagnosis of the previous Hough mismatch, rationale for the refactor, and current validation status

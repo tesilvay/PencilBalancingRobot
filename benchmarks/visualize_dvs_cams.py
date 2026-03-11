@@ -24,6 +24,7 @@ import sys
 import cv2
 import numpy as np
 
+from core.sim_types import HoughTrackerParams
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
 
@@ -38,7 +39,24 @@ def main():
         default="hough",
         help="Line algorithm: hough (paper tracker) or sam (OLS on events)",
     )
-    parser.add_argument("--decay", type=float, default=0.95, help="Hough decay, only for --mode hough (default 0.95)")
+    parser.add_argument(
+        "--hough-mixing-factor",
+        type=float,
+        default=0.02,
+        help="Hough only: per-event adaptation rate; 0.01-0.05 is a good starting range, larger is faster and noisier.",
+    )
+    parser.add_argument(
+        "--hough-inlier-stddev-px",
+        type=float,
+        default=4.0,
+        help="Hough only: Gaussian inlier width in pixels; 3-6 px is typical, larger follows faster motion but admits more background noise.",
+    )
+    parser.add_argument(
+        "--hough-min-determinant",
+        type=float,
+        default=1e-6,
+        help="Hough only: reject unstable solves when the quadratic is near-singular; usually leave near 1e-6.",
+    )
     parser.add_argument(
         "--noise-filter-duration",
         type=float,
@@ -67,8 +85,13 @@ def main():
     reader2 = DVSReader(device2, noise_filter_duration_ms=args.noise_filter_duration)
 
     if args.mode == "hough":
-        algo1 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
-        algo2 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
+        hough_params = HoughTrackerParams(
+            mixing_factor=args.hough_mixing_factor,
+            inlier_stddev_px=args.hough_inlier_stddev_px,
+            min_determinant=args.hough_min_determinant,
+        )
+        algo1 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, params=hough_params)
+        algo2 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, params=hough_params)
     else:
         algo1 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
         algo2 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)

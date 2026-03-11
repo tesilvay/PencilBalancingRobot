@@ -105,12 +105,24 @@ Standalone benchmark for the DVS line-tracking algorithm (no full sim):
 # Falling pencil: Hough vs true state (no controller)
 python -m benchmarks.benchmark_hough --mode falling --n_trials 50
 
-# Decay sweep: compare alpha error at different Hough decay values
-python -m benchmarks.benchmark_hough --mode decay_sweep
+# Mixing sweep: compare alpha error at different Hough adaptation rates
+python -m benchmarks.benchmark_hough --mode mixing_sweep
+
+# Simulate more packetized delivery by splitting synthetic events into chunks
+python -m benchmarks.benchmark_hough --mode falling --event-chunks 4
 
 # Static line (original)
 python -m benchmarks.benchmark_hough --mode static
 ```
+
+The Hough benchmark now uses Java-style parameters rather than the older batch-level decay model:
+
+- `--hough-mixing-factor`
+- `--hough-inlier-stddev-px`
+- `--hough-min-determinant`
+- `--event-chunks`
+
+See `docs/TASKS/HOUGH_PROGRESS.md` for the reasoning behind that refactor and the current validation status.
 
 ---
 
@@ -127,6 +139,9 @@ python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
 
 # Match main.py pipeline (Sam + noise filter 30 ms)
 python -m benchmarks.visualize_dvs_cams --mode sam --noise-filter-duration 30
+
+# Hough with the current Java-style tracker tuneables
+python -m benchmarks.visualize_dvs_cams --mode hough --hough-mixing-factor 0.02 --hough-inlier-stddev-px 4.0
 ```
 
 Shows accumulated events with line overlay per camera. Press 'q' to quit.
@@ -155,6 +170,7 @@ docs/                   # Architecture, tasks, this guide
 - **Real DVS + simulated servos**: Real DAVIS346 cameras measure the physical pencil; controller computes (x_des, y_des); servos stay disconnected. Run indefinitely until `q` or pencil fall.
 - **DVSWorkspaceVisualizer**: Three windows — Cam 1, Cam 2 (event footage + line overlay), Workspace (circle + desired point). Point clamped to circle edge when outside limits.
 - **`dvs_algo`**: Choose `"hough"` or `"sam"` in `HardwareParams`.
+- **`dvs_hough`**: Java-style Hough tuneables in `HardwareParams` (`mixing_factor`, `inlier_stddev_px`, `min_determinant`).
 - **`dvs_noise_filter_duration_ms`**: `None` = no filter; `30` = default (Sam only). Use `5`–`10` for low-latency, or `None` to disable.
 - **`estimator_lpf_alpha`**: `None` = LPF default (0.95); `0.99` for lower phase lag in real-time.
 - **Device discovery**: Set both `dvs_cam_x_port` and `dvs_cam_y_port` to `None` to auto-discover cameras.
@@ -165,7 +181,7 @@ docs/                   # Architecture, tasks, this guide
 ## Key Configuration
 
 - **`main.py`**: `ExperimentSetup` — params, camera_params, default_variant
-- **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo, dvs_noise_filter_duration_ms), `RunParams` (estimator_lpf_alpha), `BenchmarkVariant`, `ExperimentSetup`
+- **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo, dvs_noise_filter_duration_ms, dvs_hough), `RunParams` (estimator_lpf_alpha), `BenchmarkVariant`, `ExperimentSetup`
 - **`system_builder.py`**: Vision selection (`dvs_cam`, `dvs_algo`), controller/estimator choice, DVSWorkspaceVisualizer when real DVS + realtime
 
 ---

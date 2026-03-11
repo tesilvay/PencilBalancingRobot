@@ -19,6 +19,7 @@ from core.sim_types import (
     CameraPair,
     SystemState,
     TableCommand,
+    HoughTrackerParams,
     PhysicalParams,
     PlantParams,
     WorkspaceParams,
@@ -62,6 +63,42 @@ def generate_events(cam, obs: CameraObservation, n=500, noise_px=1.0):
     return events
 
 
+def make_hough_params(
+    mixing_factor: float = 0.02,
+    inlier_stddev_px: float = 4.0,
+    min_determinant: float = 1e-6,
+) -> HoughTrackerParams:
+    return HoughTrackerParams(
+        mixing_factor=mixing_factor,
+        inlier_stddev_px=inlier_stddev_px,
+        min_determinant=min_determinant,
+    )
+
+
+def _split_event_batch(events: np.ndarray, event_chunks: int) -> list[np.ndarray]:
+    if event_chunks <= 1 or len(events) <= 1:
+        return [events]
+
+    chunk_count = min(event_chunks, len(events))
+    chunk_sizes = np.random.multinomial(len(events), np.ones(chunk_count) / chunk_count)
+
+    chunks = []
+    start = 0
+    for chunk_size in chunk_sizes:
+        end = start + chunk_size
+        if chunk_size > 0:
+            chunks.append(events[start:end])
+        start = end
+    return chunks
+
+
+def run_tracker_on_chunks(algo, events: np.ndarray, event_chunks: int = 1):
+    result = (None, None)
+    for chunk in _split_event_batch(events, event_chunks):
+        result = algo.update(chunk)
+    return result
+
+
 # -------------------------------------------------
 # Single trial (static line - original)
 # -------------------------------------------------
@@ -69,11 +106,13 @@ def generate_events(cam, obs: CameraObservation, n=500, noise_px=1.0):
 def run_hough_trial(
     obs_true: CameraObservation,
     steps=100,
-    noise_px=1.0
+    noise_px=1.0,
+    hough_params: HoughTrackerParams | None = None,
+    event_chunks: int = 1,
 ):
 
     cam = CameraModel()
-    algo = PaperHoughLineAlgorithm()
+    algo = PaperHoughLineAlgorithm(params=hough_params)
 
     b_est_hist = []
     s_est_hist = []
@@ -82,7 +121,7 @@ def run_hough_trial(
 
         events = generate_events(cam, obs_true, noise_px=noise_px)
 
-        obs_px = algo.update(events)
+        obs_px = run_tracker_on_chunks(algo, events, event_chunks=event_chunks)
 
         if isinstance(obs_px, tuple):
             continue
@@ -102,7 +141,9 @@ def run_hough_trial(
 
 def run_hough_monte_carlo(
     n_trials=20,
-    noise_px=1.0
+    noise_px=1.0,
+    hough_params: HoughTrackerParams | None = None,
+    event_chunks: int = 1,
 ):
 
     errors_b = []
@@ -118,7 +159,9 @@ def run_hough_monte_carlo(
 
         b_est_hist, s_est_hist = run_hough_trial(
             obs_true=obs_true,
-            noise_px=noise_px
+            noise_px=noise_px,
+            hough_params=hough_params,
+            event_chunks=event_chunks,
         )
 
         if len(b_est_hist) == 0:
@@ -177,7 +220,8 @@ def run_falling_pencil_trial(
     dt: float = 0.001,
     n_events_per_step: int = 200,
     noise_px: float = 1.0,
-    hough_decay: float = 0.999,
+    hough_params: HoughTrackerParams | None = None,
+    event_chunks: int = 1,
 ):
     """
     Simulate falling pencil (no controller). Table held at ref.
@@ -187,8 +231,8 @@ def run_falling_pencil_trial(
     plant = BalancerPlant(params)
     vision_base = VisionModelBase(camera_params)
     cam = CameraModel()
-    cam1_algo = PaperHoughLineAlgorithm(decay=hough_decay)
-    cam2_algo = PaperHoughLineAlgorithm(decay=hough_decay)
+    cam1_algo = PaperHoughLineAlgorithm(params=hough_params)
+    cam2_algo = PaperHoughLineAlgorithm(params=hough_params)
 
     x_ref = params.workspace.x_ref
     y_ref = params.workspace.y_ref
@@ -215,8 +259,8 @@ def run_falling_pencil_trial(
         events2 = _generate_events(cam, b2, s2, n=n_events_per_step, noise_px=noise_px)
 
         # 4. Hough update
-        result1 = cam1_algo.update(events1)
-        result2 = cam2_algo.update(events2)
+        result1 = run_tracker_on_chunks(cam1_algo, events1, event_chunks=event_chunks)
+        result2 = run_tracker_on_chunks(cam2_algo, events2, event_chunks=event_chunks)
 
         if isinstance(result1, tuple) or isinstance(result2, tuple):
             hough_poses.append(None)
@@ -260,7 +304,8 @@ def run_falling_pencil_benchmark(
     n_trials: int = 50,
     total_time: float = 0.5,
     alpha_max: float = 0.05,
-    hough_decay: float = 0.999,
+    hough_params: HoughTrackerParams | None = None,
+    event_chunks: int = 1,
     show_progress: bool = True,
 ):
     """
@@ -302,7 +347,8 @@ def run_falling_pencil_benchmark(
             initial_state=initial_state,
             total_time=total_time,
             dt=dt,
-            hough_decay=hough_decay,
+            hough_params=hough_params,
+            event_chunks=event_chunks,
         )
 
         # Compute errors over valid steps
@@ -335,7 +381,16 @@ def run_falling_pencil_benchmark(
 
     print("\n==== Falling Pencil Benchmark (no controller) ====")
     print(f"Trials: {n_trials}, total_time: {total_time}s, dt: {dt}s")
-    print(f"Initial alpha range: ±{alpha_max} rad, Hough decay: {hough_decay}")
+    if hough_params is None:
+        hough_params = make_hough_params()
+    print(
+        "Hough params:"
+        f" mixing_factor={hough_params.mixing_factor},"
+        f" inlier_stddev_px={hough_params.inlier_stddev_px},"
+        f" min_determinant={hough_params.min_determinant},"
+        f" event_chunks={event_chunks}"
+    )
+    print(f"Initial alpha range: ±{alpha_max} rad")
     print(f"Valid Hough estimates: {n_valid}")
 
     print("\n--- Mean absolute error (Hough vs true) ---")
@@ -359,16 +414,49 @@ if __name__ == "__main__":
 
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mode", choices=["static", "falling", "both", "decay_sweep"], default="falling")
+    parser.add_argument("--mode", choices=["static", "falling", "both", "mixing_sweep", "decay_sweep"], default="falling")
     parser.add_argument("--n_trials", type=int, default=50)
     parser.add_argument("--total_time", type=float, default=0.5)
     parser.add_argument("--alpha_max", type=float, default=0.05)
-    parser.add_argument("--decay", type=float, default=0.999, help="Hough decay (0.999=laggy, 0.99=responsive)")
+    parser.add_argument(
+        "--hough-mixing-factor",
+        type=float,
+        default=0.02,
+        help="Hough only: per-event adaptation rate; 0.01-0.05 is a good starting range, larger is faster and noisier.",
+    )
+    parser.add_argument(
+        "--hough-inlier-stddev-px",
+        type=float,
+        default=4.0,
+        help="Hough only: Gaussian inlier width in pixels; 3-6 px is typical, larger follows faster motion but admits more background noise.",
+    )
+    parser.add_argument(
+        "--hough-min-determinant",
+        type=float,
+        default=1e-6,
+        help="Hough only: reject unstable solves when the quadratic is near-singular; usually leave near 1e-6.",
+    )
+    parser.add_argument(
+        "--event-chunks",
+        type=int,
+        default=1,
+        help="Split each synthetic event batch into this many smaller chunks to better mimic packetized camera delivery.",
+    )
     args = parser.parse_args()
+    hough_params = make_hough_params(
+        mixing_factor=args.hough_mixing_factor,
+        inlier_stddev_px=args.hough_inlier_stddev_px,
+        min_determinant=args.hough_min_determinant,
+    )
 
     if args.mode in ("static", "both"):
         print("\n=== Static line benchmark ===\n")
-        run_hough_monte_carlo(n_trials=20, noise_px=1.0)
+        run_hough_monte_carlo(
+            n_trials=20,
+            noise_px=1.0,
+            hough_params=hough_params,
+            event_chunks=args.event_chunks,
+        )
 
     if args.mode in ("falling", "both"):
         print("\n=== Falling pencil benchmark ===\n")
@@ -376,16 +464,22 @@ if __name__ == "__main__":
             n_trials=args.n_trials,
             total_time=args.total_time,
             alpha_max=args.alpha_max,
-            hough_decay=args.decay,
+            hough_params=hough_params,
+            event_chunks=args.event_chunks,
         )
 
-    if args.mode == "decay_sweep":
-        print("\n=== Decay sweep: alpha error vs Hough decay ===\n")
-        for decay in [0.999, 0.99, 0.95, 0.9]:
+    if args.mode in ("mixing_sweep", "decay_sweep"):
+        print("\n=== Mixing sweep: alpha error vs Hough mixing factor ===\n")
+        for mixing_factor in [0.01, 0.02, 0.05, 0.1]:
             run_falling_pencil_benchmark(
                 n_trials=30,
                 total_time=0.5,
                 alpha_max=0.05,
-                hough_decay=decay,
+                hough_params=make_hough_params(
+                    mixing_factor=mixing_factor,
+                    inlier_stddev_px=args.hough_inlier_stddev_px,
+                    min_determinant=args.hough_min_determinant,
+                ),
+                event_chunks=args.event_chunks,
                 show_progress=False,
             )

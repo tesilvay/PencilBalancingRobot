@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 # -----------------------------
@@ -74,8 +74,29 @@ class PoseMeasurement:
     Y: float
     alpha_x: float
     alpha_y: float
-    
-    
+
+
+@dataclass
+class HoughQuadraticState:
+    """
+    Quadratic coefficients for the continuous Hough objective
+    J(m, b) = a*m^2 + cross_mb*m*b + c*b^2 + linear_m*m + linear_b*b.
+    """
+    quadratic_m2: float = 0.0
+    cross_mb: float = 0.0
+    quadratic_b2: float = 0.0
+    linear_m: float = 0.0
+    linear_b: float = 0.0
+
+
+@dataclass
+class HoughTrackerParams:
+    """Tuneables for the original Java-style recursive Hough tracker."""
+    mixing_factor: float = 0.02  # Hough only: inlier adaptation rate per event; 0.01-0.05 is a good starting range.
+    inlier_stddev_px: float = 4.0  # Hough only: Gaussian inlier width in pixels; 3-6 px is typical, larger follows faster motion but admits more noise.
+    min_determinant: float = 1e-6  # Hough only: reject unstable solves when the quadratic becomes degenerate; usually leave near 1e-6.
+
+
 # -----------------------------
 # Domain-specific parameter groups
 # -----------------------------
@@ -126,7 +147,7 @@ class HardwareParams:
     dvs_cam_y_port: str | None = None
     dvs_algo: str = "hough"  # "hough" | "sam"
     dvs_noise_filter_duration_ms: float | None = 30  # None = no filter; > 0 = duration (Sam only)
-    dvs_hough_decay: float = 0.95  # Hough only: 0.95 is a good default, 0.9-0.98 is typical, 0.999 is usually too laggy
+    dvs_hough: HoughTrackerParams = field(default_factory=HoughTrackerParams)  # Hough only: ignored when dvs_algo="sam"
 
 
 @dataclass
