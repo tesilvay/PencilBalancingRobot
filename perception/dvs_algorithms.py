@@ -70,7 +70,10 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
     Event-driven quadratic Hough tracker from the pencil balancing paper.
     """
 
-    def __init__(self, decay=0.999, min_q=1e-6, polarity_filtering=False):
+    def __init__(self, width=346, height=260, decay=0.999, min_q=1e-6):
+
+        self.cx = width / 2
+        self.cy = height / 2
 
         self.A = 0.0
         self.B = 0.0
@@ -80,28 +83,22 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
 
         self.decay = decay
         self.min_q = min_q
-        self.polarity_filtering = polarity_filtering
 
     def update(self, events_np):
 
-        xs = events_np["x"]
-        ys = events_np["y"]
+        # center coordinates
+        xs = events_np["x"] - self.cx
+        ys = events_np["y"] - self.cy
 
-        if self.polarity_filtering and "polarity" in events_np.dtype.names:
-            mask = events_np["polarity"] == 1
-            xs = xs[mask]
-            ys = ys[mask]
+        # decay ONCE per batch
+        self.A *= self.decay
+        self.B *= self.decay
+        self.C *= self.decay
+        self.D *= self.decay
+        self.E *= self.decay
 
         for x, y in zip(xs, ys):
 
-            # exponential decay
-            self.A *= self.decay
-            self.B *= self.decay
-            self.C *= self.decay
-            self.D *= self.decay
-            self.E *= self.decay
-
-            # event quadratic contribution
             self.A += y * y
             self.B += 2.0 * y
             self.C += 1.0
@@ -109,14 +106,18 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
             self.E += -2.0 * x
 
         q = 4 * self.A * self.C - self.B * self.B
+        #print(f"Q: {q}")
 
         if abs(q) < self.min_q:
             return None, None
 
-        b = (self.D * self.B - 2 * self.A * self.E) / q
+        b_center = (self.D * self.B - 2 * self.A * self.E) / q
         m = (self.B * self.E - 2 * self.C * self.D) / q
 
-        return b, m
+        # convert centered intercept back to pixel intercept
+        b_pixel = b_center + self.cx - m * self.cy
+
+        return b_pixel, m
 
     def reset(self):
         self.A = self.B = self.C = self.D = self.E = 0.0

@@ -20,7 +20,7 @@ def initialize_histories(steps, initial_state):
 
 
 def pencil_fell(state):
-    return abs(state.alpha_x) > 0.5 or abs(state.alpha_y) > 0.5
+    return abs(state.alpha_x) > 2.5 or abs(state.alpha_y) > 2.5
 
 
 def calculate_rates(actuator_rate, render_rate):

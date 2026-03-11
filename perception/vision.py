@@ -191,7 +191,8 @@ class SimEventCameraInterface(VisionModelBase):
         )
         
     def reset(self):
-        pass
+        self.cam1_algo.reset()
+        self.cam2_algo.reset()
 
 
 # ============================================================
