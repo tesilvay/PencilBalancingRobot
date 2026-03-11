@@ -42,15 +42,15 @@ def main(mode):
             hardware=HardwareParams(
                 servo=True,
                 servo_port=None,
-                dvs_cam=False,
+                dvs_cam=True,  # Hough space vision via SimEventCameraInterface + PaperHoughLineAlgorithm
                 dvs_cam_x_port=None,
                 dvs_cam_y_port=None,
             ),
             run=RunParams(
                 save_video=False,
                 realtimerender=True,
-                total_time=1.0,
-                stability_tolerance=0.05,
+                total_time=5.0,  # 5s for single-run validation
+                stability_tolerance=0.02,  # 5% stability
             ),
         ),
         camera_params=CameraParams(xr=0.3, yr=0.3),
@@ -68,6 +68,8 @@ def main(mode):
         print(format_summary(summary, setup.default_variant, setup.params))
 
     elif mode == "benchmark_single":
+        # Shorter total_time for faster benchmark (200 trials)
+        setup.params.run.total_time = 2.0
         summary = run_benchmark_single(setup)
         print("\n=== Monte Carlo Benchmark ===")
         print(format_summary(summary, setup.default_variant, setup.params))

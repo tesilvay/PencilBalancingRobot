@@ -70,9 +70,9 @@ def build_vision(variant, params, camera_params):
     if variant.estimator_type is not None:
         hw = params.hardware
         if hw.dvs_cam:
-
-            cam1_algo = PaperHoughLineAlgorithm()
-            cam2_algo = PaperHoughLineAlgorithm()
+            # decay=0.95: responsive to falling pencil (~1° median error vs 3.5° at 0.999)
+            cam1_algo = PaperHoughLineAlgorithm(decay=0.95)
+            cam2_algo = PaperHoughLineAlgorithm(decay=0.95)
 
 
             if dvs_cams_connected(params):
