@@ -110,7 +110,7 @@ class RealEventCameraInterface(VisionModelBase):
         self._latest2: CameraObservation | None = None
         self._surface1 = np.zeros((DAVIS346_HEIGHT, DAVIS346_WIDTH), dtype=np.float32)
         self._surface2 = np.zeros((DAVIS346_HEIGHT, DAVIS346_WIDTH), dtype=np.float32)
-        self._decay_display = 0.95
+        self._decay_display = 0.5
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread1 = threading.Thread(target=self._reader_loop, args=(self._reader1, self.cam1_algo, 1))

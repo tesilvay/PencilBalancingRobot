@@ -52,7 +52,7 @@ class FiniteDifferenceEstimator(BaseEstimator):
 
 class LowPassFiniteDifferenceEstimator(BaseEstimator):
 
-    def __init__(self, alpha=0.9):
+    def __init__(self, alpha=0.95): # been using 0.9 for sim, test diff values for real
         self.prev_pose = None
         self.prev_vel = np.zeros(4)
         self.alpha = alpha

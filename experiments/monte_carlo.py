@@ -78,11 +78,11 @@ def run_region_trials(
         initial_state = SystemState(
             x=x_ref.x,
             x_dot=0.0,
-            alpha_x=np.random.uniform(-0.02, 0.02),
+            alpha_x=np.random.uniform(-0.2, 0.2),
             alpha_x_dot=0.0,
             y=x_ref.y,
             y_dot=0.0,
-            alpha_y=np.random.uniform(-0.02, 0.02),
+            alpha_y=np.random.uniform(-0.2, 0.2),
             alpha_y_dot=0.0
         )
 

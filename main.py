@@ -29,15 +29,15 @@ def main(mode):
                 max_acc=9.81 * 9,
             ),
             workspace=WorkspaceParams(
-                x_ref=-0.00993,
-                y_ref=0.01553,
+                x_ref=-0.00466,
+                y_ref=0.00955,
                 safe_radius=0.040,  # min is 0.031 for 100% stability
             ),
             mechanism=MechanismParams(
-                O=(83, 57),
-                B=(61, 88),
-                la=77,
-                lb=69.6,
+                O=(85.91, 57.86),
+                B=(60.10, 87.07),
+                la=76.84,
+                lb=66.83,
             ),
             hardware=HardwareParams(
                 servo=True,
@@ -45,7 +45,7 @@ def main(mode):
                 dvs_cam=True,
                 dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
                 dvs_cam_y_port=None,
-                dvs_algo="hough",  # "hough" | "sam" (sam uses noise filter)
+                dvs_algo="sam",  # "hough" | "sam" (sam uses noise filter)
             ),
             run=RunParams(
                 save_video=False,
@@ -54,7 +54,7 @@ def main(mode):
                 stability_tolerance=0.02,  # 5% stability
             ),
         ),
-        camera_params=CameraParams(xr=0.3, yr=0.3),
+        camera_params=CameraParams(xr=0.170, yr=0.176),
         default_variant=BenchmarkVariant(
             controller_type="lqr",
             estimator_type="lpf",
