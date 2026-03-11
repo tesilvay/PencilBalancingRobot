@@ -42,9 +42,10 @@ def main(mode):
             hardware=HardwareParams(
                 servo=True,
                 servo_port=None,
-                dvs_cam=True,  # Hough space vision via SimEventCameraInterface + PaperHoughLineAlgorithm
-                dvs_cam_x_port=None,
+                dvs_cam=True,
+                dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
                 dvs_cam_y_port=None,
+                dvs_algo="hough",  # "hough" | "sam" (sam uses noise filter)
             ),
             run=RunParams(
                 save_video=False,

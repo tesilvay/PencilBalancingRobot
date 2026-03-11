@@ -3,6 +3,7 @@ DVS camera reader for DAVIS346 event cameras.
 Wraps dv-processing for opening cameras and reading event batches.
 """
 
+import datetime
 import threading
 import numpy as np
 
@@ -11,23 +12,34 @@ DAVIS346_WIDTH = 346
 DAVIS346_HEIGHT = 260
 
 
+def discover_devices() -> list:
+    """
+    Discover connected DVS cameras.
+    Returns a list of device identifiers suitable for passing to DVSReader.
+    """
+    import dv_processing as dv
+
+    return dv.io.camera.discover()
+
+
 class DVSReader:
     """
     Wraps a single dv-processing DAVIS346 camera.
-    Opens by serial (camera identifier from discovery) or first available if None.
+    Opens by device (from discover_devices()), serial string, or first available if None.
     """
 
-    def __init__(self, serial: str | None = None):
+    def __init__(self, device_or_serial: str | None = None, use_noise_filter: bool = False):
         """
         Open a DAVIS346 camera.
         Args:
-            serial: Camera serial number (e.g. "00000499" for DAVIS346).
-                   If None, opens the first available camera.
+            device_or_serial: Either a device from discover_devices() (e.g. devices[0]),
+                             a serial string (e.g. "00000499"), or None for first available.
+            use_noise_filter: If True, apply BackgroundActivityNoiseFilter before returning events.
         """
         import dv_processing as dv
 
-        if serial:
-            self._capture = dv.io.camera.open(serial)
+        if device_or_serial is not None:
+            self._capture = dv.io.camera.open(device_or_serial)
         else:
             self._capture = dv.io.camera.open()
 
@@ -39,6 +51,13 @@ class DVSReader:
             raise ValueError(
                 f"Expected DAVIS346 resolution {DAVIS346_WIDTH}x{DAVIS346_HEIGHT}, "
                 f"got {self._width}x{self._height}"
+            )
+
+        self._noise_filter = None
+        if use_noise_filter:
+            self._noise_filter = dv.noise.BackgroundActivityNoiseFilter(
+                (self._width, self._height),
+                backgroundActivityDuration=datetime.timedelta(microseconds=30000),
             )
 
     @property
@@ -59,10 +78,14 @@ class DVSReader:
         Get next event batch from the camera.
         Returns numpy array with 'x', 'y' fields (and optionally 't', 'p').
         Returns None if no events available.
+        If use_noise_filter was True, events are filtered before conversion to numpy.
         """
         events = self._capture.getNextEventBatch()
         if events is None:
             return None
+        if self._noise_filter is not None:
+            self._noise_filter.accept(events)
+            events = self._noise_filter.generateEvents()
         return events.numpy()
 
     def is_running(self) -> bool:

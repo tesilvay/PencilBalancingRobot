@@ -45,6 +45,7 @@ def run_simulation(
 ) -> SimulationResult:
 
     real_mode = dvs_cams_connected(params)
+    real_cams = real_mode  # run indefinitely when real DVS cams connected
     sim = Simulator(
         plant=plant,
         controller=controller,
@@ -54,13 +55,20 @@ def run_simulation(
         real_mode=real_mode,
     )
 
-    steps = int(total_time / dt)
+    run_indefinitely = real_cams and realtime
+    steps = int(total_time / dt) if not run_indefinitely else 0
+    if run_indefinitely:
+        print("Real DVS mode: running indefinitely. Press 'q' in a visualization window to quit.")
     state = initial_state
 
-    state_history, acc_history = initialize_histories(
-        steps=steps,
-        initial_state=initial_state
-    )
+    if run_indefinitely:
+        state_history_list = [initial_state.as_vector()]
+        acc_history_list = []
+    else:
+        state_history, acc_history = initialize_histories(
+            steps=steps,
+            initial_state=initial_state
+        )
 
     command = TableCommand(params.workspace.x_ref, params.workspace.y_ref)
 
@@ -76,7 +84,10 @@ def run_simulation(
         next_actuator = start_time
         next_render = start_time
 
-    for i in range(steps):
+    i = 0
+    step_iter = range(steps) if not run_indefinitely else iter(int, 1)  # infinite iterator
+
+    for _ in step_iter:
 
         # ---- Simulation step ----
         state, command, table_acc, measurement, pose = sim.step(state, command, realtime, actuator_dt)
@@ -85,6 +96,7 @@ def run_simulation(
         if realtime:
 
             now = time.perf_counter()
+            quit_requested = False
 
             # Actuator
             if actuator is not None and now >= next_actuator:
@@ -94,17 +106,31 @@ def run_simulation(
 
             # Renderer
             if visualizer is not None and now >= next_render:
-                visualizer.render(measurement)
+                surfaces = None
+                if vision is not None and hasattr(vision, "get_surfaces"):
+                    surfaces = vision.get_surfaces()
+                quit_requested = visualizer.render(measurement, command=command, surfaces=surfaces)
                 next_render += render_dt
 
+            if quit_requested and run_indefinitely:
+                break
+
         # ---- Logging ----
-        state_history[i + 1, :] = state.as_vector()
-        acc_history[i, :] = table_acc.as_vector()
+        if run_indefinitely:
+            state_history_list.append(state.as_vector())
+            acc_history_list.append(table_acc.as_vector())
+        else:
+            state_history[i + 1, :] = state.as_vector()
+            acc_history[i, :] = table_acc.as_vector()
 
         # ---- Failure condition ----
         if pencil_fell(state):
-            state_history = state_history[:i+2]
-            acc_history = acc_history[:i+1]
+            if run_indefinitely:
+                state_history_list = state_history_list[:i+2]
+                acc_history_list = acc_history_list[:i+1]
+            else:
+                state_history = state_history[:i+2]
+                acc_history = acc_history[:i+1]
             break
 
         # ---- Real-time pacing ----
@@ -115,11 +141,18 @@ def run_simulation(
                 time.sleep(sleep_time)
 
             next_sim += dt
+
+        i += 1
         
     if realtime:
         wall_elapsed = time.perf_counter() - start_time
+        sim_steps = i + 1 if run_indefinitely else min(i + 1, steps)
         print(f"Wall time: {wall_elapsed:.3f}s")
-        print(f"Simulated time: {steps*dt:.3f}s")
+        print(f"Simulated time: {sim_steps*dt:.3f}s")
+
+    if run_indefinitely:
+        state_history = np.array(state_history_list)
+        acc_history = np.array(acc_history_list) if acc_history_list else np.zeros((0, 2))
 
     return SimulationResult(
         state_history=state_history,

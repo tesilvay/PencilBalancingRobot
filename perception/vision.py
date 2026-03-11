@@ -92,21 +92,25 @@ class RealEventCameraInterface(VisionModelBase):
         camera_params,
         cam1_algo,
         cam2_algo,
-        cam1_serial: str,
-        cam2_serial: str,
+        cam1_device: str,
+        cam2_device: str,
+        use_noise_filter: bool = False,
     ):
         super().__init__(camera_params)
         self.cam1_algo = cam1_algo
         self.cam2_algo = cam2_algo
         self.cam = CameraModel()
 
-        from perception.dvs_camera_reader import DVSReader
+        from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
-        self._reader1 = DVSReader(cam1_serial)
-        self._reader2 = DVSReader(cam2_serial)
+        self._reader1 = DVSReader(cam1_device, use_noise_filter=use_noise_filter)
+        self._reader2 = DVSReader(cam2_device, use_noise_filter=use_noise_filter)
 
         self._latest1: CameraObservation | None = None
         self._latest2: CameraObservation | None = None
+        self._surface1 = np.zeros((DAVIS346_HEIGHT, DAVIS346_WIDTH), dtype=np.float32)
+        self._surface2 = np.zeros((DAVIS346_HEIGHT, DAVIS346_WIDTH), dtype=np.float32)
+        self._decay_display = 0.95
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread1 = threading.Thread(target=self._reader_loop, args=(self._reader1, self.cam1_algo, 1))
@@ -117,10 +121,14 @@ class RealEventCameraInterface(VisionModelBase):
         self._thread2.start()
 
     def _reader_loop(self, reader, algo, _cam_id: int):
-        """Background loop: read events, update Hough, store latest (pixel space)."""
+        """Background loop: read events, update algo, store latest (pixel space) and surface."""
+        surface = self._surface1 if _cam_id == 1 else self._surface2
         while not self._stop.is_set() and reader.is_running():
             events = reader.get_event_batch()
             if events is not None and len(events) > 0:
+                surface *= self._decay_display
+                xs, ys = events["x"], events["y"]
+                np.add.at(surface, (ys, xs), 1.0)
                 result = algo.update(events)
                 if not isinstance(result, tuple):
                     with self._lock:
@@ -130,6 +138,11 @@ class RealEventCameraInterface(VisionModelBase):
                             self._latest2 = result
             else:
                 time.sleep(0.0001)
+
+    def get_surfaces(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Return copy of current event surfaces for visualization."""
+        with self._lock:
+            return self._surface1.copy(), self._surface2.copy()
 
     def get_observation(self, state_true=None) -> CameraPair | None:
         """

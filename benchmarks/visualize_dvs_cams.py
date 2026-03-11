@@ -1,39 +1,70 @@
 """
-Standalone DVS camera visualization with Hough line overlay.
+Standalone DVS camera visualization with line overlay.
 
-Initializes both DAVIS346 cameras, runs Hough in the main loop,
+Initializes both DAVIS346 cameras, runs a line-tracking algorithm (Hough or Sam),
 and renders accumulated events with the detected line overlaid.
 Use this to verify cams and algo before plugging into main.py (HIL).
 
 Usage:
-    python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
+    # Auto-discover, default Hough algorithm:
+    python -m benchmarks.visualize_dvs_cams
 
-Example (use serials from dv-list-devices):
-    python -m benchmarks.visualize_dvs_cams --cam1 00000499 --cam2 00000500
+    # Sam's OLS algorithm:
+    python -m benchmarks.visualize_dvs_cams --mode sam
+
+    # Or specify serials explicitly:
+    python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
 """
 
 import argparse
+import sys
 import cv2
 import numpy as np
 
-from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
-from perception.dvs_algorithms import PaperHoughLineAlgorithm
+from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
+from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
 
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize DVS cams with Hough line overlay")
-    parser.add_argument("--cam1", required=True, help="Camera 1 serial (e.g. from dv-list-devices)")
-    parser.add_argument("--cam2", required=True, help="Camera 2 serial")
-    parser.add_argument("--decay", type=float, default=0.95, help="Hough decay (default 0.95)")
+    parser.add_argument("--cam1", help="Camera 1 serial or device (omit to use discovery)")
+    parser.add_argument("--cam2", help="Camera 2 serial or device (omit to use discovery)")
+    parser.add_argument(
+        "--mode",
+        choices=["hough", "sam"],
+        default="hough",
+        help="Line algorithm: hough (paper tracker) or sam (OLS on events)",
+    )
+    parser.add_argument("--decay", type=float, default=0.95, help="Hough decay, only for --mode hough (default 0.95)")
     args = parser.parse_args()
 
-    print("Opening cameras...")
-    reader1 = DVSReader(args.cam1)
-    reader2 = DVSReader(args.cam2)
+    if args.cam1 is not None and args.cam2 is not None:
+        device1, device2 = args.cam1, args.cam2
+        print("Opening cameras (from serials)...")
+    elif args.cam1 is not None or args.cam2 is not None:
+        print("Error: Provide both --cam1 and --cam2, or omit both to use discovery.", file=sys.stderr)
+        sys.exit(1)
+    else:
+        devices = discover_devices()
+        print(f"Discovered devices: {devices}")
+        if len(devices) < 2:
+            print("Error: Need at least 2 DVS cameras. Connect both or pass --cam1 and --cam2.", file=sys.stderr)
+            sys.exit(1)
+        device1, device2 = devices[0], devices[1]
+        print(f"Using devices[0] and devices[1] for x and y cams")
 
-    algo1 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
-    algo2 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
-    cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
+    reader1 = DVSReader(device1)
+    reader2 = DVSReader(device2)
+
+    if args.mode == "hough":
+        algo1 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
+        algo2 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, decay=args.decay)
+    else:
+        algo1 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
+        algo2 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
+
+    print(f"Using {args.mode} line algorithm.")
+    # cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
 
     W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
     decay_display = 0.95
@@ -70,7 +101,7 @@ def main():
         frame1 = cv2.cvtColor(frame1, cv2.COLOR_GRAY2BGR)
         frame2 = cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
 
-        # Draw Hough line on each frame
+        # Draw detected line on each frame
         for frame, result in [(frame1, result1), (frame2, result2)]:
             if result is not None and not isinstance(result, tuple):
                 obs_px = result

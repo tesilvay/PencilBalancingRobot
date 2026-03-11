@@ -124,6 +124,7 @@ class HardwareParams:
     dvs_cam: bool = False
     dvs_cam_x_port: str | None = None
     dvs_cam_y_port: str | None = None
+    dvs_algo: str = "hough"  # "hough" | "sam"
 
 
 @dataclass

@@ -1,5 +1,5 @@
 import numpy as np
-from visualization.realtime_visualizer import PencilVisualizerRealtime
+from visualization.realtime_visualizer import PencilVisualizerRealtime, DVSWorkspaceVisualizer
 from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface
@@ -9,7 +9,7 @@ from core.sim_types import make_reference_state
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
 from hardware.Servo_System import ServoSystem
-from perception.dvs_algorithms import PaperHoughLineAlgorithm, SurfaceRegressionAlgorithm
+from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, SurfaceRegressionAlgorithm
 
 def build_plant(params):
     plant = BalancerPlant(params)
@@ -64,24 +64,42 @@ def build_estimator(variant, params):
 
 def dvs_cams_connected(params):
     hw = params.hardware
-    return hw.dvs_cam_y_port is not None and hw.dvs_cam_x_port is not None
+    if not hw.dvs_cam:
+        return False
+    return (hw.dvs_cam_x_port is not None and hw.dvs_cam_y_port is not None) or (
+        hw.dvs_cam_x_port is None and hw.dvs_cam_y_port is None
+    )
 
 def build_vision(variant, params, camera_params):
     if variant.estimator_type is not None:
         hw = params.hardware
         if hw.dvs_cam:
-            # decay=0.95: responsive to falling pencil (~1° median error vs 3.5° at 0.999)
-            cam1_algo = PaperHoughLineAlgorithm(decay=0.95)
-            cam2_algo = PaperHoughLineAlgorithm(decay=0.95)
-
+            if hw.dvs_algo == "sam":
+                from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
+                cam1_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
+                cam2_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
+                use_noise_filter = True
+            else:
+                cam1_algo = PaperHoughLineAlgorithm(decay=0.95)
+                cam2_algo = PaperHoughLineAlgorithm(decay=0.95)
+                use_noise_filter = False
 
             if dvs_cams_connected(params):
+                from perception.dvs_camera_reader import discover_devices
+                if hw.dvs_cam_x_port is not None and hw.dvs_cam_y_port is not None:
+                    cam1_device, cam2_device = hw.dvs_cam_x_port, hw.dvs_cam_y_port
+                else:
+                    devices = discover_devices()
+                    if len(devices) < 2:
+                        raise RuntimeError("Need at least 2 DVS cameras for real DVS mode.")
+                    cam1_device, cam2_device = devices[0], devices[1]
                 vision = RealEventCameraInterface(
                     camera_params=camera_params,
                     cam1_algo=cam1_algo,
                     cam2_algo=cam2_algo,
-                    cam1_serial=params.hardware.dvs_cam_x_port,
-                    cam2_serial=params.hardware.dvs_cam_y_port,
+                    cam1_device=cam1_device,
+                    cam2_device=cam2_device,
+                    use_noise_filter=use_noise_filter,
                 )
                 
             else:
@@ -125,13 +143,12 @@ def build_actuator(params, mech):
 
     return ServoSystem(mech, port=params.hardware.servo_port)
 
-def build_visualizer(params): #should know whether I have sim cam or real cam
-    if params.run.realtimerender:
-        visualizer = PencilVisualizerRealtime()
-    else:
-        visualizer = None
-    
-    return visualizer
+def build_visualizer(params):
+    if not params.run.realtimerender:
+        return None
+    if dvs_cams_connected(params):
+        return DVSWorkspaceVisualizer(workspace=params.workspace)
+    return PencilVisualizerRealtime()
 
 def build_system(variant, params, camera_params):
 
