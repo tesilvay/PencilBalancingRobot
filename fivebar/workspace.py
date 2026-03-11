@@ -24,16 +24,16 @@ class FiveBarWorkspace:
 
                 try:
 
-                    A, C, P1, P2 = self.mech.fk(t1, t4)
+                    A_l, C_l, P1_l, P2_l = self.mech.fk(t1, t4)
 
-                    if self.mech.valid_config(O_l, B_l, A, C, P1):
-                        P = P1
-                    elif self.mech.valid_config(O_l, B_l, A, C, P2):
-                        P = P2
+                    if self.mech.valid_config(O_l, B_l, A_l, C_l, P1_l):
+                        P_l = P1_l
+                    elif self.mech.valid_config(O_l, B_l, A_l, C_l, P2_l):
+                        P_l = P2_l
                     else:
                         continue
 
-                    P_g = self.mech.tf.l2g(P)
+                    P_g = self.mech.tf.l2g(P_l)
 
                     valid_angles.append((t1, t4))
                     valid_points.append(P_g)

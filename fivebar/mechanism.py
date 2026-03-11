@@ -12,8 +12,8 @@ class FiveBarMechanism:
 
     def ik(self, target_global):
 
-        p = self.tf.g2l(target_global)
-        xd, yd = p
+        target_l = self.tf.g2l(target_global)
+        xd, yd = target_l
 
         la = self.la
         lb = self.lb
@@ -41,23 +41,23 @@ class FiveBarMechanism:
 
         return theta1, theta4
 
-    def fk(self, theta1, theta4): #local only
-
+    def fk(self, theta1, theta4):
+        """Forward kinematics; returns points in local frame."""
         la = self.la
         lb = self.lb
         lc = self.lc
 
-        A = np.array([
+        A_l = np.array([
             la*np.cos(theta1),
             la*np.sin(theta1)
         ])
 
-        C = np.array([
+        C_l = np.array([
             lc + la*np.cos(theta4),
             la*np.sin(theta4)
         ])
 
-        d_vec = C - A
+        d_vec = C_l - A_l
         d = np.linalg.norm(d_vec)
 
         if d > 2*lb:
@@ -66,13 +66,13 @@ class FiveBarMechanism:
         e = d_vec / d
         e_perp = np.array([-e[1], e[0]])
 
-        mid = (A + C)/2
+        mid = (A_l + C_l)/2
         h = np.sqrt(lb**2 - (d/2)**2)
 
-        P1 = mid + h*e_perp
-        P2 = mid - h*e_perp
+        P1_l = mid + h*e_perp
+        P2_l = mid - h*e_perp
 
-        return A, C, P1, P2
+        return A_l, C_l, P1_l, P2_l
 
     def valid_config(self, O_l, B_l, A_l, C_l, P_l):
 

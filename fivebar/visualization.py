@@ -36,8 +36,8 @@ class FiveBarVisualizer:
 
         ax.set_aspect('equal')
         ax.grid(True)
-        ax.set_xlim(-75, 125)
-        ax.set_ylim(-75, 145)
+        ax.set_xlim(-175, 125)
+        ax.set_ylim(-175, 145)
 
         # ---- workspace points ----
         # ax.scatter(points[:,0], points[:,1], s=6, color='red')
@@ -91,18 +91,14 @@ class FiveBarVisualizer:
                 artist.remove()
             mech_artists = []
 
-            target = np.array([event.xdata, event.ydata])
+            target_g = np.array([event.xdata, event.ydata])
 
             print("\n-----------------------------")
-            print(f"Clicked: ({target[0]:.3f}, {target[1]:.3f})")
+            print(f"Clicked: ({target_g[0]:.3f}, {target_g[1]:.3f})")
 
             try:
 
-                theta1, theta4, A_l, C_l, P_l = self.mech.solve(target)
-
-                A_g = self.mech.tf.l2g(A_l)
-                C_g = self.mech.tf.l2g(C_l)
-                P_g = self.mech.tf.l2g(P_l)
+                theta1, theta4, A_g, C_g, P_g = self.mech.solve(target_g)
 
                 print("Angles (deg):", np.degrees([theta1, theta4]), "point found:", P_g)
 
