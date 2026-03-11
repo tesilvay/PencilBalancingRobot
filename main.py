@@ -47,6 +47,7 @@ def main(mode):
                 dvs_cam_y_port=None,
                 dvs_algo="sam",  # "hough" | "sam"
                 dvs_noise_filter_duration_ms=5,  # None = no filter; 5–10 for low-latency
+                dvs_hough_decay=0.95,  # Hough only: 0.95 is a good default, 0.9-0.98 is typical
             ),
             run=RunParams(
                 save_video=False,

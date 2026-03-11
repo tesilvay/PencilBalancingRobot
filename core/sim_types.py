@@ -126,6 +126,7 @@ class HardwareParams:
     dvs_cam_y_port: str | None = None
     dvs_algo: str = "hough"  # "hough" | "sam"
     dvs_noise_filter_duration_ms: float | None = 30  # None = no filter; > 0 = duration (Sam only)
+    dvs_hough_decay: float = 0.95  # Hough only: 0.95 is a good default, 0.9-0.98 is typical, 0.999 is usually too laggy
 
 
 @dataclass

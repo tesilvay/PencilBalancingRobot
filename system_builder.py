@@ -80,8 +80,8 @@ def build_vision(variant, params, camera_params):
                 cam2_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
                 noise_filter_duration_ms = hw.dvs_noise_filter_duration_ms
             else:
-                cam1_algo = PaperHoughLineAlgorithm(decay=0.95)
-                cam2_algo = PaperHoughLineAlgorithm(decay=0.95)
+                cam1_algo = PaperHoughLineAlgorithm(decay=hw.dvs_hough_decay)
+                cam2_algo = PaperHoughLineAlgorithm(decay=hw.dvs_hough_decay)
                 noise_filter_duration_ms = None
 
             if dvs_cams_connected(params):
