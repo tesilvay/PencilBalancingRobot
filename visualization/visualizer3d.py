@@ -18,9 +18,10 @@ class Visualizer3D:
         
         self.mech = mech
         
-        self.x_ref = params.x_ref
-        self.y_ref = params.y_ref
-        self.safe_radius = params.safe_radius
+        w = params.workspace
+        self.x_ref = w.x_ref
+        self.y_ref = w.y_ref
+        self.safe_radius = w.safe_radius
 
         self.fig = plt.figure()
         self.ax = self.fig.add_subplot(111, projection='3d')

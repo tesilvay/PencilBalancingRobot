@@ -3,10 +3,11 @@ from core.sim_types import PhysicalParams
 import control as ct
 
 def BuildLinearModel(param: PhysicalParams):
-    g = param.g
-    l = param.com_length
-    tau = param.tau
-    zeta = param.zeta
+    p = param.plant
+    g = p.g
+    l = p.com_length
+    tau = p.tau
+    zeta = p.zeta
     
     # State Space Representation
     # The x and y axes have the same dynamics

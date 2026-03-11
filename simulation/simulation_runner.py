@@ -59,7 +59,7 @@ def run_simulation(
         initial_state=initial_state
     )
 
-    command = TableCommand(params.x_ref, params.y_ref)
+    command = TableCommand(params.workspace.x_ref, params.workspace.y_ref)
 
     actuator_dt, render_dt = calculate_rates(
         actuator_rate=250,

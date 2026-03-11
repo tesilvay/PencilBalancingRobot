@@ -5,6 +5,7 @@ from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDiffere
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface
 from core.model import BuildLinearModel
 from core.plant import BalancerPlant
+from core.sim_types import make_reference_state
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
 from hardware.Servo_System import ServoSystem
@@ -14,14 +15,15 @@ def build_plant(params):
     plant = BalancerPlant(params)
     return plant
 
-def build_controller(config, params, x_ref):
+def build_controller(variant, params):
     A, B = BuildLinearModel(params)
+    x_ref = make_reference_state(params.workspace)
 
-    if config.controller_type == "pole":
+    if variant.controller_type == "pole":
         poles = [-14, -16, -18, -20] * 2
         controller = PolePlacementController(A, B, poles, x_ref)
 
-    elif config.controller_type == "lqr":
+    elif variant.controller_type == "lqr":
         Q_single_axis = np.diag([10, 0.1, 10, 1])  # x, x_dot, alpha, alpha_dot
         Z4 = np.zeros((4, 4))
 
@@ -41,19 +43,19 @@ def build_controller(config, params, x_ref):
 
     return controller
 
-def build_estimator(config, params):
+def build_estimator(variant, params):
     A, B = BuildLinearModel(params)
     
-    if config.estimator_type is not None:
-        if config.estimator_type == "fd":
+    if variant.estimator_type is not None:
+        if variant.estimator_type == "fd":
             estimator = FiniteDifferenceEstimator()
 
-        elif config.estimator_type == "lpf":
+        elif variant.estimator_type == "lpf":
             estimator = LowPassFiniteDifferenceEstimator()
 
-        elif config.estimator_type == "kalman":
+        elif variant.estimator_type == "kalman":
             Qk = np.eye(8) * 1e-6
-            Rk = np.eye(4) * config.noise_std**2
+            Rk = np.eye(4) * variant.noise_std**2
             estimator = KalmanEstimator(A, dt=0.001, Q=Qk, R=Rk)
     else:
         estimator = None
@@ -61,12 +63,13 @@ def build_estimator(config, params):
     return estimator
 
 def dvs_cams_connected(params):
-    return params.dvs_cam_y_port is not None and params.dvs_cam_x_port is not None
+    hw = params.hardware
+    return hw.dvs_cam_y_port is not None and hw.dvs_cam_x_port is not None
 
-def build_vision(config, params, camera_params):
-    if config.estimator_type is not None:
-        
-        if params.dvs_cam:
+def build_vision(variant, params, camera_params):
+    if variant.estimator_type is not None:
+        hw = params.hardware
+        if hw.dvs_cam:
 
             cam1_algo = PaperHoughLineAlgorithm()
             cam2_algo = PaperHoughLineAlgorithm()
@@ -89,8 +92,8 @@ def build_vision(config, params, camera_params):
         else:
             vision = SimVisionModel(
                 camera_params,
-                noise_std=config.noise_std,
-                delay_steps=config.delay_steps
+                noise_std=variant.noise_std,
+                delay_steps=variant.delay_steps
             )
     else:
         vision = None
@@ -99,14 +102,14 @@ def build_vision(config, params, camera_params):
 
 def build_mechanism(params):
 
-    if params.O is not None:
-
-        tf = FiveBarTransform(params.O, params.B)
+    if params.mechanism is not None:
+        m = params.mechanism
+        tf = FiveBarTransform(m.O, m.B)
 
         mech = FiveBarMechanism(
             tf,
-            la=params.la,
-            lb=params.lb
+            la=m.la,
+            lb=m.lb
         )
     else:
         mech = None
@@ -115,28 +118,28 @@ def build_mechanism(params):
 
 def build_actuator(params, mech):
 
-    if not params.servo:
+    if not params.hardware.servo:
         return None
 
-    return ServoSystem(mech, port=params.servo_port)
+    return ServoSystem(mech, port=params.hardware.servo_port)
 
 def build_visualizer(params): #should know whether I have sim cam or real cam
-    if params.realtimerender:
+    if params.run.realtimerender:
         visualizer = PencilVisualizerRealtime()
     else:
         visualizer = None
     
     return visualizer
 
-def build_system(config, params, camera_params, x_ref=None):
+def build_system(variant, params, camera_params):
 
     plant = build_plant(params)
 
-    controller = build_controller(config, params, x_ref)
+    controller = build_controller(variant, params)
 
-    estimator = build_estimator(config, params)
+    estimator = build_estimator(variant, params)
     
-    vision = build_vision(config, params, camera_params)
+    vision = build_vision(variant, params, camera_params)
     
     mech = build_mechanism(params)
     

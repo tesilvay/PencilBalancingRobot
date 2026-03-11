@@ -31,7 +31,7 @@ def save_benchmark_results(results, folder="results"):
 
     for r in results:
         data["results"].append({
-            "config": asdict(r.config),
+            "variant": asdict(r.variant),
             "summary": asdict(r.summary)
         })
 

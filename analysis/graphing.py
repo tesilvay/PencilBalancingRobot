@@ -37,14 +37,15 @@ def json_to_rows(data):
     rows = []
 
     for entry in data["results"]:
-        config = entry["config"]
+        # Support both "variant" (new) and "config" (legacy) for backward compatibility
+        variant = entry.get("variant", entry.get("config"))
         summary = entry["summary"]
 
         rows.append({
-            "controller": config["controller_type"],
-            "estimator": config["estimator_type"] if config["estimator_type"] is not None else "none",
-            "noise": config["noise_std"],
-            "delay": config["delay_steps"],
+            "controller": variant["controller_type"],
+            "estimator": variant["estimator_type"] if variant["estimator_type"] is not None else "none",
+            "noise": variant["noise_std"],
+            "delay": variant["delay_steps"],
             "stability": summary["stability_rate"],
             "settling": summary["avg_settling_time"],
             "avg_acc": summary["avg_acc"],

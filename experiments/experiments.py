@@ -1,15 +1,15 @@
 # experiment.py
 import numpy as np
 from experiments.monte_carlo import run_region_trials, summarize_results
-from core.sim_types import BenchmarkResult, ExperimentConfig
+from core.sim_types import BenchmarkResult, BenchmarkVariant, ExperimentSetup
 from analysis.workspace_plotter import plot_workspace_results
 from system_builder import build_system
 
 
-def format_summary(summary, config, params):
+def format_summary(summary, variant, params):
     
     # Workspace size
-    diameter_cm = params.safe_radius * 2 * 100
+    diameter_cm = params.workspace.safe_radius * 2 * 100
     
     
     stability_pct = summary.stability_rate * 100
@@ -21,10 +21,10 @@ def format_summary(summary, config, params):
     )
 
     return (
-        f"  Controller         : {config.controller_type}\n"
-        f"  Estimator          : {config.estimator_type}\n"
-        f"  Noise              : {config.noise_std}\n"
-        f"  Delay              : {config.delay_steps}\n"
+        f"  Controller         : {variant.controller_type}\n"
+        f"  Estimator          : {variant.estimator_type}\n"
+        f"  Noise              : {variant.noise_std}\n"
+        f"  Delay              : {variant.delay_steps}\n"
         f"  Workspace diameter : {diameter_cm:.1f} cm\n"
         f"\n"
         f"  Stability rate     : {stability_pct:.1f}%\n"
@@ -34,12 +34,14 @@ def format_summary(summary, config, params):
     )
 
 
-def run_single(config, params, camera_params, x_ref=None):
+def run_single(setup: ExperimentSetup):
 
-    plant,controller, vision, estimator, mech, actuator, visualizer = build_system(config, params, camera_params, x_ref=x_ref)
+    plant, controller, vision, estimator, mech, actuator, visualizer = build_system(
+        setup.default_variant, setup.params, setup.camera_params
+    )
 
     results = run_region_trials(
-        params=params,
+        params=setup.params,
         plant=plant,
         controller=controller,
         vision=vision,
@@ -48,22 +50,23 @@ def run_single(config, params, camera_params, x_ref=None):
         actuator=actuator,
         visualizer=visualizer,
         n_trials=1,
-        x_ref=x_ref,
         realtime=True,
     )
 
     return summarize_results(results)
 
 
-def run_benchmark_single(config, params, camera_params, x_ref=None):
+def run_benchmark_single(setup: ExperimentSetup):
     
     # prevents dvs from starting in the benchmark
-    params.realtimerender = False
+    setup.params.run.realtimerender = False
 
-    plant, controller, vision, estimator, mech, _, _ = build_system(config, params, camera_params, x_ref=x_ref)
+    plant, controller, vision, estimator, mech, _, _ = build_system(
+        setup.default_variant, setup.params, setup.camera_params
+    )
 
     results = run_region_trials(
-        params=params,
+        params=setup.params,
         plant=plant,
         controller=controller,
         vision=vision,
@@ -72,14 +75,13 @@ def run_benchmark_single(config, params, camera_params, x_ref=None):
         n_trials=200,
         show_progress=True,
         progress_prefix="Trial",
-        x_ref=x_ref,
         realtime=False,
     )
 
     return summarize_results(results)
 
 
-def run_benchmark_all(params, camera_params, x_ref=None):
+def run_benchmark_all(setup: ExperimentSetup):
 
     controllers = ["pole"]
     estimators = ["lpf"]
@@ -99,19 +101,25 @@ def run_benchmark_all(params, camera_params, x_ref=None):
                     print(f"\nEpoch {config_index}/{total_configs}")
                     print(f"Controller={c}, Estimator={e}, Noise={n}, Delay={d}")
 
-                    config = ExperimentConfig(
+                    variant = BenchmarkVariant(
                         controller_type=c,
                         estimator_type=e,
                         noise_std=n,
                         delay_steps=d
                     )
 
-                    metrics = run_benchmark_single(config, params, camera_params, x_ref=x_ref)
+                    # Temporary setup with this variant for run_benchmark_single
+                    variant_setup = ExperimentSetup(
+                        params=setup.params,
+                        camera_params=setup.camera_params,
+                        default_variant=variant,
+                    )
+                    metrics = run_benchmark_single(variant_setup)
 
                     all_results.append(
                         BenchmarkResult(
-                            params=params,
-                            config=config,
+                            params=setup.params,
+                            variant=variant,
                             summary=metrics
                         )
                     )
@@ -120,20 +128,20 @@ def run_benchmark_all(params, camera_params, x_ref=None):
 
 
 def sweep_workspace(
-    config,
-    params,
-    camera_params,
-    workspace_min_diameter_mm,
-    workspace_max_diameter_mm,
-    n_sizes=5
+    setup: ExperimentSetup,
+    workspace_min_diameter_mm: float,
+    workspace_max_diameter_mm: float,
+    n_sizes: int = 5,
 ):
     """
     Sweep workspace sizes and benchmark controller performance.
     """
 
-    diameters_mm = np.linspace(workspace_min_diameter_mm,
-                               workspace_max_diameter_mm,
-                               n_sizes)
+    diameters_mm = np.linspace(
+        workspace_min_diameter_mm,
+        workspace_max_diameter_mm,
+        n_sizes,
+    )
 
     radii_mm = diameters_mm / 2
 
@@ -144,13 +152,10 @@ def sweep_workspace(
 
         r_m = r_mm / 1000.0
 
-        # Update workspace limits
-        params.x_min = -r_m
-        params.x_max = r_m
-        params.y_min = -r_m
-        params.y_max = r_m
+        # Update workspace limits (plant uses safe_radius for circular workspace)
+        setup.params.workspace.safe_radius = r_m
 
-        summary = run_benchmark_single(config, params, camera_params)
+        summary = run_benchmark_single(setup)
 
         stability_rates.append(summary.stability_rate * 100)
         avg_accs.append(summary.avg_acc)
@@ -161,6 +166,6 @@ def sweep_workspace(
 
     data = np.column_stack((radii_mm, stability_rates, avg_accs))
 
-    plot_workspace_results(data, config)
+    plot_workspace_results(data, setup.default_variant)
 
     return data

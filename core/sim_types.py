@@ -28,6 +28,7 @@ class SystemState:
             self.alpha_y_dot
         ])
 
+
 @dataclass
 class TableCommand:
     x_des: float
@@ -76,34 +77,79 @@ class PoseMeasurement:
     
     
 # -----------------------------
-# Simulation Result
+# Domain-specific parameter groups
 # -----------------------------
 
 @dataclass
-class PhysicalParams:
+class PlantParams:
+    """Dynamics: gravity, pencil, table, limits."""
     g: float
     com_length: float
     tau: float
     zeta: float
     num_states: int
     max_acc: float | None = None
-    x_ref: float | None = None
-    y_ref: float | None = None
+
+
+@dataclass
+class WorkspaceParams:
+    """Reference position and workspace boundary."""
+    x_ref: float
+    y_ref: float
     safe_radius: float | None = None
-    # mech params
-    O: tuple[float, float] | None = None
-    B: tuple[float, float] | None = None
-    la: float | None = None
-    lb: float | None = None
+
+
+def make_reference_state(workspace: WorkspaceParams) -> SystemState:
+    """Build reference state from workspace params."""
+    return SystemState(
+        x=workspace.x_ref, x_dot=0.0, alpha_x=0.0, alpha_x_dot=0.0,
+        y=workspace.y_ref, y_dot=0.0, alpha_y=0.0, alpha_y_dot=0.0
+    )
+
+
+@dataclass
+class MechanismParams:
+    """Five-bar geometry (mm)."""
+    O: tuple[float, float]
+    B: tuple[float, float]
+    la: float
+    lb: float
+
+
+@dataclass
+class HardwareParams:
+    """Real hardware flags and ports."""
     servo: bool = False
     servo_port: str | None = None
     dvs_cam: bool = False
     dvs_cam_x_port: str | None = None
     dvs_cam_y_port: str | None = None
+
+
+@dataclass
+class RunParams:
+    """Simulation/display options."""
     save_video: bool = False
     realtimerender: bool = False
-    total_time: float | None = None
-    stability_tolerance: float | None = None
+    total_time: float = 5.0
+    stability_tolerance: float = 0.05
+
+
+@dataclass
+class PhysicalParams:
+    """Composition of all physical/experiment parameters."""
+    plant: PlantParams
+    workspace: WorkspaceParams
+    mechanism: MechanismParams | None = None
+    hardware: HardwareParams | None = None
+    run: RunParams | None = None
+
+    def __post_init__(self):
+        if self.hardware is None:
+            self.hardware = HardwareParams()
+        if self.run is None:
+            self.run = RunParams()
+
 
 @dataclass
 class SimulationResult:
@@ -111,11 +157,21 @@ class SimulationResult:
     acc_history: np.ndarray
 
 @dataclass
-class ExperimentConfig:
+class BenchmarkVariant:
+    """One point in the benchmark sweep: controller, estimator, noise, delay."""
     controller_type: str
     estimator_type: str | None
     noise_std: float
     delay_steps: int
+
+
+@dataclass
+class ExperimentSetup:
+    """Bundled experiment configuration: params, cameras, and default algorithm variant."""
+    params: PhysicalParams
+    camera_params: CameraParams
+    default_variant: BenchmarkVariant
+
 
 @dataclass
 class TrialMetrics:
@@ -134,5 +190,5 @@ class BenchmarkSummary:
 @dataclass
 class BenchmarkResult:
     params: PhysicalParams
-    config: ExperimentConfig
+    variant: BenchmarkVariant
     summary: BenchmarkSummary

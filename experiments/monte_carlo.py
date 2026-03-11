@@ -4,7 +4,7 @@ import sys
 import time
 from simulation.simulation_runner import run_simulation
 from visualization.visualizer3d import Visualizer3D
-from core.sim_types import TrialMetrics, BenchmarkSummary, SystemState
+from core.sim_types import TrialMetrics, BenchmarkSummary, SystemState, make_reference_state
 from analysis.graphing import plot_state_history
 
 
@@ -60,10 +60,10 @@ def run_region_trials(
     n_trials=100,
     show_progress=False,
     progress_prefix="",
-    x_ref=None,
     realtime=False,
 ):
     results = []
+    x_ref = make_reference_state(params.workspace)
 
     if show_progress:
         bar = ProgressBar(n_trials, prefix=progress_prefix)
@@ -89,7 +89,7 @@ def run_region_trials(
         sim_result = run_simulation(
             params=params,
             initial_state=initial_state,
-            total_time=params.total_time,
+            total_time=params.run.total_time,
             dt=dt,
             plant=plant,
             controller=controller,
@@ -106,11 +106,11 @@ def run_region_trials(
         if n_trials == 1: # only render if we use the single mode
             #plot_state_history(sim_result.state_history, x_ref)
             viz = Visualizer3D(sim_result.state_history, dt=0.001, mech=mech, params=params)
-            viz.render_video(video_speed=1, save_video=params.save_video)
+            viz.render_video(video_speed=1, save_video=params.run.save_video)
             
             
 
-        stabilized, settling_time = evaluate_stability(sim_result, dt, tol=params.stability_tolerance)
+        stabilized, settling_time = evaluate_stability(sim_result, dt, tol=params.run.stability_tolerance)
         max_acc = np.max(np.abs(sim_result.acc_history))
         
         if max_acc > 200:

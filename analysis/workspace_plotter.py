@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 
-def plot_workspace_results(data, config):
+def plot_workspace_results(data, variant):
 
     radii = data[:, 0]
     stability = data[:, 1]
@@ -20,19 +20,19 @@ def plot_workspace_results(data, config):
     plt.title("Workspace Radius vs Control Performance")
     plt.grid(True)
 
-    # Annotate experiment configuration
-    config_text = (
-        f"Controller: {config.controller_type}\n"
-        f"Estimator: {config.estimator_type}\n"
-        f"Noise σ: {config.noise_std}\n"
-        f"Delay: {config.delay_steps} steps\n"
+    # Annotate experiment variant
+    variant_text = (
+        f"Controller: {variant.controller_type}\n"
+        f"Estimator: {variant.estimator_type}\n"
+        f"Noise σ: {variant.noise_std}\n"
+        f"Delay: {variant.delay_steps} steps\n"
         f"Trials per radius: 200"
     )
 
     ax1.text(
         0.02,
         0.98,
-        config_text,
+        variant_text,
         transform=ax1.transAxes,
         verticalalignment="top",
         bbox=dict(boxstyle="round", facecolor="white", alpha=0.8)

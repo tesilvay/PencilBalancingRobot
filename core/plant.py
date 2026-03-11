@@ -10,16 +10,18 @@ import numpy as np
 class BalancerPlant:
 
     def __init__(self, param: PhysicalParams):
-        self.g = param.g
-        self.l = param.com_length
-        self.tau = param.tau
-        self.zeta = param.zeta
+        p = param.plant
+        w = param.workspace
+        self.g = p.g
+        self.l = p.com_length
+        self.tau = p.tau
+        self.zeta = p.zeta
 
-        self.max_acc = param.max_acc
+        self.max_acc = p.max_acc
 
-        self.x_ref = param.x_ref
-        self.y_ref = param.y_ref
-        self.safe_radius = param.safe_radius
+        self.x_ref = w.x_ref
+        self.y_ref = w.y_ref
+        self.safe_radius = w.safe_radius
 
     # ------------------------------------------------------------------
     # Public API
