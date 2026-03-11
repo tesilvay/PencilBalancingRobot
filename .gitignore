@@ -5,3 +5,4 @@ venv/
 .DS_Store
 simulation_videos/
 simulations/
+docs/
