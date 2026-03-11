@@ -80,7 +80,7 @@ class DVSWorkspaceVisualizer:
 
         cv2.moveWindow(self.cam_x, 50, 100)
         cv2.moveWindow(self.cam_y, 50 + self.width + 55, 100)
-        cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 100)
+        cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
 
         self._workspace_size = 350
         self._scale = 4000  # px/m
