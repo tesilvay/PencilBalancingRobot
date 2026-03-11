@@ -1,5 +1,7 @@
 import numpy as np
 
+from core.sim_types import CameraObservation
+
 
 class DVSLineAlgorithm:
     """Base class for DVS line estimation algorithms."""
@@ -116,8 +118,12 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
 
         # convert centered intercept back to pixel intercept
         b_pixel = b_center + self.cx - m * self.cy
-
-        return b_pixel, m
+        
+        
+        return CameraObservation(
+            slope=m,
+            intercept=b_pixel
+        )
 
     def reset(self):
         self.A = self.B = self.C = self.D = self.E = 0.0
