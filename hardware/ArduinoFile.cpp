@@ -90,11 +90,6 @@ void move_servos(float d1,float d2){
 
     servo1.writeMicroseconds(us1);
     servo2.writeMicroseconds(us2);
-
-    Serial.print("MOVE ");
-    Serial.print(us1);
-    Serial.print(" ");
-    Serial.println(us2);
 }
 
 

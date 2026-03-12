@@ -19,8 +19,8 @@ class ServoController:
         self.ser.write(msg.encode("utf-8"))
         self.ser.flush()
 
-    def send_angles(self, a, b): #degrees
-        cmd_str = f"CMD,{a},{b}"
+    def send_angles(self, a, b):
+        cmd_str = f"CMD,{a:.2f},{b:.2f}"
         self.send(cmd_str)
 
 class MockServoController:
@@ -30,10 +30,10 @@ class MockServoController:
 
     def send(self, cmd):
         t = time.perf_counter() - self.start
-        #print(f"{t:0.4f}s | {cmd}")
+        print(f"{t:0.4f}s | {cmd}")
 
     def send_angles(self, theta1, theta2):
-        cmd = f"CMD,{theta1:.1f},{theta2:.1f}"
+        cmd = f"CMD,{theta1:.2f},{theta2:.2f}"
         self.send(cmd)
 
 class MechanismAdapter:
@@ -55,7 +55,7 @@ class MechanismAdapter:
     
 class ServoSystem:
 
-    def __init__(self, mechanism, port="/dev/ttyUSB1"):
+    def __init__(self, mechanism, port="/dev/ttyUSB1", frequency=250):
 
         self.adapter = MechanismAdapter(mechanism)
         
@@ -65,7 +65,7 @@ class ServoSystem:
             self.controller = ServoController(port)
 
         self.last_send = 0.0
-        self.period = 0.01   # 100 Hz
+        self.period = 1.0 / frequency
 
     def send(self, command):
 

@@ -73,7 +73,7 @@ def run_simulation(
     command = TableCommand(params.workspace.x_ref, params.workspace.y_ref)
 
     actuator_dt, render_dt = calculate_rates(
-        actuator_rate=250,
+        actuator_rate=params.hardware.servo_frequency,
         render_rate=30
     )
 
@@ -123,14 +123,10 @@ def run_simulation(
             state_history[i + 1, :] = state.as_vector()
             acc_history[i, :] = table_acc.as_vector()
 
-        # ---- Failure condition ----
-        if pencil_fell(state):
-            if run_indefinitely:
-                state_history_list = state_history_list[:i+2]
-                acc_history_list = acc_history_list[:i+1]
-            else:
-                state_history = state_history[:i+2]
-                acc_history = acc_history[:i+1]
+        # ---- Failure condition (skip in indefinite real-time mode) ----
+        if not run_indefinitely and pencil_fell(state):
+            state_history = state_history[:i+2]
+            acc_history = acc_history[:i+1]
             break
 
         # ---- Real-time pacing ----

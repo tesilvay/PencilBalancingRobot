@@ -32,7 +32,7 @@ def main(mode):
             workspace=WorkspaceParams(
                 x_ref=-0.00466,
                 y_ref=0.00955,
-                safe_radius=0.040,  # min is 0.031 for 100% stability
+                safe_radius=0.020,  # min is 0.031 for 100% stability
             ),
             mechanism=MechanismParams(
                 O=(85.91, 57.86),
@@ -41,9 +41,13 @@ def main(mode):
                 lb=66.83,
             ),
             hardware=HardwareParams(
+                
                 servo=True,
-                servo_port=None, # None uses a mock controller
+                servo_port="/dev/ttyUSB0", # None uses a mock controller
+                servo_frequency=250,
+                
                 dvs_cam=True,
+                
                 dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
                 dvs_cam_y_port=None,
                 dvs_algo="hough",  # "hough" | "sam"

@@ -37,7 +37,7 @@ class ServoController:
         
 
 
-ctrl = ServoController("/dev/ttyUSB1")
+ctrl = ServoController("/dev/ttyUSB0")
 
 ctrl.set_mode("CAL")
 

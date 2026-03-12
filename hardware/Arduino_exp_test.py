@@ -83,6 +83,6 @@ def experiment_console(ctrl):
 
 if __name__ == "__main__":
 
-    ctrl = ServoController("/dev/ttyUSB1")
-
+    ctrl = ServoController("/dev/ttyUSB0")
+    
     experiment_console(ctrl)

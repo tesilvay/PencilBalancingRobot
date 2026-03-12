@@ -141,7 +141,11 @@ def build_actuator(params, mech):
     if not params.hardware.servo:
         return None
 
-    return ServoSystem(mech, port=params.hardware.servo_port)
+    return ServoSystem(
+        mech,
+        port=params.hardware.servo_port,
+        frequency=params.hardware.servo_frequency,
+    )
 
 def build_visualizer(params):
     if not params.run.realtimerender:
