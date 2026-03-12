@@ -142,6 +142,9 @@ python -m benchmarks.visualize_dvs_cams --mode sam --noise-filter-duration 30
 
 # Hough with the current Java-style tracker tuneables
 python -m benchmarks.visualize_dvs_cams --mode hough --hough-mixing-factor 0.02 --hough-inlier-stddev-px 4.0
+
+# test cams
+sudo .venv/bin/python -m benchmarks.visualize_dvs_cams --mode hough
 ```
 
 Shows accumulated events with line overlay per camera. Press 'q' to quit.

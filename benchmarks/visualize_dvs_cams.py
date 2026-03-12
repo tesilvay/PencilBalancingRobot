@@ -21,6 +21,7 @@ Usage:
 
 import argparse
 import sys
+import time
 import cv2
 import numpy as np
 
@@ -64,6 +65,24 @@ def main():
         metavar="MS",
         help="Noise filter duration (ms). Omit = no filter. Use 30 to match main.py with Sam.",
     )
+    parser.add_argument(
+        "--decay-display",
+        type=float,
+        default=0.5,
+        help="Display only: per-batch surface decay. Lower values keep only more recent events.",
+    )
+    parser.add_argument(
+        "--surface-intensity-gain",
+        type=float,
+        default=50.0,
+        help="Display only: scales surface brightness before clipping to 8-bit.",
+    )
+    parser.add_argument(
+        "--display-fps",
+        type=float,
+        default=30.0,
+        help="Display only: target GUI refresh rate in frames per second.",
+    )
     args = parser.parse_args()
 
     if args.cam1 is not None and args.cam2 is not None:
@@ -100,14 +119,17 @@ def main():
     # cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
 
     W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
-    decay_display = 0.95
+    decay_display = args.decay_display
+    surface_intensity_gain = args.surface_intensity_gain
+    display_period = 1.0 / args.display_fps
+    next_display = time.perf_counter()
     surface1 = np.zeros((H, W), dtype=np.float32)
     surface2 = np.zeros((H, W), dtype=np.float32)
 
     cv2.namedWindow("Cam 1 (x-axis)", cv2.WINDOW_NORMAL)
     cv2.namedWindow("Cam 2 (y-axis)", cv2.WINDOW_NORMAL)
     cv2.moveWindow("Cam 1 (x-axis)", 50, 100)
-    cv2.moveWindow("Cam 2 (y-axis)", 50 + W + 55, 100)
+    cv2.moveWindow("Cam 2 (y-axis)", 50 + W + 55, 137)
 
     print("Running. Press 'q' to quit.")
 
@@ -128,27 +150,32 @@ def main():
             np.add.at(surface2, (ys, xs), 1.0)
             result2 = algo2.update(events2)
 
-        # Build display frames (normalize surface to 0-255)
-        frame1 = np.clip(surface1 * 50, 0, 255).astype(np.uint8)
-        frame2 = np.clip(surface2 * 50, 0, 255).astype(np.uint8)
-        frame1 = cv2.cvtColor(frame1, cv2.COLOR_GRAY2BGR)
-        frame2 = cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
+        now = time.perf_counter()
+        if now >= next_display:
+            # Build display frames (normalize surface to 0-255).
+            frame1 = np.clip(surface1 * surface_intensity_gain, 0, 255).astype(np.uint8)
+            frame2 = np.clip(surface2 * surface_intensity_gain, 0, 255).astype(np.uint8)
+            frame1 = cv2.cvtColor(frame1, cv2.COLOR_GRAY2BGR)
+            frame2 = cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
 
-        # Draw detected line on each frame
-        for frame, result in [(frame1, result1), (frame2, result2)]:
-            if result is not None and not isinstance(result, tuple):
-                obs_px = result
-                s_px, b_px = obs_px.slope, obs_px.intercept
-                y0, y1 = 0, H - 1
-                x0 = int(s_px * y0 + b_px)
-                x1 = int(s_px * y1 + b_px)
-                cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+            # Draw detected line on each frame.
+            for frame, result in [(frame1, result1), (frame2, result2)]:
+                if result is not None and not isinstance(result, tuple):
+                    obs_px = result
+                    s_px, b_px = obs_px.slope, obs_px.intercept
+                    y0, y1 = 0, H - 1
+                    x0 = int(s_px * y0 + b_px)
+                    x1 = int(s_px * y1 + b_px)
+                    cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
 
-        cv2.imshow("Cam 1 (x-axis)", frame1)
-        cv2.imshow("Cam 2 (y-axis)", frame2)
+            cv2.imshow("Cam 1 (x-axis)", frame1)
+            cv2.imshow("Cam 2 (y-axis)", frame2)
 
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+            while next_display <= now:
+                next_display += display_period
 
     reader1.close()
     reader2.close()
