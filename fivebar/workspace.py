@@ -12,7 +12,9 @@ class FiveBarWorkspace:
 
     def sweep_joint_space(self, theta_res=100):
 
-        theta_vals = np.linspace(0, np.pi, theta_res)
+        theta_min_deg = -45
+        theta_max_deg = 225
+        theta_vals = np.linspace(np.radians(theta_min_deg), np.radians(theta_max_deg), theta_res)
 
         valid_angles = []
         valid_points = []
@@ -34,6 +36,9 @@ class FiveBarWorkspace:
                         continue
 
                     P_g = self.mech.tf.l2g(P_l)
+
+                    if P_g[0] < 0 or P_g[1] < 0:
+                        continue
 
                     valid_angles.append((t1, t4))
                     valid_points.append(P_g)

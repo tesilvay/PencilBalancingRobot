@@ -15,10 +15,10 @@ class MechanismParams:
 if __name__ == "__main__":
 
     mechanism=MechanismParams(
-                O=(85.91, 57.86),
-                B=(60.10, 87.07),
-                la=76.84,
-                lb=66.83,
+                O=(239, 288),
+                B=(212, 320),
+                la=170,
+                lb=170,
             )
 
 
@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     workspace = FiveBarWorkspace(mech)
 
-    angles, points = workspace.sweep_joint_space(200)
+    angles, points = workspace.sweep_joint_space(100)
 
     viz = FiveBarVisualizer(mech, workspace)
 

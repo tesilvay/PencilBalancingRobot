@@ -76,11 +76,11 @@ def run_region_trials(
             vision.reset()
 
         initial_state = SystemState(
-            x=x_ref.x,
+            x=x_ref.x + np.random.uniform(-0.020, 0.020),
             x_dot=0.0,
             alpha_x=np.random.uniform(-0.2, 0.2),
             alpha_x_dot=0.0,
-            y=x_ref.y,
+            y=x_ref.y + np.random.uniform(-0.20, 0.020),
             y_dot=0.0,
             alpha_y=np.random.uniform(-0.2, 0.2),
             alpha_y_dot=0.0

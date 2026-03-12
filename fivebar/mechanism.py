@@ -74,24 +74,33 @@ class FiveBarMechanism:
 
         return A_l, C_l, P1_l, P2_l
 
+    def _cranks_uncrossed(self, O_l, B_l, A_l, C_l):
+        """Left and right input cranks don't overlap/toggle."""
+        v_left_crank = A_l - O_l
+        v_right_crank = C_l - B_l
+        return np.cross(v_left_crank, v_right_crank) < 0
+
+    def _elbows_opposed(self, O_l, B_l, A_l, C_l, P_l):
+        """Left and right elbows bend in opposite directions."""
+        cross_left = np.cross(A_l - O_l, P_l - A_l)
+        cross_right = np.cross(C_l - B_l, P_l - C_l)
+        return cross_left * cross_right < 0
+
+    def _coupler_above_elbows(self, A_l, C_l, P_l):
+        """Coupler point P sits above the elbow-to-elbow line."""
+        return np.cross(P_l - A_l, P_l - C_l) > 0
+
+    def _point_in_front(self, P_l):
+        """P has positive y in the local frame (in front of the mechanism)."""
+        return P_l[1] > 0
+
     def valid_config(self, O_l, B_l, A_l, C_l, P_l):
-
-        v1 = A_l - O_l
-        v2 = P_l - A_l
-        v3 = C_l - B_l
-        v4 = P_l - C_l
-
-        cross = np.cross(v1, v3)
-        cond1 = cross < 0
-
-        cross_left = np.cross(v1, v2)
-        cross_right = np.cross(v3, v4)
-        cond2 = cross_left * cross_right < 0
-
-        cross_in = np.cross(v2, v4)
-        cond3 = cross_in > 0
-
-        return cond1 and cond2 and cond3
+        return (
+            self._cranks_uncrossed(O_l, B_l, A_l, C_l)
+            and self._elbows_opposed(O_l, B_l, A_l, C_l, P_l)
+            and self._coupler_above_elbows(A_l, C_l, P_l)
+            and self._point_in_front(P_l)
+        )
 
     def solve(self, target_global):
 
