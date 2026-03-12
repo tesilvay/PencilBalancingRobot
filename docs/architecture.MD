@@ -106,8 +106,10 @@ This split keeps components decoupled and makes it easy to swap implementations 
 **Hough algorithm (`PaperHoughLineAlgorithm`)** — paper-inspired tracker:
 
 - Maintains quadratic accumulators over centered pixel coordinates \((x - c_x, y - c_y)\).
-- On each event batch, decays the accumulators, integrates the new events, and solves a small quadratic form to recover slope \(m\) and intercept \(b_{px}\).
-- Selected when `dvs_algo="hough"`. No noise filter. Used in `benchmarks/benchmark_hough.py` for static/falling pencil and decay sweeps.
+- For each event: solves the current line, computes the event's residual, applies a Gaussian inlier weight, performs adaptive forgetting proportional to that weight, and accumulates the weighted event into the quadratic state. This mirrors the original `polyAddEventX/Y` logic in `Conradt/PencilBalancer.java`.
+- The per-event inner loop is compiled via Numba (`@numba.njit`) in `_hough_update_events_jit()`. This brings throughput from ~30k-100k events/s (pure Python) to millions of events/s, matching the compiled-Java performance of the original system.
+- Accepts an optional `max_events` parameter. When set, only the newest N events from a batch are processed by the algorithm (tail slice), acting as a safety cap under extreme event bursts.
+- Selected when `dvs_algo="hough"`. No noise filter. Used in `benchmarks/benchmark_hough.py` for static/falling pencil and decay sweeps, and in `benchmarks/visualize_dvs_cams.py` for live camera validation.
 
 **Surface algorithm (`SurfaceRegressionAlgorithm`)** — not used:
 
@@ -115,6 +117,12 @@ This split keeps components decoupled and makes it easy to swap implementations 
 
 **Benchmark (`benchmarks/benchmark_hough.py`)**:
 - Generates synthetic DVS-like events, runs `PaperHoughLineAlgorithm`, measures pixel and normalized-space errors. Typical mean normalized intercept error \(\mathcal{O}(10^{-3})\), slope error \(\mathcal{O}(10^{-4})\).
+
+**Live camera benchmark (`benchmarks/visualize_dvs_cams.py`)**:
+- Opens two DAVIS346 cameras, runs Sam or Hough, renders event surfaces with line overlay at 30 FPS.
+- Uses batch draining: each iteration reads all queued batches per camera, concatenates them, updates the display surface with every event, and feeds the merged batch to the algorithm. This prevents backlog buildup under high event rates.
+- Supports `--max-events-per-batch N` to cap events fed to the Hough algorithm per iteration.
+- Requires `sudo` for USB camera access: `sudo .venv/bin/python -m benchmarks.visualize_dvs_cams --mode hough`.
 
 ### `simulation/` — loop integration and scheduling
 
