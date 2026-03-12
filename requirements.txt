@@ -3,6 +3,7 @@ numpy>=1.24
 scipy>=1.8
 matplotlib>=3.7
 control>=0.9
+numba>=0.58
 
 # Geometry / hardware
 shapely>=2.1

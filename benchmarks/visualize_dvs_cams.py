@@ -83,6 +83,14 @@ def main():
         default=30.0,
         help="Display only: target GUI refresh rate in frames per second.",
     )
+    parser.add_argument(
+        "--max-events-per-batch",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Hough only: cap events fed to the algorithm per iteration (newest N kept). "
+             "Omit to process all events (Numba JIT handles typical rates).",
+    )
     args = parser.parse_args()
 
     if args.cam1 is not None and args.cam2 is not None:
@@ -109,8 +117,14 @@ def main():
             inlier_stddev_px=args.hough_inlier_stddev_px,
             min_determinant=args.hough_min_determinant,
         )
-        algo1 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, params=hough_params)
-        algo2 = PaperHoughLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, params=hough_params)
+        algo1 = PaperHoughLineAlgorithm(
+            width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT,
+            params=hough_params, max_events=args.max_events_per_batch,
+        )
+        algo2 = PaperHoughLineAlgorithm(
+            width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT,
+            params=hough_params, max_events=args.max_events_per_batch,
+        )
     else:
         algo1 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
         algo2 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
@@ -135,20 +149,37 @@ def main():
 
     result1, result2 = None, None
     while reader1.is_running() and reader2.is_running():
-        events1 = reader1.get_event_batch()
-        events2 = reader2.get_event_batch()
+        # Drain all queued batches per camera to prevent backlog.
+        # Surface gets every event (visual accuracy); algorithm sees the
+        # merged batch (event cap inside the algo trims if needed).
+        batches1 = []
+        while True:
+            b = reader1.get_event_batch()
+            if b is None or len(b) == 0:
+                break
+            batches1.append(b)
 
-        if events1 is not None and len(events1) > 0:
+        batches2 = []
+        while True:
+            b = reader2.get_event_batch()
+            if b is None or len(b) == 0:
+                break
+            batches2.append(b)
+
+        if batches1:
+            events1 = np.concatenate(batches1)
             surface1 *= decay_display
-            xs, ys = events1["x"], events1["y"]
-            np.add.at(surface1, (ys, xs), 1.0)
+            np.add.at(surface1, (events1["y"], events1["x"]), 1.0)
             result1 = algo1.update(events1)
 
-        if events2 is not None and len(events2) > 0:
+        if batches2:
+            events2 = np.concatenate(batches2)
             surface2 *= decay_display
-            xs, ys = events2["x"], events2["y"]
-            np.add.at(surface2, (ys, xs), 1.0)
+            np.add.at(surface2, (events2["y"], events2["x"]), 1.0)
             result2 = algo2.update(events2)
+
+        if not batches1 and not batches2:
+            time.sleep(0.0001)
 
         now = time.perf_counter()
         if now >= next_display:

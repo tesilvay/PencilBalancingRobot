@@ -1,6 +1,49 @@
+import math
+
+import numba
 import numpy as np
 
 from core.sim_types import CameraObservation, HoughQuadraticState, HoughTrackerParams
+
+
+@numba.njit(cache=True)
+def _hough_update_events_jit(
+    xs_centered, ys_centered,
+    q_m2, cross_mb, q_b2, lin_m, lin_b,
+    mixing_factor, inv_2sigma2, min_determinant,
+):
+    """Numba-compiled inner loop for the recursive Hough tracker.
+
+    Mirrors Conradt/PencilBalancer.java polyAddEventX/Y: per-event solve,
+    Gaussian inlier weight, adaptive forgetting, and accumulation.
+    """
+    for i in range(len(xs_centered)):
+        det = 4.0 * q_m2 * q_b2 - cross_mb * cross_mb
+        if abs(det) < min_determinant:
+            continue
+        intercept = (lin_m * cross_mb - 2.0 * q_m2 * lin_b) / det
+        slope = (cross_mb * lin_b - 2.0 * q_b2 * lin_m) / det
+
+        predicted_x = intercept + ys_centered[i] * slope
+        residual = xs_centered[i] - predicted_x
+        weight = math.exp(-residual * residual * inv_2sigma2)
+
+        dec = 1.0 - mixing_factor * weight
+        q_m2 *= dec
+        cross_mb *= dec
+        q_b2 *= dec
+        lin_m *= dec
+        lin_b *= dec
+
+        yi = ys_centered[i]
+        xi = xs_centered[i]
+        q_m2 += weight * (yi * yi)
+        cross_mb += weight * (2.0 * yi)
+        q_b2 += weight
+        lin_m += weight * (-2.0 * xi * yi)
+        lin_b += weight * (-2.0 * xi)
+
+    return q_m2, cross_mb, q_b2, lin_m, lin_b
 
 
 class DVSLineAlgorithm:
@@ -80,17 +123,18 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
     into small, named steps.
     """
 
-    def __init__(self, width=346, height=260, params: HoughTrackerParams | None = None):
+    def __init__(self, width=346, height=260, params: HoughTrackerParams | None = None,
+                 max_events: int | None = None):
         self.width = width
         self.height = height
         self.cx = width / 2
         self.cy = height / 2
         self.params = HoughTrackerParams() if params is None else params
+        self.max_events = max_events
 
-        # Java mapping note:
-        #   polyAX/polyBX/polyCX/polyDX/polyEX
-        # become:
-        #   quadratic_m2/cross_mb/quadratic_b2/linear_m/linear_b
+        sigma = self.params.inlier_stddev_px
+        self._inv_2sigma2 = 1.0 / (2.0 * sigma * sigma)
+
         self.state = HoughQuadraticState()
         self.current_centered_line: CameraObservation | None = None
         self.reset()
@@ -165,24 +209,21 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
         if events_np is None or len(events_np) == 0:
             return self._current_pixel_observation()
 
-        xs_centered = events_np["x"].astype(np.float32) - self.cx
-        ys_centered = events_np["y"].astype(np.float32) - self.cy
+        if self.max_events is not None and len(events_np) > self.max_events:
+            events_np = events_np[-self.max_events:]
 
-        for x_centered, y_centered in zip(xs_centered, ys_centered):
-            estimate = self.current_centered_line
-            if estimate is None:
-                estimate = self._solve_centered_line()
-                self.current_centered_line = estimate
+        xs_centered = events_np["x"].astype(np.float64) - self.cx
+        ys_centered = events_np["y"].astype(np.float64) - self.cy
 
-            if estimate is None:
-                continue
-
-            residual = self._event_residual(x_centered, y_centered, estimate)
-            weight = self._gaussian_inlier_weight(residual)
-            decay_factor = self._adaptive_decay(weight)
-            self._apply_forgetting(decay_factor)
-            self._accumulate_weighted_event(x_centered, y_centered, weight)
-            self.current_centered_line = self._solve_centered_line()
+        s = self.state
+        (s.quadratic_m2, s.cross_mb, s.quadratic_b2,
+         s.linear_m, s.linear_b) = _hough_update_events_jit(
+            xs_centered, ys_centered,
+            s.quadratic_m2, s.cross_mb, s.quadratic_b2,
+            s.linear_m, s.linear_b,
+            self.params.mixing_factor, self._inv_2sigma2,
+            self.params.min_determinant,
+        )
 
         return self._current_pixel_observation()
 
