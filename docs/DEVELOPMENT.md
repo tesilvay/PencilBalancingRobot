@@ -174,7 +174,7 @@ docs/                   # Architecture, tasks, this guide
 - **DVSWorkspaceVisualizer**: Three windows — Cam 1, Cam 2 (event footage + line overlay), Workspace (circle + desired point). Point clamped to circle edge when outside limits.
 - **`dvs_algo`**: Choose `"hough"` or `"sam"` in `HardwareParams`.
 - **`dvs_hough`**: Java-style Hough tuneables in `HardwareParams` (`mixing_factor`, `inlier_stddev_px`, `min_determinant`).
-- **`dvs_noise_filter_duration_ms`**: `None` = no filter; `30` = default (Sam only). Use `5`–`10` for low-latency, or `None` to disable.
+- **`dvs_sam_noise_filter_duration_ms`**: `None` = no filter; `30` = default (Sam OLS only). Use `5`–`10` for low-latency, or `None` to disable.
 - **`estimator_lpf_alpha`**: `None` = LPF default (0.95); `0.99` for lower phase lag in real-time.
 - **Device discovery**: Set both `dvs_cam_x_port` and `dvs_cam_y_port` to `None` to auto-discover cameras.
 - **Quit key**: Press `q` in any visualization window to exit indefinite real-DVS runs.
@@ -184,7 +184,7 @@ docs/                   # Architecture, tasks, this guide
 ## Key Configuration
 
 - **`main.py`**: `ExperimentSetup` — params, camera_params, default_variant
-- **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo, dvs_noise_filter_duration_ms, dvs_hough), `RunParams` (estimator_lpf_alpha), `BenchmarkVariant`, `ExperimentSetup`
+- **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo, dvs_sam_noise_filter_duration_ms, dvs_hough), `RunParams` (estimator_lpf_alpha), `BenchmarkVariant`, `ExperimentSetup`
 - **`system_builder.py`**: Vision selection (`dvs_cam`, `dvs_algo`), controller/estimator choice, DVSWorkspaceVisualizer when real DVS + realtime
 
 ---

@@ -78,7 +78,7 @@ def build_vision(variant, params, camera_params):
                 from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
                 cam1_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
                 cam2_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
-                noise_filter_duration_ms = hw.dvs_noise_filter_duration_ms
+                noise_filter_duration_ms = hw.dvs_sam_noise_filter_duration_ms
             else:
                 cam1_algo = PaperHoughLineAlgorithm(params=hw.dvs_hough)
                 cam2_algo = PaperHoughLineAlgorithm(params=hw.dvs_hough)

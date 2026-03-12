@@ -125,7 +125,7 @@ The code has been refactored to match the Java update rule more closely, but **r
 
 ### Recommended Fixes — Implemented
 
-1. **Configurable noise filter duration** — `HardwareParams.dvs_noise_filter_duration_ms`: `None` = no filter; `> 0` = duration (ms). Set to 5–10 for low-latency, or `None` to disable. Sam only; Hough never uses the filter.
+1. **Configurable noise filter duration** — `HardwareParams.dvs_sam_noise_filter_duration_ms`: `None` = no filter; `> 0` = duration (ms). Set to 5–10 for low-latency, or `None` to disable. Sam OLS only; Hough never uses the filter.
 
 2. **Align visualize_dvs_cams with main.py** — Use `--noise-filter-duration 30` to match main.py. Omit for no filter (more responsive but incomparable).
 

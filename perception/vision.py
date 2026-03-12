@@ -121,14 +121,20 @@ class RealEventCameraInterface(VisionModelBase):
         self._thread2.start()
 
     def _reader_loop(self, reader, algo, _cam_id: int):
-        """Background loop: read events, update algo, store latest (pixel space) and surface."""
+        """Background loop: drain all queued batches, update algo, store latest."""
         surface = self._surface1 if _cam_id == 1 else self._surface2
         while not self._stop.is_set() and reader.is_running():
-            events = reader.get_event_batch()
-            if events is not None and len(events) > 0:
+            batches = []
+            while True:
+                b = reader.get_event_batch()
+                if b is None or len(b) == 0:
+                    break
+                batches.append(b)
+
+            if batches:
+                events = np.concatenate(batches)
                 surface *= self._decay_display
-                xs, ys = events["x"], events["y"]
-                np.add.at(surface, (ys, xs), 1.0)
+                np.add.at(surface, (events["y"], events["x"]), 1.0)
                 result = algo.update(events)
                 if not isinstance(result, tuple):
                     with self._lock:
