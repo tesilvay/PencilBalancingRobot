@@ -31,6 +31,16 @@ class FiveBarWorkspace:
             self._numba_constants = get_numba_constants(self.mech)
         return self._numba_constants
 
+    def warm_up_numba(self):
+        """Run one Numba kernel call to trigger JIT so subsequent sweep timings exclude compile time."""
+        if os.environ.get("USE_NUMBA", "1") == "0":
+            return
+        nc = self._get_numba_constants()
+        if nc is None or point_valid_numba is None:
+            return
+        x_min, y_min, _, _ = self._cartesian_bounds()
+        point_valid_numba(x_min, y_min, **nc)
+
     def _cartesian_bounds(self):
         """Bounding box for the Cartesian grid (first quadrant; max extends past bases by la+lb)."""
         O_g, B_g = self.mech.tf.bases_global()
@@ -177,6 +187,8 @@ class FiveBarWorkspace:
             and os.environ.get("USE_NUMBA", "1") != "0"
         )
         nc = self._get_numba_constants() if use_numba else None
+        if use_numba and nc is not None:
+            point_valid_numba(x_min, y_min, **nc)  # warm up Numba JIT before timing
         if not use_numba:
             reachable_fast = self._make_reachability_checker()
 
@@ -245,6 +257,8 @@ class FiveBarWorkspace:
             and os.environ.get("USE_NUMBA", "1") != "0"
         )
         nc = self._get_numba_constants() if use_numba else None
+        if use_numba and nc is not None:
+            point_valid_numba(x_min, y_min, **nc)  # warm up Numba JIT before timing
         if not use_numba:
             reachable_fast = self._make_reachability_checker()
         points_adaptive = []
