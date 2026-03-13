@@ -40,13 +40,13 @@ class FiveBarVisualizer:
         ax.set_ylim(-50, 500)
 
         # ---- workspace points ----
-        ax.scatter(points[:,0], points[:,1], s=6, color='red')
+        # ax.scatter(points[:,0], points[:,1], s=6, color='red')
 
         # ---- workspace boundary ----
-        poly = self.workspace.alpha_shape(points, alpha=0.02)
+        poly = self.workspace.alpha_shape(points, alpha=0.05)
 
-        #x, y = poly.exterior.xy
-        #ax.plot(x, y, 'k', linewidth=2)
+        x, y = poly.exterior.xy
+        ax.plot(x, y, 'k', linewidth=2)
 
         # ---- largest inscribed circle ----
         center, radius = self.workspace.safe_workspace_circle(poly)

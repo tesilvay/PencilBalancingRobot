@@ -110,13 +110,24 @@ class FiveBarMechanism:
 
         O_l, B_l = self.tf.bases_local()
 
-        if self.valid_config(O_l, B_l, A_l, C_l, P1_l):
+        target_l = self.tf.g2l(np.asarray(target_global))
+        d1 = np.linalg.norm(target_l - P1_l)
+        d2 = np.linalg.norm(target_l - P2_l)
+        valid_P1 = self.valid_config(O_l, B_l, A_l, C_l, P1_l)
+        valid_P2 = self.valid_config(O_l, B_l, A_l, C_l, P2_l)
+        target_branch = 1 if d1 <= d2 else 2
+
+        # Only use the branch that actually reaches the target; it must be valid (workspace/orientation).
+        if target_branch == 1 and valid_P1:
             P_l = P1_l
-        else:
+        elif target_branch == 2 and valid_P2:
             P_l = P2_l
+        else:
+            raise ValueError(
+                "Point not reachable in a valid configuration (outside workspace or invalid elbow orientation)"
+            )
 
         A_g = self.tf.l2g(A_l)
         C_g = self.tf.l2g(C_l)
         P_g = self.tf.l2g(P_l)
-        
         return theta1, theta4, A_g, C_g, P_g

@@ -2,6 +2,7 @@ import numpy as np
 from scipy.spatial import Delaunay
 from shapely.geometry import Polygon, Point, MultiLineString
 from shapely.ops import polygonize
+from tqdm import tqdm
 import shapely
 
 
@@ -21,30 +22,32 @@ class FiveBarWorkspace:
 
         O_l, B_l = self.mech.tf.bases_local()
 
-        for t1 in theta_vals:
-            for t4 in theta_vals:
+        total = theta_res * theta_res
+        with tqdm(total=total, desc="Sweeping joint space", unit="pt") as pbar:
+            for t1 in theta_vals:
+                for t4 in theta_vals:
+                    try:
+                        A_l, C_l, P1_l, P2_l = self.mech.fk(t1, t4)
 
-                try:
+                        if self.mech.valid_config(O_l, B_l, A_l, C_l, P1_l):
+                            P_l = P1_l
+                        elif self.mech.valid_config(O_l, B_l, A_l, C_l, P2_l):
+                            P_l = P2_l
+                        else:
+                            pbar.update(1)
+                            continue
 
-                    A_l, C_l, P1_l, P2_l = self.mech.fk(t1, t4)
+                        P_g = self.mech.tf.l2g(P_l)
 
-                    if self.mech.valid_config(O_l, B_l, A_l, C_l, P1_l):
-                        P_l = P1_l
-                    elif self.mech.valid_config(O_l, B_l, A_l, C_l, P2_l):
-                        P_l = P2_l
-                    else:
-                        continue
+                        if P_g[0] < 0 or P_g[1] < 0:
+                            pbar.update(1)
+                            continue
 
-                    P_g = self.mech.tf.l2g(P_l)
-
-                    if P_g[0] < 0 or P_g[1] < 0:
-                        continue
-
-                    valid_angles.append((t1, t4))
-                    valid_points.append(P_g)
-
-                except:
-                    pass
+                        valid_angles.append((t1, t4))
+                        valid_points.append(P_g)
+                    except Exception:
+                        pass
+                    pbar.update(1)
 
         return valid_angles, np.array(valid_points)
 
