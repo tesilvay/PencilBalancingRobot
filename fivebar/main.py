@@ -18,12 +18,12 @@ class MechanismParams:
     
 if __name__ == "__main__":
 
-    mechanism=MechanismParams(
-                O=(239, 288),
-                B=(212, 320),
-                la=170,
-                lb=170,
-            )
+    mechanism = MechanismParams(
+        O=(239, 288),
+        B=(212, 320),
+        la=170,
+        lb=120,
+    )
 
 
     tf = FiveBarTransform(mechanism.O, mechanism.B)
@@ -32,11 +32,30 @@ if __name__ == "__main__":
 
     workspace = FiveBarWorkspace(mech)
 
-    t0 = time.perf_counter()
-    points = workspace.sweep_cartesian(70)
-    elapsed_ms = (time.perf_counter() - t0) * 1000.0
-    print(f"Workspace sweep took {elapsed_ms:.1f} ms for {points.shape[0]} valid points.")
+    MAX_RES = 70
+    MIN_RES = 5
+    ALPHA = 0.05  # use heuristic inside compare_adaptive_to_full
+
+    result = workspace.compare_adaptive_to_full(
+        max_res=MAX_RES,
+        alpha=ALPHA,
+        min_res=MIN_RES,
+        samples_per_cell=3,
+    )
+
+    pts_full = result["pts_full"]
+    pts_adapt = result["pts_adapt"]
+
+    print(f"Full sweep:     {pts_full.shape[0]} valid points, {result['time_full_ms']:.1f} ms")
+    print(f"Adaptive sweep: {pts_adapt.shape[0]} valid points, {result['time_adaptive_ms']:.1f} ms")
+    print(
+        "Geometric error:"
+        f" area_rel_error={result['area_rel_error']},"
+        f" sym_diff_ratio={result['sym_diff_ratio']},"
+        f" hausdorff_distance={result['hausdorff_distance']}"
+    )
 
     viz = FiveBarVisualizer(mech, workspace)
 
-    viz.interactive_workspace(points)
+    # Visualize adaptive sweep by default; switch to pts_full for ground truth.
+    viz.interactive_workspace(pts_adapt)

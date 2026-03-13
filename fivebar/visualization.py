@@ -15,12 +15,21 @@ class FiveBarVisualizer:
         ax.set_aspect('equal')
         ax.grid(True)
 
-        ax.scatter(points[:,0], points[:,1], s=5)
+        ax.scatter(points[:, 0], points[:, 1], s=5)
 
-        poly = self.workspace.alpha_shape(points, alpha=0.02)
+        # Choose alpha based on workspace span so the polygon wraps the points.
+        span = max(np.ptp(points[:, 0]), np.ptp(points[:, 1]))
+        alpha = 1.0 / max(span * 0.1, 1e-6)
+        poly = self.workspace.alpha_shape(points, alpha=alpha)
 
-        x,y = poly.exterior.xy
-        ax.plot(x,y,'k')
+        # If we get a MultiPolygon, take the largest component for visualization.
+        if hasattr(poly, "geoms"):
+            poly_main = max(poly.geoms, key=lambda g: g.area)
+        else:
+            poly_main = poly
+
+        x, y = poly_main.exterior.xy
+        ax.plot(x, y, 'k')
 
         center,r = self.workspace.largest_inscribed_circle(poly)
 
@@ -40,12 +49,20 @@ class FiveBarVisualizer:
         ax.set_ylim(-50, 500)
 
         # ---- workspace points ----
-        ax.scatter(points[:,0], points[:,1], s=6, color='red')
+        ax.scatter(points[:, 0], points[:, 1], s=6, color='red')
 
         # ---- workspace boundary ----
-        poly = self.workspace.alpha_shape(points, alpha=0.05)
+        span = max(np.ptp(points[:, 0]), np.ptp(points[:, 1]))
+        alpha = 1.0 / max(span * 0.1, 1e-6)
+        poly = self.workspace.alpha_shape(points, alpha=alpha)
 
-        x, y = poly.exterior.xy
+        # Handle MultiPolygon by selecting the largest area component.
+        if hasattr(poly, "geoms"):
+            poly_main = max(poly.geoms, key=lambda g: g.area)
+        else:
+            poly_main = poly
+
+        x, y = poly_main.exterior.xy
         ax.plot(x, y, 'k', linewidth=2)
 
         # ---- largest inscribed circle ----
