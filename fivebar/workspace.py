@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from scipy.spatial import Delaunay
 from shapely.geometry import Polygon, Point, MultiLineString
@@ -5,11 +6,30 @@ from shapely.ops import polygonize
 from tqdm import tqdm
 import shapely
 
+try:
+    from .numba_solve import HAS_NUMBA, get_numba_constants, point_valid_numba
+except ImportError:
+    try:
+        from numba_solve import HAS_NUMBA, get_numba_constants, point_valid_numba
+    except ImportError:
+        HAS_NUMBA = False
+        get_numba_constants = None
+        point_valid_numba = None
+
 
 class FiveBarWorkspace:
 
     def __init__(self, mech):
         self.mech = mech
+        self._numba_constants = None
+
+    def _get_numba_constants(self):
+        """Cached constants for Numba kernel; only used when HAS_NUMBA."""
+        if not HAS_NUMBA or get_numba_constants is None:
+            return None
+        if self._numba_constants is None:
+            self._numba_constants = get_numba_constants(self.mech)
+        return self._numba_constants
 
     def _cartesian_bounds(self):
         """Bounding box for the Cartesian grid (first quadrant; max extends past bases by la+lb)."""
@@ -151,22 +171,33 @@ class FiveBarWorkspace:
         xs = np.linspace(x_min, x_max, x_res)
         ys = np.linspace(y_min, y_max, y_res)
 
-        reachable_fast = self._make_reachability_checker()
+        use_numba = (
+            HAS_NUMBA
+            and point_valid_numba is not None
+            and os.environ.get("USE_NUMBA", "1") != "0"
+        )
+        nc = self._get_numba_constants() if use_numba else None
+        if not use_numba:
+            reachable_fast = self._make_reachability_checker()
 
         points = []
         total = x_res * y_res
         with tqdm(total=total, desc="Workspace full sweep", unit="pt") as pbar:
             for x in xs:
                 for y in ys:
-                    pt = np.array([x, y])
-                    if not reachable_fast(pt):
-                        pbar.update(1)
-                        continue
-                    try:
-                        self.mech.solve(pt)
-                        points.append(pt)
-                    except ValueError:
-                        pass
+                    if use_numba and nc is not None:
+                        if point_valid_numba(x, y, **nc):
+                            points.append(np.array([x, y]))
+                    else:
+                        pt = np.array([x, y])
+                        if not reachable_fast(pt):
+                            pbar.update(1)
+                            continue
+                        try:
+                            self.mech.solve(pt)
+                            points.append(pt)
+                        except ValueError:
+                            pass
                     pbar.update(1)
 
         if not points:
@@ -208,7 +239,14 @@ class FiveBarWorkspace:
 
         max_depth = math.ceil(math.log2(max_res / float(min_res)))
 
-        reachable_fast = self._make_reachability_checker()
+        use_numba = (
+            HAS_NUMBA
+            and point_valid_numba is not None
+            and os.environ.get("USE_NUMBA", "1") != "0"
+        )
+        nc = self._get_numba_constants() if use_numba else None
+        if not use_numba:
+            reachable_fast = self._make_reachability_checker()
         points_adaptive = []
 
         def add_representative_point(cell_points, x0, x1, y0, y1):
@@ -246,16 +284,23 @@ class FiveBarWorkspace:
 
                 for x in xs:
                     for y in ys:
-                        pt = np.array([x, y])
-                        if not reachable_fast(pt):
-                            num_unreachable += 1
-                            continue
-                        try:
-                            self.mech.solve(pt)
-                            num_reachable += 1
-                            cell_points.append(pt)
-                        except ValueError:
-                            num_unreachable += 1
+                        if use_numba and nc is not None:
+                            if point_valid_numba(x, y, **nc):
+                                num_reachable += 1
+                                cell_points.append(np.array([x, y]))
+                            else:
+                                num_unreachable += 1
+                        else:
+                            pt = np.array([x, y])
+                            if not reachable_fast(pt):
+                                num_unreachable += 1
+                                continue
+                            try:
+                                self.mech.solve(pt)
+                                num_reachable += 1
+                                cell_points.append(pt)
+                            except ValueError:
+                                num_unreachable += 1
 
                 if num_reachable == 0:
                     # Exterior cell: nothing to do.
@@ -301,7 +346,14 @@ class FiveBarWorkspace:
         no visible gaps in the boundary sampling for alpha-shape.
         """
         x_min, y_min, x_max, y_max = self._cartesian_bounds()
-        reachable_fast = self._make_reachability_checker()
+        use_numba = (
+            HAS_NUMBA
+            and point_valid_numba is not None
+            and os.environ.get("USE_NUMBA", "1") != "0"
+        )
+        nc = self._get_numba_constants() if use_numba else None
+        if not use_numba:
+            reachable_fast = self._make_reachability_checker()
 
         # Match axis sampling density to the target resolution.
         axis_res = max_res
@@ -313,25 +365,33 @@ class FiveBarWorkspace:
 
         # Sweep along x-axis (y = 0).
         for x in xs_axis:
-            pt = np.array([x, 0.0])
-            if not reachable_fast(pt):
-                continue
-            try:
-                self.mech.solve(pt)
-                axis_points.append(pt)
-            except ValueError:
-                pass
+            if use_numba and nc is not None:
+                if point_valid_numba(x, 0.0, **nc):
+                    axis_points.append(np.array([x, 0.0]))
+            else:
+                pt = np.array([x, 0.0])
+                if not reachable_fast(pt):
+                    continue
+                try:
+                    self.mech.solve(pt)
+                    axis_points.append(pt)
+                except ValueError:
+                    pass
 
         # Sweep along y-axis (x = 0).
         for y in ys_axis:
-            pt = np.array([0.0, y])
-            if not reachable_fast(pt):
-                continue
-            try:
-                self.mech.solve(pt)
-                axis_points.append(pt)
-            except ValueError:
-                pass
+            if use_numba and nc is not None:
+                if point_valid_numba(0.0, y, **nc):
+                    axis_points.append(np.array([0.0, y]))
+            else:
+                pt = np.array([0.0, y])
+                if not reachable_fast(pt):
+                    continue
+                try:
+                    self.mech.solve(pt)
+                    axis_points.append(pt)
+                except ValueError:
+                    pass
 
         if not axis_points:
             return points
