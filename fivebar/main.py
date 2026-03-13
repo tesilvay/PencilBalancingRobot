@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import time
 from transform import FiveBarTransform
 from mechanism import FiveBarMechanism
 from workspace import FiveBarWorkspace
@@ -31,7 +32,10 @@ if __name__ == "__main__":
 
     workspace = FiveBarWorkspace(mech)
 
+    t0 = time.perf_counter()
     points = workspace.sweep_cartesian(70)
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+    print(f"Workspace sweep took {elapsed_ms:.1f} ms for {points.shape[0]} valid points.")
 
     viz = FiveBarVisualizer(mech, workspace)
 

@@ -3,12 +3,13 @@ import numpy as np
 
 class FiveBarMechanism:
 
-    def __init__(self, transform, la, lb):
-
+    def __init__(self, transform, la, lb, min_angle_deg=0.0):
         self.tf = transform
         self.la = la
         self.lb = lb
         self.lc = transform.lc
+        self.min_angle_deg = min_angle_deg
+        self._min_sin = np.sin(np.radians(min_angle_deg))
 
     def ik(self, target_global):
 
@@ -75,20 +76,29 @@ class FiveBarMechanism:
         return A_l, C_l, P1_l, P2_l
 
     def _cranks_uncrossed(self, O_l, B_l, A_l, C_l):
-        """Left and right input cranks don't overlap/toggle."""
+        """Left and right input cranks don't overlap/toggle; stay min_angle_deg away from parallel."""
         v_left_crank = A_l - O_l
         v_right_crank = C_l - B_l
-        return np.cross(v_left_crank, v_right_crank) < 0
+        cross = np.cross(v_left_crank, v_right_crank)
+        prod = np.linalg.norm(v_left_crank) * np.linalg.norm(v_right_crank)
+        return cross < 0 and np.abs(cross) >= self._min_sin * prod
 
     def _elbows_opposed(self, O_l, B_l, A_l, C_l, P_l):
-        """Left and right elbows bend in opposite directions."""
+        """Left and right elbows bend in opposite directions; stay min_angle_deg away from straight."""
+        la, lb = self.la, self.lb
         cross_left = np.cross(A_l - O_l, P_l - A_l)
         cross_right = np.cross(C_l - B_l, P_l - C_l)
-        return cross_left * cross_right < 0
+        if cross_left * cross_right >= 0:
+            return False
+        return np.abs(cross_left) >= self._min_sin * la * lb and np.abs(cross_right) >= self._min_sin * la * lb
 
     def _coupler_above_elbows(self, A_l, C_l, P_l):
-        """Coupler point P sits above the elbow-to-elbow line."""
-        return np.cross(P_l - A_l, P_l - C_l) > 0
+        """Coupler point P sits above the elbow-to-elbow line; stay min_angle_deg away from collinear."""
+        v1 = P_l - A_l
+        v2 = P_l - C_l
+        cross = np.cross(v1, v2)
+        prod = np.linalg.norm(v1) * np.linalg.norm(v2)
+        return cross > 0 and cross >= self._min_sin * prod
 
     def _point_in_front(self, P_l):
         """P has positive y in the local frame (in front of the mechanism)."""
