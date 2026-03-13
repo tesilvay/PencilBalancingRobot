@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 import os
 import time
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
 from transform import FiveBarTransform
 from mechanism import FiveBarMechanism
 from workspace import FiveBarWorkspace
@@ -34,6 +37,7 @@ if __name__ == "__main__":
     workspace = FiveBarWorkspace(mech)
 
     # --- Config: set these to choose behavior ---
+    MODE = "interactive"  # "interactive" or "find_best_l"
     MAX_RES = 100
     MIN_RES = 20
     ALPHA = 0.01  # use heuristic inside compare_adaptive_to_full
@@ -52,7 +56,39 @@ if __name__ == "__main__":
     pts_adapt = None
     pts_show = None  # which points to visualize
 
-    if COMPARE_SWEEP and COMPARE_NUMBA:
+    if MODE == "find_best_l":
+        # Sweep l_a = l_b from 70 to 200; for each L compute workspace and largest inscribed circle radius; plot.
+        L_MIN, L_MAX = 70, 200
+        os.environ.pop("USE_NUMBA", None)
+        workspace.warm_up_numba()
+        lengths = []
+        radii = []
+        for L in tqdm(range(L_MIN, L_MAX + 1), desc="find_best_l"):
+            mech.la = mech.lb = L
+            workspace._numba_constants = None
+            pts = workspace.sweep_cartesian_adaptive(
+                max_res=MAX_RES, min_res=MIN_RES, samples_per_cell=2, show_progress=False
+            )
+            if pts.size == 0:
+                r = 0.0
+            else:
+                span = max(np.ptp(pts[:, 0]), np.ptp(pts[:, 1]))
+                alpha = 1.0 / max(span * 0.1, 1e-6)
+                poly = workspace.alpha_shape(pts, alpha)
+                center, r = workspace.safe_workspace_circle(poly)
+                if center is None:
+                    r = 0.0
+            lengths.append(L)
+            radii.append(r)
+        best_idx = int(np.argmax(radii))
+        print(f"Best L = {lengths[best_idx]} mm, max radius = {radii[best_idx]:.2f} mm")
+        plt.plot(lengths, radii)
+        plt.xlabel("Arm length (l_a = l_b) [mm]")
+        plt.ylabel("Largest inscribed circle radius [mm]")
+        plt.grid(True)
+        plt.show()
+
+    elif COMPARE_SWEEP and COMPARE_NUMBA:
         # Compare all four: full/adaptive × Numba/Python
         os.environ.pop("USE_NUMBA", None)
         t0 = time.perf_counter()
@@ -147,5 +183,6 @@ if __name__ == "__main__":
             )
             print(f"Adaptive sweep: {pts_show.shape[0]} valid points, {(time.perf_counter() - t0) * 1000:.1f} ms")
 
-    viz = FiveBarVisualizer(mech, workspace)
-    viz.interactive_workspace(pts_show)
+    if MODE != "find_best_l":
+        viz = FiveBarVisualizer(mech, workspace)
+        viz.interactive_workspace(pts_show)

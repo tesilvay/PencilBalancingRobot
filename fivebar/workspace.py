@@ -217,7 +217,7 @@ class FiveBarWorkspace:
 
         return np.vstack(points)
 
-    def sweep_cartesian_adaptive(self, max_res=70, min_res=10, samples_per_cell=3):
+    def sweep_cartesian_adaptive(self, max_res=70, min_res=10, samples_per_cell=3, show_progress=True):
         """Multi-stage adaptive sweep: refine only boundary cells up to an effective max resolution."""
         from collections import deque
 
@@ -281,7 +281,7 @@ class FiveBarWorkspace:
             if best_pt is not None:
                 points_adaptive.append(best_pt)
 
-        with tqdm(desc="Workspace adaptive sweep", unit="cell") as pbar:
+        with tqdm(desc="Workspace adaptive sweep", unit="cell", disable=not show_progress) as pbar:
             while queue:
                 x0, x1, y0, y1, level = queue.popleft()
                 pbar.update(1)
