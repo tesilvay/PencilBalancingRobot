@@ -22,14 +22,14 @@ class FiveBarWorkspace:
         return x_min, y_min, x_max, y_max
 
     def sweep_cartesian(self, x_res=100, y_res=None):
-        """Adaptive workspace sampling: coarse grid + boundary refinement via IK/solve."""
+        """Adaptive workspace sampling: coarse grid + local refinement around boundary points."""
         if y_res is None:
             y_res = x_res
 
-        # Derive a coarse resolution from the requested fine resolution.
-        coarse_res = max(10, x_res // 2)
-
         x_min, y_min, x_max, y_max = self._cartesian_bounds()
+
+        # Fixed coarse resolution: very rough pass to find approximate workspace.
+        coarse_res = min(10, x_res)  # do not exceed requested fine resolution
 
         # Precompute geometry for early rejection in local frame.
         O_l, B_l = self.mech.tf.bases_local()
@@ -49,16 +49,20 @@ class FiveBarWorkspace:
         # ---- Coarse sweep over full bounds ----
         xs_coarse = np.linspace(x_min, x_max, coarse_res)
         ys_coarse = np.linspace(y_min, y_max, coarse_res)
+        dx = (x_max - x_min) / (coarse_res - 1) if coarse_res > 1 else 0.0
+        dy = (y_max - y_min) / (coarse_res - 1) if coarse_res > 1 else 0.0
 
+        coarse_valid = np.zeros((coarse_res, coarse_res), dtype=bool)
         coarse_points = []
         total_coarse = coarse_res * coarse_res
         with tqdm(total=total_coarse, desc="Workspace coarse sweep", unit="pt") as pbar:
-            for x in xs_coarse:
-                for y in ys_coarse:
+            for i, x in enumerate(xs_coarse):
+                for j, y in enumerate(ys_coarse):
                     pt = np.array([x, y])
                     if reachable_fast(pt):
                         try:
                             self.mech.solve(pt)
+                            coarse_valid[i, j] = True
                             coarse_points.append(pt)
                         except ValueError:
                             pass
@@ -69,35 +73,62 @@ class FiveBarWorkspace:
 
         coarse_points = np.vstack(coarse_points)
 
-        # Build coarse polygon.
-        coarse_poly = self.alpha_shape(coarse_points, alpha=0.05)
+        # ---- Find boundary points in the coarse grid ----
+        boundary_indices = []
+        for i in range(coarse_res):
+            for j in range(coarse_res):
+                if not coarse_valid[i, j]:
+                    continue
+                # 4-neighborhood; missing neighbors treated as outside (boundary).
+                neighbors = [
+                    (i - 1, j),
+                    (i + 1, j),
+                    (i, j - 1),
+                    (i, j + 1),
+                ]
+                has_hole_neighbor = False
+                for ni, nj in neighbors:
+                    if ni < 0 or ni >= coarse_res or nj < 0 or nj >= coarse_res:
+                        has_hole_neighbor = True
+                        break
+                    if not coarse_valid[ni, nj]:
+                        has_hole_neighbor = True
+                        break
+                if has_hole_neighbor:
+                    boundary_indices.append((i, j))
 
-        # ---- Boundary-focused refinement ----
-        xs_fine = np.linspace(x_min, x_max, x_res)
-        ys_fine = np.linspace(y_min, y_max, y_res)
-
-        # Narrow band around the polygon where we refine.
-        band_width = 5.0  # mm
-        band_region = coarse_poly.buffer(band_width)
-
+        # ---- Local refinement around boundary points ----
         refined_points = []
-        total_fine = x_res * y_res
-        with tqdm(total=total_fine, desc="Workspace boundary refinement", unit="pt") as pbar:
-            for x in xs_fine:
-                for y in ys_fine:
-                    pt = np.array([x, y])
-                    if not band_region.contains(Point(pt[0], pt[1])):
+        # Subdivision factor per coarse cell, based on desired fine resolution.
+        sub_div = max(2, x_res // max(1, coarse_res))
+
+        total_refined = len(boundary_indices) * (sub_div * sub_div)
+        with tqdm(total=total_refined, desc="Workspace boundary refinement", unit="pt") as pbar:
+            for i, j in boundary_indices:
+                x_center = xs_coarse[i]
+                y_center = ys_coarse[j]
+
+                # Define a small box around the coarse point, within one coarse cell.
+                x0 = max(x_min, x_center - dx / 2.0)
+                x1 = min(x_max, x_center + dx / 2.0)
+                y0 = max(y_min, y_center - dy / 2.0)
+                y1 = min(y_max, y_center + dy / 2.0)
+
+                xs_local = np.linspace(x0, x1, sub_div)
+                ys_local = np.linspace(y0, y1, sub_div)
+
+                for xl in xs_local:
+                    for yl in ys_local:
+                        pt = np.array([xl, yl])
+                        if not reachable_fast(pt):
+                            pbar.update(1)
+                            continue
+                        try:
+                            self.mech.solve(pt)
+                            refined_points.append(pt)
+                        except ValueError:
+                            pass
                         pbar.update(1)
-                        continue
-                    if not reachable_fast(pt):
-                        pbar.update(1)
-                        continue
-                    try:
-                        self.mech.solve(pt)
-                        refined_points.append(pt)
-                    except ValueError:
-                        pass
-                    pbar.update(1)
 
         if refined_points:
             refined_points = np.vstack(refined_points)

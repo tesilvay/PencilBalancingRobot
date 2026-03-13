@@ -45,8 +45,8 @@ class FiveBarVisualizer:
         # ---- workspace boundary ----
         poly = self.workspace.alpha_shape(points, alpha=0.05)
 
-        #, y = poly.exterior.xy
-        #ax.plot(x, y, 'k', linewidth=2)
+        x, y = poly.exterior.xy
+        ax.plot(x, y, 'k', linewidth=2)
 
         # ---- largest inscribed circle ----
         center, radius = self.workspace.safe_workspace_circle(poly)
