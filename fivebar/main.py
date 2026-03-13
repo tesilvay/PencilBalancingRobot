@@ -4,6 +4,9 @@ from mechanism import FiveBarMechanism
 from workspace import FiveBarWorkspace
 from visualization import FiveBarVisualizer
 
+MIN_ANGLE_DEG = 20.0  # Minimum angle (deg) away from straight/collinear; tune for safe workspace margin.
+
+
 @dataclass
 class MechanismParams:
     """Five-bar geometry (mm)."""
@@ -24,11 +27,11 @@ if __name__ == "__main__":
 
     tf = FiveBarTransform(mechanism.O, mechanism.B)
 
-    mech = FiveBarMechanism(tf, la=mechanism.la, lb=mechanism.lb)
+    mech = FiveBarMechanism(tf, la=mechanism.la, lb=mechanism.lb, min_angle_deg=MIN_ANGLE_DEG)
 
     workspace = FiveBarWorkspace(mech)
 
-    angles, points = workspace.sweep_joint_space(100)
+    points = workspace.sweep_cartesian(70)
 
     viz = FiveBarVisualizer(mech, workspace)
 

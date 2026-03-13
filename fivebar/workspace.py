@@ -11,45 +11,36 @@ class FiveBarWorkspace:
     def __init__(self, mech):
         self.mech = mech
 
-    def sweep_joint_space(self, theta_res=100):
+    def _cartesian_bounds(self):
+        """Bounding box for the Cartesian grid (first quadrant; max extends past bases by la+lb)."""
+        O_g, B_g = self.mech.tf.bases_global()
+        la, lb = self.mech.la, self.mech.lb
+        x_min = 0.0
+        y_min = 0.0
+        x_max = float(max(O_g[0], B_g[0])) + la + lb
+        y_max = float(max(O_g[1], B_g[1])) + la + lb
+        return x_min, y_min, x_max, y_max
 
-        theta_min_deg = -45
-        theta_max_deg = 225
-        theta_vals = np.linspace(np.radians(theta_min_deg), np.radians(theta_max_deg), theta_res)
-
-        valid_angles = []
+    def sweep_cartesian(self, x_res=100, y_res=None):
+        """Sample workspace by testing Cartesian grid points via IK/solve; returns valid points only."""
+        if y_res is None:
+            y_res = x_res
+        x_min, y_min, x_max, y_max = self._cartesian_bounds()
+        xs = np.linspace(x_min, x_max, x_res)
+        ys = np.linspace(y_min, y_max, y_res)
+        xx, yy = np.meshgrid(xs, ys)
+        grid_points = np.column_stack([xx.ravel(), yy.ravel()])
         valid_points = []
-
-        O_l, B_l = self.mech.tf.bases_local()
-
-        total = theta_res * theta_res
-        with tqdm(total=total, desc="Sweeping joint space", unit="pt") as pbar:
-            for t1 in theta_vals:
-                for t4 in theta_vals:
-                    try:
-                        A_l, C_l, P1_l, P2_l = self.mech.fk(t1, t4)
-
-                        if self.mech.valid_config(O_l, B_l, A_l, C_l, P1_l):
-                            P_l = P1_l
-                        elif self.mech.valid_config(O_l, B_l, A_l, C_l, P2_l):
-                            P_l = P2_l
-                        else:
-                            pbar.update(1)
-                            continue
-
-                        P_g = self.mech.tf.l2g(P_l)
-
-                        if P_g[0] < 0 or P_g[1] < 0:
-                            pbar.update(1)
-                            continue
-
-                        valid_angles.append((t1, t4))
-                        valid_points.append(P_g)
-                    except Exception:
-                        pass
-                    pbar.update(1)
-
-        return valid_angles, np.array(valid_points)
+        total = len(grid_points)
+        with tqdm(total=total, desc="Sweeping workspace (Cartesian)", unit="pt") as pbar:
+            for pt in grid_points:
+                try:
+                    self.mech.solve(pt)
+                    valid_points.append(pt)
+                except (ValueError, Exception):
+                    pass
+                pbar.update(1)
+        return np.array(valid_points) if valid_points else np.empty((0, 2))
 
     def alpha_shape(self, points, alpha):
 
@@ -113,10 +104,7 @@ class FiveBarWorkspace:
 
         return best_center,best_r
     
-    def safe_workspace_circle(self, poly, buffer=0.7):
-
+    def safe_workspace_circle(self, poly):
+        """Largest circle inscribed in poly (polygon already encodes safe margin via valid_config)."""
         center, r = self.largest_inscribed_circle(poly)
-        
-        r_safe = r * buffer
-
-        return center, r_safe
+        return center, r
