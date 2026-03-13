@@ -24,7 +24,7 @@ def build_controller(variant, params):
         controller = PolePlacementController(A, B, poles, x_ref)
 
     elif variant.controller_type == "lqr":
-        Q_single_axis = np.diag([0.1, 0.1, 10, 1])  # x, x_dot, alpha, alpha_dot
+        Q_single_axis = np.diag([0.1, 0.1, 100, 10])  # x, x_dot, alpha, alpha_dot
         Z4 = np.zeros((4, 4))
 
         # Symmetric block diagonal for x and y axes
@@ -150,9 +150,10 @@ def build_actuator(params, mech):
 def build_visualizer(params):
     if not params.run.realtimerender:
         return None
+    show_workspace = params.hardware.servo
     if dvs_cams_connected(params):
-        return DVSWorkspaceVisualizer(workspace=params.workspace)
-    return PencilVisualizerRealtime()
+        return DVSWorkspaceVisualizer(workspace=params.workspace, show_workspace=show_workspace)
+    return PencilVisualizerRealtime(show_workspace=show_workspace, workspace=params.workspace)
 
 def build_system(variant, params, camera_params):
 
