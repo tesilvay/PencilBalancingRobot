@@ -1,0 +1,128 @@
+{
+    "metadata": {
+        "timestamp": "20260313_193301",
+        "physical_params": {
+            "plant": {
+                "g": 9.81,
+                "com_length": 0.1,
+                "tau": 0.02,
+                "zeta": 0.7,
+                "num_states": 8,
+                "max_acc": 39.24
+            },
+            "workspace": {
+                "x_ref": 0.0,
+                "y_ref": 0.0,
+                "safe_radius": 0.108
+            },
+            "mechanism": {
+                "O": [
+                    128.77,
+                    178.13
+                ],
+                "B": [
+                    101.77,
+                    210.13
+                ],
+                "la": 175,
+                "lb": 175
+            },
+            "hardware": {
+                "servo": true,
+                "servo_port": null,
+                "dvs_cam": false,
+                "dvs_cam_x_port": null,
+                "dvs_cam_y_port": null,
+                "servo_frequency": 250,
+                "dvs_algo": "hough",
+                "dvs_sam_noise_filter_duration_ms": 5,
+                "dvs_hough": {
+                    "mixing_factor": 0.02,
+                    "inlier_stddev_px": 4.0,
+                    "min_determinant": 1e-06
+                }
+            },
+            "run": {
+                "save_video": false,
+                "realtimerender": false,
+                "total_time": 5.0,
+                "stability_tolerance": 0.3,
+                "estimator_lpf_alpha": null,
+                "initial_angle_spread_deg": 12,
+                "initial_position_spread_m": 0.06
+            }
+        }
+    },
+    "results": [
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.022484999999999998,
+                "max_acc": 39.239998717752265,
+                "avg_acc": 36.824127804517666
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.001,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.022705000000000003,
+                "max_acc": 39.23999999185498,
+                "avg_acc": 38.34886991480699
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.01,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.99,
+                "avg_settling_time": 0.2146767676767677,
+                "max_acc": 39.239999999885754,
+                "avg_acc": 39.2399982336624
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.05,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 39.2399999999999,
+                "avg_acc": 39.239778850206534
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.1,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 39.23999999996213,
+                "avg_acc": 39.238581083860225
+            }
+        }
+    ]
+}

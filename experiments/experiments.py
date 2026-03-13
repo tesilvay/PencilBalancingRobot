@@ -83,10 +83,10 @@ def run_benchmark_single(setup: ExperimentSetup):
 
 def run_benchmark_all(setup: ExperimentSetup):
 
-    controllers = ["pole"]
+    controllers = ["lqr"]
     estimators = ["lpf"]
-    noises = [0, 1e-3, 5e-3, 1e-2, 5e-2]
-    delays = [0, 2, 10, 15]
+    noises = [0, 1e-3, 1e-2, 5e-2, 1e-1]
+    delays = [1]
 
     all_results = []
     total_configs = len(controllers) * len(estimators) * len(noises) * len(delays)

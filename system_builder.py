@@ -24,7 +24,7 @@ def build_controller(variant, params):
         controller = PolePlacementController(A, B, poles, x_ref)
 
     elif variant.controller_type == "lqr":
-        Q_single_axis = np.diag([0.1, 0.1, 100, 10])  # x, x_dot, alpha, alpha_dot
+        Q_single_axis = np.diag([0.01, 0.01, 100, 10])  # x, x_dot, alpha, alpha_dot
         Z4 = np.zeros((4, 4))
 
         # Symmetric block diagonal for x and y axes
@@ -34,7 +34,7 @@ def build_controller(variant, params):
         ])
 
         # Empirically large R keeps poles reasonable
-        R = np.eye(2) * 1e5
+        R = np.eye(2) * 1e6
 
         controller = LQRController(A, B, Q, R, x_ref)
 
