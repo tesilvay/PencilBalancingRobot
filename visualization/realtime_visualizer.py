@@ -6,23 +6,37 @@ from core.sim_types import CameraObservation, TableCommand, WorkspaceParams
 
 
 class PencilVisualizerRealtime:
+    """
+    Simulated camera view (2 windows). Optionally workspace (3rd window) when show_workspace and workspace set.
+    Positions when 3 windows: same as DVSWorkspaceVisualizer (50,100), (50+width+55, 100), (50+2*width+110, 136).
+    """
 
-    def __init__(self, width=346, height=260):
-
+    def __init__(self, width=346, height=260, show_workspace: bool = False, workspace: WorkspaceParams | None = None):
         self.width = width
         self.height = height
+        self.show_workspace = show_workspace and workspace is not None
+        self.workspace = workspace
 
         self.cam = CameraModel(width, height)
-        
+
         self.cam_x = "Camera x-axis"
         self.cam_y = "Camera y-axis"
-        
+        self.workspace_win = "Workspace"
 
         cv2.namedWindow(self.cam_x, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.cam_y, cv2.WINDOW_NORMAL)
+        if self.show_workspace:
+            cv2.namedWindow(self.workspace_win, cv2.WINDOW_NORMAL)
+            cv2.moveWindow(self.cam_x, 50, 100)
+            cv2.moveWindow(self.cam_y, 50 + self.width + 55, 100)
+            cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
+        else:
+            cv2.moveWindow(self.cam_x, 50, 100)
+            cv2.moveWindow(self.cam_y, 50 + self.width + 55, 137)
 
-        cv2.moveWindow(self.cam_x, 50, 100)
-        cv2.moveWindow(self.cam_y, 50 + self.width + 55, 137)
+        self._workspace_size = 350
+        self._scale = 4000
+        self._center = self._workspace_size // 2
 
     def draw_line(self, img, b, s):
 
@@ -37,6 +51,45 @@ class PencilVisualizerRealtime:
         x1 = int(s_px * y1 + b_px)
 
         cv2.line(img, (x0, y0), (x1, y1), 255, 2)
+
+    def _clamp_to_workspace(self, x_des: float, y_des: float) -> tuple[float, float]:
+        if self.workspace is None:
+            return x_des, y_des
+        x_ref = self.workspace.x_ref
+        y_ref = self.workspace.y_ref
+        safe_radius = self.workspace.safe_radius
+        if safe_radius is None:
+            return x_des, y_des
+        dx = x_des - x_ref
+        dy = y_des - y_ref
+        dist = np.sqrt(dx * dx + dy * dy)
+        if dist > safe_radius and dist > 0:
+            scale = safe_radius / dist
+            dx *= scale
+            dy *= scale
+            x_des = x_ref + dx
+            y_des = y_ref + dy
+        return x_des, y_des
+
+    def _render_workspace(self, command: TableCommand | None):
+        if self.workspace is None:
+            return
+        canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
+        canvas[:] = 40
+        canvas = cv2.cvtColor(canvas, cv2.COLOR_GRAY2BGR)
+        x_ref = self.workspace.x_ref
+        y_ref = self.workspace.y_ref
+        safe_radius = self.workspace.safe_radius
+        if safe_radius is not None:
+            radius_px = int(safe_radius * self._scale)
+            cv2.circle(canvas, (self._center, self._center), radius_px, (100, 100, 100), 1)
+        if command is not None:
+            x_des, y_des = self._clamp_to_workspace(command.x_des, command.y_des)
+            px = int(self._center + (x_des - x_ref) * self._scale)
+            py = int(self._center - (y_des - y_ref) * self._scale)
+            if 0 <= px < self._workspace_size and 0 <= py < self._workspace_size:
+                cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
+        cv2.imshow(self.workspace_win, canvas)
 
     def render(self, measurement, command=None, surfaces=None):
         if measurement is None:
@@ -53,6 +106,8 @@ class PencilVisualizerRealtime:
 
         cv2.imshow(self.cam_x, img1)
         cv2.imshow(self.cam_y, img2)
+        if self.show_workspace:
+            self._render_workspace(command)
 
         key = cv2.waitKey(1) & 0xFF
         return key == ord("q")
@@ -60,14 +115,16 @@ class PencilVisualizerRealtime:
 
 class DVSWorkspaceVisualizer:
     """
-    Real DVS footage + workspace plot. Used only when real DVS cams are connected.
-    Layout: Cam 1 | Cam 2 | Workspace (left to right).
+    Real DVS footage + optional workspace plot. Used when real DVS cams are connected.
+    Layout: Cam 1 | Cam 2 | [Workspace when show_workspace].
+    Window positions (when all 3 shown): cam1 (50,100), cam2 (50+width+55, 100), workspace (50+2*width+110, 136).
     """
 
-    def __init__(self, workspace: WorkspaceParams, width=346, height=260):
+    def __init__(self, workspace: WorkspaceParams, width=346, height=260, show_workspace: bool = True):
         self.width = width
         self.height = height
         self.workspace = workspace
+        self.show_workspace = show_workspace
         self.cam = CameraModel(width, height)
 
         self.cam_x = "Cam 1 (x-axis)"
@@ -76,11 +133,12 @@ class DVSWorkspaceVisualizer:
 
         cv2.namedWindow(self.cam_x, cv2.WINDOW_NORMAL)
         cv2.namedWindow(self.cam_y, cv2.WINDOW_NORMAL)
-        cv2.namedWindow(self.workspace_win, cv2.WINDOW_NORMAL)
-
         cv2.moveWindow(self.cam_x, 50, 100)
         cv2.moveWindow(self.cam_y, 50 + self.width + 55, 100)
-        cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
+
+        if show_workspace:
+            cv2.namedWindow(self.workspace_win, cv2.WINDOW_NORMAL)
+            cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
 
         self._workspace_size = 350
         self._scale = 4000  # px/m
@@ -154,6 +212,7 @@ class DVSWorkspaceVisualizer:
 
         cv2.imshow(self.cam_x, frame1)
         cv2.imshow(self.cam_y, frame2)
-        self._render_workspace(command)
+        if self.show_workspace:
+            self._render_workspace(command)
         key = cv2.waitKey(1) & 0xFF
         return key == ord("q")

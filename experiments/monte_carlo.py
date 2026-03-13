@@ -74,15 +74,17 @@ def run_region_trials(
             estimator.reset()
         if vision is not None:
             vision.reset()
-
+        
+        angle_rad = np.deg2rad(params.run.initial_angle_spread_deg)
+        pos_spread = params.run.initial_position_spread_m
         initial_state = SystemState(
-            x=x_ref.x,# + np.random.uniform(-0.020, 0.020),
+            x=x_ref.x + np.random.uniform(-pos_spread, pos_spread),
             x_dot=0.0,
-            alpha_x=np.random.uniform(-0.2, 0.2),
+            alpha_x=np.random.uniform(-angle_rad, angle_rad),
             alpha_x_dot=0.0,
-            y=x_ref.y,# + np.random.uniform(-0.20, 0.020),
+            y=x_ref.y + np.random.uniform(-pos_spread, pos_spread),
             y_dot=0.0,
-            alpha_y=np.random.uniform(-0.2, 0.2),
+            alpha_y=np.random.uniform(-angle_rad, angle_rad),
             alpha_y_dot=0.0
         )
 

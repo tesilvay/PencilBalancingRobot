@@ -159,6 +159,9 @@ class RunParams:
     total_time: float = 5.0
     stability_tolerance: float = 0.05
     estimator_lpf_alpha: float | None = None  # None = LPF default (0.95)
+    # Monte Carlo initial state: ± spread for angle (degrees) and position (meters)
+    initial_angle_spread_deg: float = 11.46  # 0.2 rad ≈ 11.46°
+    initial_position_spread_m: float = 0.050  # ±50 mm
 
 
 @dataclass

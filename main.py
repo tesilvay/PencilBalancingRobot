@@ -30,20 +30,21 @@ def main(mode):
                 max_acc=9.81 * 9,
             ),
             workspace=WorkspaceParams(
-                x_ref=-0.00466,
-                y_ref=0.00955,
-                safe_radius=0.040,  # min is 0.031 for 100% stability
+                x_ref=0.0,
+                y_ref=0.0,
+                safe_radius=0.108,  # min is 0.031 for 100% stability
             ),
-            mechanism=MechanismParams(
-                O=(85.91, 57.86),
-                B=(60.10, 87.07),
-                la=76.84,
-                lb=66.83,
+            mechanism=MechanismParams( # mechanism in mm
+                O=(128.77, 178.13),
+                B=(101.77, 210.13),
+
+                la=175,
+                lb=175,
             ),
             hardware=HardwareParams(
                 
-                servo=False,
-                servo_port="/dev/ttyUSB0", # None uses a mock controller
+                servo=True,
+                servo_port=None,#"/dev/ttyUSB0", # None uses a mock controller
                 servo_frequency=250,
                 
                 dvs_cam=False,
@@ -64,13 +65,15 @@ def main(mode):
                 total_time=5.0,  # 5s for single-run validation
                 stability_tolerance=0.05,  # 5% stability should be possible
                 estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)
+                initial_angle_spread_deg=12,
+                initial_position_spread_m=0.060,
             ),
         ),
         camera_params=CameraParams(xr=0.170, yr=0.176),
         default_variant=BenchmarkVariant(
             controller_type="lqr",
             estimator_type="lpf",
-            noise_std=0.0001,
+            noise_std=0.001,
             delay_steps=1,
         ),
     )
