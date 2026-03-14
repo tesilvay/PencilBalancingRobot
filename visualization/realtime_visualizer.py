@@ -35,8 +35,13 @@ class PencilVisualizerRealtime:
             cv2.moveWindow(self.cam_y, 50 + self.width + 55, 137)
 
         self._workspace_size = 350
-        self._scale = 4000
         self._center = self._workspace_size // 2
+        self._workspace_margin = 20
+        self._grid_step_m = 0.02
+        if self.show_workspace and self.workspace is not None and self.workspace.safe_radius is not None:
+            self._scale = (self._workspace_size - 2 * self._workspace_margin) / (2 * self.workspace.safe_radius)
+        else:
+            self._scale = 4000
 
     def draw_line(self, img, b, s):
 
@@ -80,9 +85,27 @@ class PencilVisualizerRealtime:
         x_ref = self.workspace.x_ref
         y_ref = self.workspace.y_ref
         safe_radius = self.workspace.safe_radius
+        grid_color = (55, 55, 55)
+        circle_color = (100, 100, 100)
+
         if safe_radius is not None:
+            n_grid = int(np.ceil(safe_radius / self._grid_step_m))
+            for k in range(-n_grid, n_grid + 1):
+                x_world = x_ref + k * self._grid_step_m
+                px = int(self._center + (x_world - x_ref) * self._scale)
+                if 0 <= px < self._workspace_size:
+                    cv2.line(canvas, (px, 0), (px, self._workspace_size - 1), grid_color, 1)
+                y_world = y_ref + k * self._grid_step_m
+                py = int(self._center - (y_world - y_ref) * self._scale)
+                if 0 <= py < self._workspace_size:
+                    cv2.line(canvas, (0, py), (self._workspace_size - 1, py), grid_color, 1)
             radius_px = int(safe_radius * self._scale)
-            cv2.circle(canvas, (self._center, self._center), radius_px, (100, 100, 100), 1)
+            cv2.circle(canvas, (self._center, self._center), radius_px, circle_color, 1)
+
+        cross_len = 15
+        cv2.line(canvas, (self._center - cross_len, self._center), (self._center + cross_len, self._center), circle_color, 1)
+        cv2.line(canvas, (self._center, self._center - cross_len), (self._center, self._center + cross_len), circle_color, 1)
+
         if command is not None:
             x_des, y_des = self._clamp_to_workspace(command.x_des, command.y_des)
             px = int(self._center + (x_des - x_ref) * self._scale)
@@ -141,8 +164,13 @@ class DVSWorkspaceVisualizer:
             cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
 
         self._workspace_size = 350
-        self._scale = 4000  # px/m
         self._center = self._workspace_size // 2
+        self._workspace_margin = 20
+        self._grid_step_m = 0.02
+        if workspace.safe_radius is not None:
+            self._scale = (self._workspace_size - 2 * self._workspace_margin) / (2 * workspace.safe_radius)
+        else:
+            self._scale = 4000
 
     def _draw_line(self, frame, b, s):
         obs_px = self.cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
@@ -178,10 +206,26 @@ class DVSWorkspaceVisualizer:
         x_ref = self.workspace.x_ref
         y_ref = self.workspace.y_ref
         safe_radius = self.workspace.safe_radius
+        grid_color = (55, 55, 55)
+        circle_color = (100, 100, 100)
 
         if safe_radius is not None:
+            n_grid = int(np.ceil(safe_radius / self._grid_step_m))
+            for k in range(-n_grid, n_grid + 1):
+                x_world = x_ref + k * self._grid_step_m
+                px = int(self._center + (x_world - x_ref) * self._scale)
+                if 0 <= px < self._workspace_size:
+                    cv2.line(canvas, (px, 0), (px, self._workspace_size - 1), grid_color, 1)
+                y_world = y_ref + k * self._grid_step_m
+                py = int(self._center - (y_world - y_ref) * self._scale)
+                if 0 <= py < self._workspace_size:
+                    cv2.line(canvas, (0, py), (self._workspace_size - 1, py), grid_color, 1)
             radius_px = int(safe_radius * self._scale)
-            cv2.circle(canvas, (self._center, self._center), radius_px, (100, 100, 100), 1)
+            cv2.circle(canvas, (self._center, self._center), radius_px, circle_color, 1)
+
+        cross_len = 15
+        cv2.line(canvas, (self._center - cross_len, self._center), (self._center + cross_len, self._center), circle_color, 1)
+        cv2.line(canvas, (self._center, self._center - cross_len), (self._center, self._center + cross_len), circle_color, 1)
 
         if command is not None:
             x_des, y_des = self._clamp_to_workspace(command.x_des, command.y_des)
