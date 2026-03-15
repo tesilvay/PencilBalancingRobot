@@ -7,14 +7,15 @@ from tqdm import tqdm
 import shapely
 
 try:
-    from .numba_solve import HAS_NUMBA, get_numba_constants, point_valid_numba
+    from .numba_solve import HAS_NUMBA, get_numba_constants, point_valid_numba, constants_for_point_valid
 except ImportError:
     try:
-        from numba_solve import HAS_NUMBA, get_numba_constants, point_valid_numba
+        from numba_solve import HAS_NUMBA, get_numba_constants, point_valid_numba, constants_for_point_valid
     except ImportError:
         HAS_NUMBA = False
         get_numba_constants = None
         point_valid_numba = None
+        constants_for_point_valid = None
 
 
 class FiveBarWorkspace:
@@ -39,7 +40,7 @@ class FiveBarWorkspace:
         if nc is None or point_valid_numba is None:
             return
         x_min, y_min, _, _ = self._cartesian_bounds()
-        point_valid_numba(x_min, y_min, **nc)
+        point_valid_numba(x_min, y_min, **constants_for_point_valid(nc))
 
     def _cartesian_bounds(self):
         """Bounding box for the Cartesian grid (first quadrant; max extends past bases by la+lb)."""
@@ -188,7 +189,7 @@ class FiveBarWorkspace:
         )
         nc = self._get_numba_constants() if use_numba else None
         if use_numba and nc is not None:
-            point_valid_numba(x_min, y_min, **nc)  # warm up Numba JIT before timing
+            point_valid_numba(x_min, y_min, **constants_for_point_valid(nc))  # warm up Numba JIT before timing
         if not use_numba:
             reachable_fast = self._make_reachability_checker()
 
@@ -198,7 +199,7 @@ class FiveBarWorkspace:
             for x in xs:
                 for y in ys:
                     if use_numba and nc is not None:
-                        if point_valid_numba(x, y, **nc):
+                        if point_valid_numba(x, y, **constants_for_point_valid(nc)):
                             points.append(np.array([x, y]))
                     else:
                         pt = np.array([x, y])
@@ -258,7 +259,7 @@ class FiveBarWorkspace:
         )
         nc = self._get_numba_constants() if use_numba else None
         if use_numba and nc is not None:
-            point_valid_numba(x_min, y_min, **nc)  # warm up Numba JIT before timing
+            point_valid_numba(x_min, y_min, **constants_for_point_valid(nc))  # warm up Numba JIT before timing
         if not use_numba:
             reachable_fast = self._make_reachability_checker()
         points_adaptive = []
@@ -299,7 +300,7 @@ class FiveBarWorkspace:
                 for x in xs:
                     for y in ys:
                         if use_numba and nc is not None:
-                            if point_valid_numba(x, y, **nc):
+                            if point_valid_numba(x, y, **constants_for_point_valid(nc)):
                                 num_reachable += 1
                                 cell_points.append(np.array([x, y]))
                             else:
@@ -380,7 +381,7 @@ class FiveBarWorkspace:
         # Sweep along x-axis (y = 0).
         for x in xs_axis:
             if use_numba and nc is not None:
-                if point_valid_numba(x, 0.0, **nc):
+                if point_valid_numba(x, 0.0, **constants_for_point_valid(nc)):
                     axis_points.append(np.array([x, 0.0]))
             else:
                 pt = np.array([x, 0.0])
@@ -395,7 +396,7 @@ class FiveBarWorkspace:
         # Sweep along y-axis (x = 0).
         for y in ys_axis:
             if use_numba and nc is not None:
-                if point_valid_numba(0.0, y, **nc):
+                if point_valid_numba(0.0, y, **constants_for_point_valid(nc)):
                     axis_points.append(np.array([0.0, y]))
             else:
                 pt = np.array([0.0, y])

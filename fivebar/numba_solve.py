@@ -235,6 +235,15 @@ else:
         raise RuntimeError("Numba is not installed; use Python solve.")
 
 
+# Keys needed by point_valid_numba (no r_*); get_numba_constants returns more for solve_numba.
+POINT_VALID_KEYS = ("o_g_0", "o_g_1", "rt_00", "rt_01", "rt_10", "rt_11", "lc", "la", "lb", "r_min", "r_max", "min_sin")
+
+
+def constants_for_point_valid(nc):
+    """Return subset of constants dict suitable for point_valid_numba (excludes r_*)."""
+    return {k: nc[k] for k in POINT_VALID_KEYS}
+
+
 def get_numba_constants(mech):
     """
     Build flat constants for point_valid_numba and solve_numba from a FiveBarMechanism.
