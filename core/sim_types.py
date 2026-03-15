@@ -184,6 +184,7 @@ class PhysicalParams:
 class SimulationResult:
     state_history: np.ndarray
     acc_history: np.ndarray
+    mech_history: np.ndarray | None = None
 
 @dataclass
 class BenchmarkVariant:

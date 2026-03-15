@@ -7,7 +7,7 @@ import numpy as np
 
 class Visualizer3D:
 
-    def __init__(self, history, dt, L=0.2, fps=60, mech=None, params=None):
+    def __init__(self, history, dt, L=0.2, fps=60, mech=None, mech_history=None, params=None):
 
         self.history = history
         self.dt = dt
@@ -17,6 +17,7 @@ class Visualizer3D:
         self.total_sim_time = history.shape[0] * dt
         
         self.mech = mech
+        self.mech_history = mech_history
         
         w = params.workspace
         self.x_ref = w.x_ref
@@ -147,39 +148,45 @@ class Visualizer3D:
         # --- Mechanism ---
         if self.mech is not None:
 
-            try:
+            scale = 1.0 / 1000.0
+            O = np.array(self.mech.tf.O_g) * scale
+            B = np.array(self.mech.tf.B_g) * scale
 
-                target_mm = np.array([x, y]) * 1000.0
-
-                _, _, A_mm, C_mm, P_mm = self.mech.solve(target_mm)
-
-                scale = 1/1000.0
-
-                # mechanism points come in mm, so convert to m
-                O = np.array(self.mech.tf.O_g) * scale
-                B = np.array(self.mech.tf.B_g) * scale
-                A = A_mm * scale
-                C = C_mm * scale
-                P = P_mm * scale
-
-                # OA
-                self.link_OA.set_data([O[0], A[0]], [O[1], A[1]])
-                self.link_OA.set_3d_properties([0, 0])
-
-                # AP
-                self.link_AP.set_data([A[0], P[0]], [A[1], P[1]])
-                self.link_AP.set_3d_properties([0, 0])
-
-                # BC
-                self.link_BC.set_data([B[0], C[0]], [B[1], C[1]])
-                self.link_BC.set_3d_properties([0, 0])
-
-                # CP
-                self.link_CP.set_data([C[0], P[0]], [C[1], P[1]])
-                self.link_CP.set_3d_properties([0, 0])
-
-            except Exception:
-                pass
+            if self.mech_history is not None:
+                sim_index = int(round(sim_time / self.dt))
+                if 0 <= sim_index < len(self.mech_history):
+                    A_mm = self.mech_history[sim_index, 0, :]
+                    C_mm = self.mech_history[sim_index, 1, :]
+                    P_mm = self.mech_history[sim_index, 2, :]
+                    if not (np.any(np.isnan(A_mm)) or np.any(np.isnan(C_mm)) or np.any(np.isnan(P_mm))):
+                        A = A_mm * scale
+                        C = C_mm * scale
+                        P = P_mm * scale
+                        self.link_OA.set_data([O[0], A[0]], [O[1], A[1]])
+                        self.link_OA.set_3d_properties([0, 0])
+                        self.link_AP.set_data([A[0], P[0]], [A[1], P[1]])
+                        self.link_AP.set_3d_properties([0, 0])
+                        self.link_BC.set_data([B[0], C[0]], [B[1], C[1]])
+                        self.link_BC.set_3d_properties([0, 0])
+                        self.link_CP.set_data([C[0], P[0]], [C[1], P[1]])
+                        self.link_CP.set_3d_properties([0, 0])
+            else:
+                try:
+                    target_mm = np.array([x, y]) * 1000.0
+                    _, _, A_mm, C_mm, P_mm = self.mech.solve(target_mm)
+                    A = A_mm * scale
+                    C = C_mm * scale
+                    P = P_mm * scale
+                    self.link_OA.set_data([O[0], A[0]], [O[1], A[1]])
+                    self.link_OA.set_3d_properties([0, 0])
+                    self.link_AP.set_data([A[0], P[0]], [A[1], P[1]])
+                    self.link_AP.set_3d_properties([0, 0])
+                    self.link_BC.set_data([B[0], C[0]], [B[1], C[1]])
+                    self.link_BC.set_3d_properties([0, 0])
+                    self.link_CP.set_data([C[0], P[0]], [C[1], P[1]])
+                    self.link_CP.set_3d_properties([0, 0])
+                except Exception:
+                    pass
 
         # --- Text ---
         self.info_text.set_text(

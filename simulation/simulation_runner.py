@@ -41,6 +41,7 @@ def run_simulation(
     estimator=None,
     actuator=None,
     visualizer=None,
+    mech=None,
     realtime: bool = False
 ) -> SimulationResult:
 
@@ -64,11 +65,23 @@ def run_simulation(
     if run_indefinitely:
         state_history_list = [initial_state.as_vector()]
         acc_history_list = []
+        mech_history = None
     else:
         state_history, acc_history = initialize_histories(
             steps=steps,
             initial_state=initial_state
         )
+        if mech is not None:
+            mech_history = np.full((steps + 1, 3, 2), np.nan, dtype=np.float64)
+            try:
+                _, _, A_g, C_g, P_g = mech.solve(np.array([initial_state.x, initial_state.y]) * 1000.0)
+                mech_history[0, 0, :] = A_g
+                mech_history[0, 1, :] = C_g
+                mech_history[0, 2, :] = P_g
+            except ValueError:
+                pass
+        else:
+            mech_history = None
 
     command = TableCommand(params.workspace.x_ref, params.workspace.y_ref)
 
@@ -122,11 +135,21 @@ def run_simulation(
         else:
             state_history[i + 1, :] = state.as_vector()
             acc_history[i, :] = table_acc.as_vector()
+            if mech_history is not None:
+                try:
+                    _, _, A_g, C_g, P_g = mech.solve(np.array([state.x, state.y]) * 1000.0)
+                    mech_history[i + 1, 0, :] = A_g
+                    mech_history[i + 1, 1, :] = C_g
+                    mech_history[i + 1, 2, :] = P_g
+                except ValueError:
+                    pass
 
         # ---- Failure condition (skip in indefinite real-time mode) ----
         if not run_indefinitely and pencil_fell(state):
             state_history = state_history[:i+2]
             acc_history = acc_history[:i+1]
+            if mech_history is not None:
+                mech_history = mech_history[:i+2]
             break
 
         # ---- Real-time pacing ----
@@ -152,5 +175,6 @@ def run_simulation(
 
     return SimulationResult(
         state_history=state_history,
-        acc_history=acc_history
+        acc_history=acc_history,
+        mech_history=mech_history
     )
