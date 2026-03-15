@@ -24,7 +24,7 @@ def main(mode):
             plant=PlantParams(
                 g=9.81,
                 com_length=0.1,
-                tau=0.02,
+                tau=0.04,
                 zeta=0.7,
                 num_states=8,
                 max_acc=9.81 * 3,
