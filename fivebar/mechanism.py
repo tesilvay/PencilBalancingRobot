@@ -112,8 +112,8 @@ class FiveBarMechanism:
             and self._point_in_front(P_l)
         )
 
-    def solve(self, target_global):
-
+    def _solve_python(self, target_global):
+        """Python implementation of solve(); used when Numba is unavailable or as fallback."""
         theta1, theta4 = self.ik(target_global)
 
         A_l, C_l, P1_l, P2_l = self.fk(theta1, theta4)
@@ -141,3 +141,24 @@ class FiveBarMechanism:
         C_g = self.tf.l2g(C_l)
         P_g = self.tf.l2g(P_l)
         return theta1, theta4, A_g, C_g, P_g
+
+    def solve(self, target_global):
+        x_g, y_g = np.asarray(target_global).flatten()[:2]
+        try:
+            from fivebar.numba_solve import HAS_NUMBA, get_numba_constants, solve_numba
+            if HAS_NUMBA:
+                if getattr(self, "_numba_constants", None) is None:
+                    self._numba_constants = get_numba_constants(self)
+                result = solve_numba(x_g, y_g, **self._numba_constants)
+                if result[0]:
+                    _, theta1, theta4, A_g_x, A_g_y, C_g_x, C_g_y, P_g_x, P_g_y = result
+                    A_g = np.array([A_g_x, A_g_y])
+                    C_g = np.array([C_g_x, C_g_y])
+                    P_g = np.array([P_g_x, P_g_y])
+                    return theta1, theta4, A_g, C_g, P_g
+                raise ValueError(
+                    "Point not reachable in a valid configuration (outside workspace or invalid elbow orientation)"
+                )
+        except (ImportError, RuntimeError):
+            pass
+        return self._solve_python(target_global)
