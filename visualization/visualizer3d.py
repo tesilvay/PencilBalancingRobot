@@ -7,24 +7,24 @@ import numpy as np
 
 class Visualizer3D:
 
-    def __init__(self, history, dt, L=0.2, fps=60, mech=None, mech_history=None, params=None):
-
+    def __init__(self, history, dt, L=0.2, fps=60, mech=None, mech_history=None, params=None, cmd_history=None):
         self.history = history
         self.dt = dt
         self.L = L
         self.fps = fps
         self.frame_period = 1.0 / fps
         self.total_sim_time = history.shape[0] * dt
-        
+
         self.mech = mech
         self.mech_history = mech_history
-        
+        self.cmd_history = cmd_history  # (N, 2) table command at sim frequency, or None
+
         w = params.workspace
         self.x_ref = w.x_ref
         self.y_ref = w.y_ref
         self.safe_radius = w.safe_radius
 
-        self.fig = plt.figure()
+        self.fig = plt.figure(figsize=(8, 8))   # width, height in inches
         self.ax = self.fig.add_subplot(111, projection='3d')
 
         self.ax.set_xlim(-0.15, 0.15)
@@ -36,6 +36,7 @@ class Visualizer3D:
         self.ax.set_zlabel("Z")
 
         self.table_plot, = self.ax.plot([], [], [], 'k-', linewidth=2)
+        self.table_cmd_plot, = self.ax.plot([], [], [], 'c--', linewidth=1)  # table command (current -> desired)
         self.pencil_plot, = self.ax.plot([], [], [], 'r-', linewidth=3)
         
         # Mechanism plot
@@ -91,13 +92,16 @@ class Visualizer3D:
             transform=self.ax.transAxes
         )
 
+        # Disable 3D pan/rotate/zoom for faster redraws and fixed view
+        self.ax.disable_mouse_rotation()
+
         plt.ion()
         plt.show()
 
     # -------------------------------------------------
     # Render a single frame
     # -------------------------------------------------
-    def render_frame(self, state, sim_time):
+    def render_frame(self, state, sim_time, interactive=True):
 
         x = state[0]
         alpha_x = state[2]
@@ -113,6 +117,15 @@ class Visualizer3D:
 
         self.table_plot.set_data(corners_x, corners_y)
         self.table_plot.set_3d_properties(corners_z)
+
+        # --- Table command line (current position -> desired x_ref, y_ref) ---
+        sim_index = int(round(sim_time / self.dt))
+        if self.cmd_history is not None and 0 <= sim_index < len(self.cmd_history):
+            cmd_x, cmd_y = self.cmd_history[sim_index, 0], self.cmd_history[sim_index, 1]
+        else:
+            cmd_x, cmd_y = self.x_ref, self.y_ref
+        self.table_cmd_plot.set_data([x, cmd_x], [y, cmd_y])
+        self.table_cmd_plot.set_3d_properties([0, 0])
 
         # --- Pencil ---
         base = np.array([x, y, 0.0])
@@ -188,17 +201,24 @@ class Visualizer3D:
                 except Exception:
                     pass
 
-        # --- Text ---
+        # --- Text (table command from history if available; cmd_x, cmd_y already set above) ---
+        if self.cmd_history is None or not (0 <= sim_index < len(self.cmd_history)):
+            cmd_x = getattr(self, "x_ref", 0.0)
+            cmd_y = getattr(self, "y_ref", 0.0)
         self.info_text.set_text(
             f"Sim Time: {sim_time:.3f} s\n"
             f"x: {x:.3f}\n"
             f"y: {y:.3f}\n"
             f"αx: {alpha_x:.3f}\n"
-            f"αy: {alpha_y:.3f}"
+            f"αy: {alpha_y:.3f}\n"
+            f"Table cmd: ({cmd_x:.3f}, {cmd_y:.3f})"
         )
 
-        plt.draw()
-        plt.pause(0.001)
+        if interactive:
+            self.fig.canvas.draw_idle()
+            plt.pause(0.001)
+        else:
+            self.fig.canvas.draw()
 
     # -------------------------------------------------
     # Playback
@@ -256,7 +276,7 @@ class Visualizer3D:
 
                 state = self.history[sim_index]
 
-                self.render_frame(state, sim_time)
+                self.render_frame(state, sim_time, interactive=not save_video)
 
                 if save_video:
                     writer.grab_frame()

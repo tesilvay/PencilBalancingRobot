@@ -185,6 +185,7 @@ class SimulationResult:
     state_history: np.ndarray
     acc_history: np.ndarray
     mech_history: np.ndarray | None = None
+    cmd_history: np.ndarray | None = None  # (N, 2) table command (x_des, y_des) at sim frequency, N = len(state_history)
 
 @dataclass
 class BenchmarkVariant:

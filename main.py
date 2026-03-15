@@ -61,7 +61,7 @@ def main(mode):
             ),
             run=RunParams(
                 save_video=False,
-                realtimerender=True,
+                realtimerender=False,
                 total_time=5.0,  # 5s for single-run validation
                 stability_tolerance=0.3,  # max |angle| rad: ~0.05 strict standing; ~0.3 at least upright (fell vs not)
                 estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)

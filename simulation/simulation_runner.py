@@ -10,14 +10,13 @@ from core.sim_types import (
 from system_builder import dvs_cams_connected
 
 
-def initialize_histories(steps, initial_state):
-
+def initialize_histories(steps, initial_state, x_ref, y_ref):
     state_history = np.zeros((steps + 1, 8))
     state_history[0, :] = initial_state.as_vector()
-
     acc_history = np.zeros((steps, 2))
-
-    return state_history, acc_history
+    cmd_history = np.zeros((steps + 1, 2))
+    cmd_history[0, :] = [x_ref, y_ref]
+    return state_history, acc_history, cmd_history
 
 
 def pencil_fell(state):
@@ -62,14 +61,19 @@ def run_simulation(
         print("Real DVS mode: running indefinitely. Press 'q' in a visualization window to quit.")
     state = initial_state
 
+    x_ref = params.workspace.x_ref
+    y_ref = params.workspace.y_ref
     if run_indefinitely:
         state_history_list = [initial_state.as_vector()]
         acc_history_list = []
+        cmd_history_list = [[x_ref, y_ref]]
         mech_history = None
     else:
-        state_history, acc_history = initialize_histories(
+        state_history, acc_history, cmd_history = initialize_histories(
             steps=steps,
-            initial_state=initial_state
+            initial_state=initial_state,
+            x_ref=x_ref,
+            y_ref=y_ref,
         )
         if mech is not None:
             mech_history = np.full((steps + 1, 3, 2), np.nan, dtype=np.float64)
@@ -83,7 +87,7 @@ def run_simulation(
         else:
             mech_history = None
 
-    command = TableCommand(params.workspace.x_ref, params.workspace.y_ref)
+    command = TableCommand(x_ref, y_ref)
 
     actuator_dt, render_dt = calculate_rates(
         actuator_rate=params.hardware.servo_frequency,
@@ -132,9 +136,11 @@ def run_simulation(
         if run_indefinitely:
             state_history_list.append(state.as_vector())
             acc_history_list.append(table_acc.as_vector())
+            cmd_history_list.append([command.x_des, command.y_des])
         else:
             state_history[i + 1, :] = state.as_vector()
             acc_history[i, :] = table_acc.as_vector()
+            cmd_history[i + 1, :] = [command.x_des, command.y_des]
             if mech_history is not None:
                 try:
                     _, _, A_g, C_g, P_g = mech.solve(np.array([state.x, state.y]) * 1000.0)
@@ -148,6 +154,7 @@ def run_simulation(
         if not run_indefinitely and pencil_fell(state):
             state_history = state_history[:i+2]
             acc_history = acc_history[:i+1]
+            cmd_history = cmd_history[:i+2]
             if mech_history is not None:
                 mech_history = mech_history[:i+2]
             break
@@ -172,9 +179,11 @@ def run_simulation(
     if run_indefinitely:
         state_history = np.array(state_history_list)
         acc_history = np.array(acc_history_list) if acc_history_list else np.zeros((0, 2))
+        cmd_history = np.array(cmd_history_list) if cmd_history_list else np.zeros((0, 2))
 
     return SimulationResult(
         state_history=state_history,
         acc_history=acc_history,
-        mech_history=mech_history
+        mech_history=mech_history,
+        cmd_history=cmd_history,
     )
