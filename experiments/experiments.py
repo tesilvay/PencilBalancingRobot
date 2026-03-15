@@ -50,7 +50,7 @@ def run_single(setup: ExperimentSetup):
         actuator=actuator,
         visualizer=visualizer,
         n_trials=1,
-        realtime=True,
+        realtime=setup.params.run.realtimerender,
     )
 
     return summarize_results(results)

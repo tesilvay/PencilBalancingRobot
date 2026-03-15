@@ -106,8 +106,8 @@ def run_region_trials(
         if show_progress:
             bar.update(trial + 1)
         
-        if n_trials == 1: # only render if we use the single mode
-            #plot_state_history(sim_result.state_history, x_ref)
+        # When not realtime-rendering, run fast then show 3D (single-run only)
+        if n_trials == 1 and not params.run.realtimerender:
             viz = Visualizer3D(
                 sim_result.state_history,
                 dt=0.001,
@@ -115,6 +115,7 @@ def run_region_trials(
                 mech=mech,
                 mech_history=sim_result.mech_history,
                 params=params,
+                cmd_history=sim_result.cmd_history,
             )
             viz.render_video(video_speed=1, save_video=params.run.save_video)
             
