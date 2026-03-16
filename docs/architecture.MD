@@ -122,7 +122,7 @@ This split keeps components decoupled and makes it easy to swap implementations 
 - Opens two DAVIS346 cameras, runs Sam or Hough, renders event surfaces with line overlay at 30 FPS.
 - Uses batch draining: each iteration reads all queued batches per camera, concatenates them, updates the display surface with every event, and feeds the merged batch to the algorithm. This prevents backlog buildup under high event rates.
 - Supports `--max-events-per-batch N` to cap events fed to the Hough algorithm per iteration.
-- Requires `sudo` for USB camera access: `sudo .venv/bin/python -m benchmarks.visualize_dvs_cams --mode hough`.
+- Requires `sudo` for USB camera access: `sudo .venv/bin/python -m hardware.visualize_dvs_cams --mode hough`.
 
 ### `simulation/` — loop integration and scheduling
 
@@ -180,6 +180,8 @@ The system swaps implementations while keeping the same high-level contracts:
   - Hardware: `ServoSystem` (optionally using `fivebar/` kinematics)
 
 The selection logic is in `system_builder.py`; `simulation_runner` checks `dvs_cams_connected(params)` to set `real_mode`.
+
+**Real-DVS pause**: When real DVS cams are connected and realtime is on, **Space** toggles "system on" vs "system off". When paused, the actuator receives a center command (`TableCommand(x_ref, y_ref)`) every tick so the table stays at center; the workspace window shows a "System paused — table at center" overlay. **q** quits. The sim step still runs while paused so measurement/state stay fresh for unpause.
 
 ---
 

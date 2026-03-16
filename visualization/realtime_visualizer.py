@@ -114,7 +114,7 @@ class PencilVisualizerRealtime:
                 cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
         cv2.imshow(self.workspace_win, canvas)
 
-    def render(self, measurement, command=None, surfaces=None):
+    def render(self, measurement, command=None, surfaces=None, **kwargs):
         if measurement is None:
             key = cv2.waitKey(1) & 0xFF
             return key == ord("q")
@@ -198,7 +198,23 @@ class DVSWorkspaceVisualizer:
             y_des = y_ref + dy
         return x_des, y_des
 
-    def _render_workspace(self, command: TableCommand | None):
+    def _render_workspace(self, command: TableCommand | None, paused: bool = False):
+        if paused:
+            canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
+            canvas[:] = 30
+            canvas = cv2.cvtColor(canvas, cv2.COLOR_GRAY2BGR)
+            text = "Paused - table at center"
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.7
+            thickness = 2
+            (tw, th), _ = cv2.getTextSize(text, font, font_scale, thickness)
+            tx = (self._workspace_size - tw) // 2
+            ty = (self._workspace_size + th) // 2
+            cv2.putText(canvas, text, (tx, ty), font, font_scale, (0, 0, 0), thickness + 2)
+            cv2.putText(canvas, text, (tx, ty), font, font_scale, (255, 255, 255), thickness)
+            cv2.imshow(self.workspace_win, canvas)
+            return
+
         canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
         canvas[:] = 40
         canvas = cv2.cvtColor(canvas, cv2.COLOR_GRAY2BGR)
@@ -236,7 +252,7 @@ class DVSWorkspaceVisualizer:
 
         cv2.imshow(self.workspace_win, canvas)
 
-    def render(self, measurement=None, command=None, surfaces=None):
+    def render(self, measurement=None, command=None, surfaces=None, paused: bool | None = None):
         if surfaces is not None and len(surfaces) == 2:
             surface1, surface2 = surfaces
             frame1 = np.clip(surface1 * 50, 0, 255).astype(np.uint8)
@@ -256,7 +272,10 @@ class DVSWorkspaceVisualizer:
 
         cv2.imshow(self.cam_x, frame1)
         cv2.imshow(self.cam_y, frame2)
+        is_paused = paused is True
         if self.show_workspace:
-            self._render_workspace(command)
+            self._render_workspace(command, paused=is_paused)
         key = cv2.waitKey(1) & 0xFF
-        return key == ord("q")
+        quit_requested = key == ord("q")
+        toggle_pause = key == ord(" ")
+        return (quit_requested, toggle_pause)

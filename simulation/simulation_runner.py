@@ -57,8 +57,9 @@ def run_simulation(
 
     run_indefinitely = real_cams and realtime
     steps = int(total_time / dt) if not run_indefinitely else 0
+    paused = False  # only used when run_indefinitely (real DVS + realtime)
     if run_indefinitely:
-        print("Real DVS mode: running indefinitely. Press 'q' in a visualization window to quit.")
+        print("Real DVS mode: running indefinitely. Press 'q' to quit, Space to pause/unpause.")
     state = initial_state
 
     x_ref = params.workspace.x_ref
@@ -114,20 +115,35 @@ def run_simulation(
 
             now = time.perf_counter()
             quit_requested = False
+            toggle_pause = False
 
-            # Actuator
-            if actuator is not None and now >= next_actuator:
-                command_limited = plant.clamp_command(command)
-                actuator.send(command_limited)
-                next_actuator += actuator_dt
-
-            # Renderer
+            # Renderer (may return quit + toggle_pause when run_indefinitely)
             if visualizer is not None and now >= next_render:
                 surfaces = None
                 if vision is not None and hasattr(vision, "get_surfaces"):
                     surfaces = vision.get_surfaces()
-                quit_requested = visualizer.render(measurement, command=command, surfaces=surfaces)
+                result = visualizer.render(
+                    measurement, command=command, surfaces=surfaces,
+                    paused=paused if run_indefinitely else None,
+                )
+                if isinstance(result, tuple) and len(result) == 2:
+                    quit_requested, toggle_pause = result
+                else:
+                    quit_requested = result
                 next_render += render_dt
+
+            if toggle_pause and run_indefinitely:
+                paused = not paused
+
+            # Actuator: when paused send center command, else clamped controller output
+            if actuator is not None and now >= next_actuator:
+                if paused and run_indefinitely:
+                    center_cmd = TableCommand(x_ref, y_ref)
+                    actuator.send(center_cmd)
+                else:
+                    command_limited = plant.clamp_command(command)
+                    actuator.send(command_limited)
+                next_actuator += actuator_dt
 
             if quit_requested and run_indefinitely:
                 break

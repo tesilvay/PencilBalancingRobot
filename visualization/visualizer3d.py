@@ -47,7 +47,7 @@ class Visualizer3D:
         self.link_CP, = self.ax.plot([], [], [], 'm--', linewidth=2)
         
         # --- Pencil tip trail ---
-        self.trail_length = 120   # number of frames to keep
+        self.trail_length = 20   # number of frames to keep
         self.tip_history = []
 
         self.trail_plot, = self.ax.plot(
