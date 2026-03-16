@@ -44,10 +44,10 @@ def main(mode):
             hardware=HardwareParams(
                 
                 servo=True,
-                servo_port=None,#"/dev/ttyUSB0", # None uses a mock controller
+                servo_port="/dev/ttyUSB0", # None uses a mock controller
                 servo_frequency=250,
                 
-                dvs_cam=False,
+                dvs_cam=True,
                 
                 dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
                 dvs_cam_y_port=None,
@@ -61,7 +61,7 @@ def main(mode):
             ),
             run=RunParams(
                 save_video=False,
-                realtimerender=False,
+                realtimerender=True,
                 total_time=5.0,  # 5s for single-run validation
                 stability_tolerance=0.3,  # max |angle| rad: ~0.05 strict standing; ~0.3 at least upright (fell vs not)
                 estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)
