@@ -122,8 +122,15 @@ def run_simulation(
                 surfaces = None
                 if vision is not None and hasattr(vision, "get_surfaces"):
                     surfaces = vision.get_surfaces()
+                if run_indefinitely and paused:
+                    title = "Paused - table at center | Space: resume | Q: quit"
+                elif run_indefinitely:
+                    title = "Experiment - real DVS | Space: pause | Q: quit"
+                else:
+                    title = "Experiment - simulation | Q: quit"
                 result = visualizer.render(
                     measurement, command=command, surfaces=surfaces,
+                    title=title,
                     paused=paused if run_indefinitely else None,
                 )
                 if isinstance(result, tuple) and len(result) == 2:

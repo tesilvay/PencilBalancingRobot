@@ -19,6 +19,12 @@ from core.sim_types import (
     TableCommand,
 )
 from system_builder import build_mechanism, build_actuator
+from visualization.composite_layout import (
+    BANNER_HEIGHT,
+    ONE_PANEL_MARGIN,
+    build_composite,
+    get_default_window_size,
+)
 
 
 # Same defaults as main.py for workspace and mechanism
@@ -141,12 +147,13 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
     if actuator is None:
         raise RuntimeError("Actuator not built (servo disabled?)")
 
-    # Same workspace view as main (grid, circle, point) — single window only
-    workspace_win = "Workspace"
+    # Same workspace view as main (grid, circle, point) — single composite window with banner
+    WINDOW_NAME = "Workspace picker"
     workspace_size = 350
     grid_step_m = 0.02
-    cv2.namedWindow(workspace_win, cv2.WINDOW_NORMAL)
-    cv2.moveWindow(workspace_win, 50, 100)
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    w, h = get_default_window_size(has_cams=False, has_workspace=True)
+    cv2.resizeWindow(WINDOW_NAME, w, h)
 
     current_command: TableCommand | None = None
     center = workspace_size // 2
@@ -156,15 +163,18 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
         else 4000.0
     )
 
-    def on_mouse(event, px, py, _flags, _userdata):
+    # Composite layout: workspace panel is at (ONE_PANEL_MARGIN, BANNER_HEIGHT)
+    def on_mouse(event, win_x, win_y, _flags, _userdata):
         nonlocal current_command
         if event != cv2.EVENT_LBUTTONDOWN:
             return
-        # Pixel -> world (same mapping as in main's visualizer)
-        # px = center + (x_world - x_ref) * scale  =>  x_world = x_ref + (px - center) / scale
-        # py = center - (y_world - y_ref) * scale  =>  y_world = y_ref - (py - center) / scale
-        x_world = workspace.x_ref + (px - center) / scale
-        y_world = workspace.y_ref - (py - center) / scale
+        canvas_px = win_x - ONE_PANEL_MARGIN
+        canvas_py = win_y - BANNER_HEIGHT
+        if not (0 <= canvas_px < workspace_size and 0 <= canvas_py < workspace_size):
+            return
+        # Canvas pixel -> world (same mapping as in main's visualizer)
+        x_world = workspace.x_ref + (canvas_px - center) / scale
+        y_world = workspace.y_ref - (canvas_py - center) / scale
 
         if not is_inside_workspace(x_world, y_world, workspace):
             x_world, y_world = clamp_to_workspace(x_world, y_world, workspace)
@@ -176,14 +186,16 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
         actuator.send(cmd)
         current_command = cmd
 
-    cv2.setMouseCallback(workspace_win, on_mouse)
+    cv2.setMouseCallback(WINDOW_NAME, on_mouse)
 
     print("Click in the Workspace window to send table command. Press 'q' to quit.")
+    title = "Workspace picker — click to move table | Q: quit"
     while True:
         canvas, _, _ = _render_workspace_canvas(
             workspace, current_command, workspace_size=workspace_size, grid_step_m=grid_step_m
         )
-        cv2.imshow(workspace_win, canvas)
+        composite = build_composite(title, None, None, canvas)
+        cv2.imshow(WINDOW_NAME, composite)
         if cv2.waitKey(1) & 0xFF == ord("q"):
             break
     cv2.destroyAllWindows()

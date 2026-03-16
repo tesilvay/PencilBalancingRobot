@@ -17,6 +17,8 @@ Usage:
 
     # Or specify serials explicitly:
     python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
+    
+    sudo .venv/bin/python -m hardware.visualize_dvs_cams
 """
 
 import argparse
@@ -26,6 +28,7 @@ import cv2
 import numpy as np
 
 from core.sim_types import HoughTrackerParams
+from visualization.composite_layout import build_composite, get_default_window_size
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
 
@@ -140,10 +143,10 @@ def main():
     surface1 = np.zeros((H, W), dtype=np.float32)
     surface2 = np.zeros((H, W), dtype=np.float32)
 
-    cv2.namedWindow("Cam 1 (x-axis)", cv2.WINDOW_NORMAL)
-    cv2.namedWindow("Cam 2 (y-axis)", cv2.WINDOW_NORMAL)
-    cv2.moveWindow("Cam 1 (x-axis)", 50, 100)
-    cv2.moveWindow("Cam 2 (y-axis)", 50 + W + 55, 137)
+    WINDOW_NAME = "DVS cam preview"
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    w, h = get_default_window_size(has_cams=True, has_workspace=False)
+    cv2.resizeWindow(WINDOW_NAME, w, h)
 
     print("Running. Press 'q' to quit.")
 
@@ -199,8 +202,9 @@ def main():
                     x1 = int(s_px * y1 + b_px)
                     cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
 
-            cv2.imshow("Cam 1 (x-axis)", frame1)
-            cv2.imshow("Cam 2 (y-axis)", frame2)
+            title = f"DVS cam preview - {args.mode} | Q: quit"
+            composite = build_composite(title, frame1, frame2, None)
+            cv2.imshow(WINDOW_NAME, composite)
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break

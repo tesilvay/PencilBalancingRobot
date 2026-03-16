@@ -23,6 +23,7 @@ import numpy as np
 if __package__ is None or __package__ == "":
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from visualization.composite_layout import build_composite, get_default_window_size
 from core.sim_types import (
     HardwareParams,
     HoughTrackerParams,
@@ -249,12 +250,10 @@ def main() -> None:
         algo2 = SamLineAlgorithm(width=W, height=H, min_points=50)
     cam_model = CameraModel(width=W, height=H)
 
-    cv2.namedWindow("Cam 1 (x-axis)", cv2.WINDOW_NORMAL)
-    cv2.namedWindow("Cam 2 (y-axis)", cv2.WINDOW_NORMAL)
-    cv2.namedWindow("Workspace", cv2.WINDOW_NORMAL)
-    cv2.moveWindow("Cam 1 (x-axis)", 50, 100)
-    cv2.moveWindow("Cam 2 (y-axis)", 50 + W + 55, 100)
-    cv2.moveWindow("Workspace", 50 + 2 * W + 110, 136)
+    WINDOW_NAME = "DVS Calibration"
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    w, h = get_default_window_size(has_cams=True, has_workspace=True)
+    cv2.resizeWindow(WINDOW_NAME, w, h)
 
     decay = args.decay_display
     gain = args.surface_intensity_gain
@@ -303,13 +302,13 @@ def main() -> None:
                 x0 = int(s_px * y0 + b_px)
                 x1 = int(s_px * y1 + b_px)
                 cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
-        cv2.imshow("Cam 1 (x-axis)", frame1)
-        cv2.imshow("Cam 2 (y-axis)", frame2)
         ws_canvas = render_workspace_calibration(
             workspace, grid_points, saved_indices, None, next_index=0,
             message="Press SPACE to begin",
         )
-        cv2.imshow("Workspace", ws_canvas)
+        title = "Calibration — Press SPACE to begin | Q: abort"
+        composite = build_composite(title, frame1, frame2, ws_canvas)
+        cv2.imshow(WINDOW_NAME, composite)
         key = cv2.waitKey(1) & 0xFF
         if key == ord(" "):
             started = True
@@ -362,13 +361,13 @@ def main() -> None:
                             x0 = int(s_px * y0 + b_px)
                             x1 = int(s_px * y1 + b_px)
                             cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
-                    cv2.imshow("Cam 1 (x-axis)", frame1)
-                    cv2.imshow("Cam 2 (y-axis)", frame2)
                     next_idx = idx + 1 if idx + 1 < len(grid_points) else None
                     ws_canvas = render_workspace_calibration(
                         workspace, grid_points, saved_indices, idx, next_index=next_idx,
                     )
-                    cv2.imshow("Workspace", ws_canvas)
+                    title = f"Calibration — Point {idx + 1}/{len(grid_points)} | Q: abort"
+                    composite = build_composite(title, frame1, frame2, ws_canvas)
+                    cv2.imshow(WINDOW_NAME, composite)
                     if cv2.waitKey(1) & 0xFF == ord("q"):
                         print("Aborted by user (Q).")
                         return

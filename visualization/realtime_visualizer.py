@@ -3,13 +3,15 @@ import numpy as np
 from perception.vision import get_measurements
 from perception.camera_model import CameraModel
 from core.sim_types import CameraObservation, TableCommand, WorkspaceParams
+from visualization.composite_layout import build_composite, get_default_window_size
 
 
 class PencilVisualizerRealtime:
     """
-    Simulated camera view (2 windows). Optionally workspace (3rd window) when show_workspace and workspace set.
-    Positions when 3 windows: same as DVSWorkspaceVisualizer (50,100), (50+width+55, 100), (50+2*width+110, 136).
+    Simulated camera view with optional workspace. Single composite window (banner + 2 or 3 panels).
     """
+
+    _window_name = "Pencil Balancer"
 
     def __init__(self, width=346, height=260, show_workspace: bool = False, workspace: WorkspaceParams | None = None):
         self.width = width
@@ -19,20 +21,9 @@ class PencilVisualizerRealtime:
 
         self.cam = CameraModel(width, height)
 
-        self.cam_x = "Camera x-axis"
-        self.cam_y = "Camera y-axis"
-        self.workspace_win = "Workspace"
-
-        cv2.namedWindow(self.cam_x, cv2.WINDOW_NORMAL)
-        cv2.namedWindow(self.cam_y, cv2.WINDOW_NORMAL)
-        if self.show_workspace:
-            cv2.namedWindow(self.workspace_win, cv2.WINDOW_NORMAL)
-            cv2.moveWindow(self.cam_x, 50, 100)
-            cv2.moveWindow(self.cam_y, 50 + self.width + 55, 100)
-            cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
-        else:
-            cv2.moveWindow(self.cam_x, 50, 100)
-            cv2.moveWindow(self.cam_y, 50 + self.width + 55, 137)
+        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+        w, h = get_default_window_size(has_cams=True, has_workspace=self.show_workspace)
+        cv2.resizeWindow(self._window_name, w, h)
 
         self._workspace_size = 350
         self._center = self._workspace_size // 2
@@ -76,9 +67,9 @@ class PencilVisualizerRealtime:
             y_des = y_ref + dy
         return x_des, y_des
 
-    def _render_workspace(self, command: TableCommand | None):
+    def _build_workspace_canvas(self, command: TableCommand | None) -> np.ndarray | None:
         if self.workspace is None:
-            return
+            return None
         canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
         canvas[:] = 40
         canvas = cv2.cvtColor(canvas, cv2.COLOR_GRAY2BGR)
@@ -112,9 +103,9 @@ class PencilVisualizerRealtime:
             py = int(self._center - (y_des - y_ref) * self._scale)
             if 0 <= px < self._workspace_size and 0 <= py < self._workspace_size:
                 cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
-        cv2.imshow(self.workspace_win, canvas)
+        return canvas
 
-    def render(self, measurement, command=None, surfaces=None, **kwargs):
+    def render(self, measurement, command=None, surfaces=None, title: str | None = None, **kwargs):
         if measurement is None:
             key = cv2.waitKey(1) & 0xFF
             return key == ord("q")
@@ -127,10 +118,12 @@ class PencilVisualizerRealtime:
         self.draw_line(img1, b1, s1)
         self.draw_line(img2, b2, s2)
 
-        cv2.imshow(self.cam_x, img1)
-        cv2.imshow(self.cam_y, img2)
-        if self.show_workspace:
-            self._render_workspace(command)
+        frame1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
+        frame2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
+        workspace_canvas = self._build_workspace_canvas(command) if self.show_workspace else None
+        title_str = title if title is not None else "Experiment | Q: quit"
+        composite = build_composite(title_str, frame1, frame2, workspace_canvas)
+        cv2.imshow(self._window_name, composite)
 
         key = cv2.waitKey(1) & 0xFF
         return key == ord("q")
@@ -138,10 +131,10 @@ class PencilVisualizerRealtime:
 
 class DVSWorkspaceVisualizer:
     """
-    Real DVS footage + optional workspace plot. Used when real DVS cams are connected.
-    Layout: Cam 1 | Cam 2 | [Workspace when show_workspace].
-    Window positions (when all 3 shown): cam1 (50,100), cam2 (50+width+55, 100), workspace (50+2*width+110, 136).
+    Real DVS footage + optional workspace plot. Single composite window (banner + 2 or 3 panels).
     """
+
+    _window_name = "Pencil Balancer"
 
     def __init__(self, workspace: WorkspaceParams, width=346, height=260, show_workspace: bool = True):
         self.width = width
@@ -150,18 +143,9 @@ class DVSWorkspaceVisualizer:
         self.show_workspace = show_workspace
         self.cam = CameraModel(width, height)
 
-        self.cam_x = "Cam 1 (x-axis)"
-        self.cam_y = "Cam 2 (y-axis)"
-        self.workspace_win = "Workspace"
-
-        cv2.namedWindow(self.cam_x, cv2.WINDOW_NORMAL)
-        cv2.namedWindow(self.cam_y, cv2.WINDOW_NORMAL)
-        cv2.moveWindow(self.cam_x, 50, 100)
-        cv2.moveWindow(self.cam_y, 50 + self.width + 55, 100)
-
-        if show_workspace:
-            cv2.namedWindow(self.workspace_win, cv2.WINDOW_NORMAL)
-            cv2.moveWindow(self.workspace_win, 50 + 2 * self.width + 110, 136)
+        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+        w, h = get_default_window_size(has_cams=True, has_workspace=show_workspace)
+        cv2.resizeWindow(self._window_name, w, h)
 
         self._workspace_size = 350
         self._center = self._workspace_size // 2
@@ -198,7 +182,7 @@ class DVSWorkspaceVisualizer:
             y_des = y_ref + dy
         return x_des, y_des
 
-    def _render_workspace(self, command: TableCommand | None, paused: bool = False):
+    def _build_workspace_canvas(self, command: TableCommand | None, paused: bool = False) -> np.ndarray:
         if paused:
             canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
             canvas[:] = 30
@@ -212,8 +196,7 @@ class DVSWorkspaceVisualizer:
             ty = (self._workspace_size + th) // 2
             cv2.putText(canvas, text, (tx, ty), font, font_scale, (0, 0, 0), thickness + 2)
             cv2.putText(canvas, text, (tx, ty), font, font_scale, (255, 255, 255), thickness)
-            cv2.imshow(self.workspace_win, canvas)
-            return
+            return canvas
 
         canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
         canvas[:] = 40
@@ -250,9 +233,9 @@ class DVSWorkspaceVisualizer:
             if 0 <= px < self._workspace_size and 0 <= py < self._workspace_size:
                 cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
 
-        cv2.imshow(self.workspace_win, canvas)
+        return canvas
 
-    def render(self, measurement=None, command=None, surfaces=None, paused: bool | None = None):
+    def render(self, measurement=None, command=None, surfaces=None, title: str | None = None, paused: bool | None = None):
         if surfaces is not None and len(surfaces) == 2:
             surface1, surface2 = surfaces
             frame1 = np.clip(surface1 * 50, 0, 255).astype(np.uint8)
@@ -270,11 +253,14 @@ class DVSWorkspaceVisualizer:
             self._draw_line(frame1, b1, s1)
             self._draw_line(frame2, b2, s2)
 
-        cv2.imshow(self.cam_x, frame1)
-        cv2.imshow(self.cam_y, frame2)
         is_paused = paused is True
-        if self.show_workspace:
-            self._render_workspace(command, paused=is_paused)
+        workspace_canvas = self._build_workspace_canvas(command, paused=is_paused) if self.show_workspace else None
+        title_str = title if title is not None else (
+            "Paused - table at center | Space: resume | Q: quit" if is_paused else "Experiment | Space: pause | Q: quit"
+        )
+        composite = build_composite(title_str, frame1, frame2, workspace_canvas)
+        cv2.imshow(self._window_name, composite)
+
         key = cv2.waitKey(1) & 0xFF
         quit_requested = key == ord("q")
         toggle_pause = key == ord(" ")
