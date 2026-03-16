@@ -214,7 +214,7 @@ def main() -> None:
         print("Error: No grid points inside workspace circle.", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Calibration mode — grid sweep. Points inside workspace: {len(grid_points)}. Press Q to abort.")
+    print(f"Calibration mode - grid sweep. Points inside workspace: {len(grid_points)}. Press Q to abort.")
 
     params = PhysicalParams(
         plant=PlantParams(
@@ -306,7 +306,7 @@ def main() -> None:
             workspace, grid_points, saved_indices, None, next_index=0,
             message="Press SPACE to begin",
         )
-        title = "Calibration — Press SPACE to begin | Q: abort"
+        title = "Calibration - Press SPACE to begin | Q: abort"
         composite = build_composite(title, frame1, frame2, ws_canvas)
         cv2.imshow(WINDOW_NAME, composite)
         key = cv2.waitKey(1) & 0xFF
@@ -365,7 +365,7 @@ def main() -> None:
                     ws_canvas = render_workspace_calibration(
                         workspace, grid_points, saved_indices, idx, next_index=next_idx,
                     )
-                    title = f"Calibration — Point {idx + 1}/{len(grid_points)} | Q: abort"
+                    title = f"Calibration - Point {idx + 1}/{len(grid_points)} | Q: abort"
                     composite = build_composite(title, frame1, frame2, ws_canvas)
                     cv2.imshow(WINDOW_NAME, composite)
                     if cv2.waitKey(1) & 0xFF == ord("q"):

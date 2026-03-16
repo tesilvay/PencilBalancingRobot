@@ -74,7 +74,7 @@ def plot_stability_vs_noise(rows):
         fig, axes = plt.subplots(2, 2, figsize=(12, 8))
         axes = axes.flatten()
 
-        fig.suptitle(f"Stability vs Noise — Controller: {controller}", fontsize=14)
+        fig.suptitle(f"Stability vs Noise - Controller: {controller}", fontsize=14)
 
         for idx, estimator in enumerate(estimators):
             ax = axes[idx]
@@ -147,7 +147,7 @@ def plot_stability_heatmaps(rows):
             plt.yticks(range(len(delays)), delays)
             plt.xlabel("Noise Std")
             plt.ylabel("Delay Steps")
-            plt.title(f"Stability Heatmap — {controller} + {estimator}")
+            plt.title(f"Stability Heatmap - {controller} + {estimator}")
             plt.colorbar(label="Stability Rate")
             plt.tight_layout()
             plt.show()

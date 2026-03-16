@@ -189,7 +189,7 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
     cv2.setMouseCallback(WINDOW_NAME, on_mouse)
 
     print("Click in the Workspace window to send table command. Press 'q' to quit.")
-    title = "Workspace picker — click to move table | Q: quit"
+    title = "Workspace picker - click to move table | Q: quit"
     while True:
         canvas, _, _ = _render_workspace_canvas(
             workspace, current_command, workspace_size=workspace_size, grid_step_m=grid_step_m
