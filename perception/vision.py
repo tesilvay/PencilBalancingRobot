@@ -41,11 +41,16 @@ class VisionModelBase:
         if abs(denom) < 1e-8:
             denom = 1e-8
 
-        # some sort of projection down to base height instead of camera height at b1, b2?
         X = (b1 * self.yr + b1 * b2 * self.xr) / denom
         Y = (b2 * self.xr - b1 * b2 * self.yr) / denom
         alpha_x = (s1 + b1 * s2) / denom
         alpha_y = (s2 - b2 * s1) / denom
+
+        if getattr(self, "dvs_calibration", None) is not None:
+            X_cal, Y_cal = self.dvs_calibration.apply(b1, b2)
+            if np.isfinite(X_cal) and np.isfinite(Y_cal):
+                X, Y = X_cal, Y_cal
+                print(f"Calibrated pose mm: X={X*1000:.2f}, Y={Y*1000:.2f}")
 
         return PoseMeasurement(
             X=X,

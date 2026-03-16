@@ -149,6 +149,7 @@ class HardwareParams:
     dvs_algo: str = "hough"  # "hough" | "sam"
     dvs_sam_noise_filter_duration_ms: float | None = 30  # None = no filter; > 0 = duration (Sam OLS only)
     dvs_hough: HoughTrackerParams = field(default_factory=HoughTrackerParams)  # Hough only: ignored when dvs_algo="sam"
+    dvs_calibration_path: str | None = None  # JSON from grid-sweep calibration; when set, (X,Y) from reconstruct use 2D cal
 
 
 @dataclass

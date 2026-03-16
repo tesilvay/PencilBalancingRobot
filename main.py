@@ -47,7 +47,8 @@ def main(mode):
                 servo_port="/dev/ttyUSB0", # None uses a mock controller
                 servo_frequency=250,
                 
-                dvs_cam=True,
+                dvs_cam=True, 
+                dvs_calibration_path="perception/calibration_files/dvs_calibration.json",
                 
                 dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
                 dvs_cam_y_port=None,
