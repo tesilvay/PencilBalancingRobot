@@ -2,6 +2,11 @@
 
 This document describes a **data-driven, multivariate regression calibration** for the DVS pencil balancer. It is intended as the target design for a future calibration pipeline that replaces the current **intercept-only** 2D lookup with a single learned mapping from all four line observables to full pose. The current calibration is documented in [DVS_CALIBRATION.md](DVS_CALIBRATION.md).
 
+Terminology note (to avoid confusion):
+
+- **camnorm** (camera-normalized): the geometric quantities \((b, s)\) produced by the vision pipeline after converting pixel line fits using camera intrinsics. These are *dimensionless* and are what the analytic `reconstruct()` math expects.
+- **standardized** (ML feature scaling): \((x - \mu)/\sigma\) applied to camnorm inputs *only for regression numerical conditioning*. These values must never be fed into the analytic `reconstruct()` directly.
+
 ---
 
 ## Motivation
@@ -18,10 +23,10 @@ In robotics this style is often called **empirical camera-to-robot calibration**
 
 ## What the estimator depends on
 
-The vision pipeline produces four scalars from the two cameras:
+The vision pipeline produces four scalars from the two cameras (all in **camnorm** coordinates):
 
-- **b1, s1** — normalized intercept and slope from camera 1 (x-axis).
-- **b2, s2** — normalized intercept and slope from camera 2 (y-axis).
+- **b1, s1** — camnorm intercept and slope from camera 1.
+- **b2, s2** — camnorm intercept and slope from camera 2.
 
 The pose is **(X, Y, αx, αy)** (base position in workspace, tilt angles). The calibration problem is to learn a mapping:
 
@@ -80,7 +85,14 @@ Y_true
 αy_true
 ```
 
-You will have on the order of **125 rows** (for 5×5 grid × 5 tilts). Storage can be CSV, JSON array of objects, or similar; the regression step builds a design matrix from the first four columns and four target vectors from the last four.
+You will have on the order of **125 rows** (for 5×5 grid × 5 tilts).
+
+Recommended storage:
+
+- **Dataset file** (raw samples): save into `perception/calibration_files/` with a name like `dvs_pose_dataset.json` (or `.csv`).
+- **Trained model file** (runtime artifact): save into `perception/calibration_files/` with a name like `dvs_pose_regression_model.json`.
+
+Keep these separate: the dataset is for offline training and debugging; the trained model is what you load at runtime.
 
 ---
 
@@ -114,22 +126,25 @@ So **9 features** per sample (one constant, four linear, four interaction).
 
 ### Normalization (important)
 
-Normalize inputs **before** regression to improve numerical stability:
+Standardize camnorm inputs **before** regression to improve numerical stability:
 
 ```text
 b1' = (b1 - mean(b1)) / std(b1)
 ```
 
-and similarly for s1, b2, s2. Use the **training** mean and std at runtime when applying the model.
+and similarly for s1, b2, s2.
+
+Important: this is **ML feature scaling** (standardization), not the camnorm pixel→camera conversion. The camnorm conversion still happens upstream in the vision pipeline. The regression takes camnorm values and then standardizes them internally using the **training** mean and std at runtime when applying the model.
 
 ---
 
-## Training (offline)
+## Dataset creation
 
 Pseudocode:
 
 ```text
-dataset = []
+dataset = np.array(N_poses,8)
+# columns: [b1, s1, b2, s2, X_true, Y_true, ax_true, ay_true]
 
 for pose in calibration_poses:
 
@@ -144,8 +159,28 @@ for pose in calibration_poses:
     s2 = average(measurements.s2)
 
     dataset.append([b1, s1, b2, s2, pose.X, pose.Y, pose.ax, pose.ay])
+```
 
-# Normalize (b1, s1, b2, s2) using training mean/std
+### Dataset storage format
+
+We store the calibration dataset as a **NumPy `.npz`** plus a small JSON metadata file:
+
+- `perception/calibration_files/dvs_pose_dataset.npz`
+  - key `data`: NumPy array of shape `(N_poses, 8)`
+  - **column order**: `[b1, s1, b2, s2, X_true, Y_true, ax_true, ay_true]`
+- `perception/calibration_files/dvs_pose_dataset_meta.json`
+  - `column_names`: `["b1", "s1", "b2", "s2", "X_true", "Y_true", "ax_true", "ay_true"]`
+  - `grid_shape`: e.g. `[5, 5]` for a 5×5 grid
+  - `tilt_angles_deg`: e.g. `[0, +θ, -θ]` description for αx/αy tilts
+  - optional fields: date, run ID, number of frames averaged per pose, etc.
+
+This way, the `.npz` file is optimized for fast numeric work, and the JSON sidecar documents exactly what each column and pose index means.
+
+
+## Training (offline)
+```
+# Compute training mean/std for (b1, s1, b2, s2)
+# Standardize (b1, s1, b2, s2) using those stats
 # Build design matrix M: each row = feature_vector for one sample
 
 for each sample in dataset:
@@ -153,26 +188,62 @@ for each sample in dataset:
     feature_vector = [1, b1, b2, s1, s2, b1*s1, b1*s2, b2*s1, b2*s2]
     add feature_vector to matrix M
 
-# Four least-squares problems
+# Four least-squares problems (one per output)
 coeff_X  = least_squares(M, X_true)
 coeff_Y  = least_squares(M, Y_true)
 coeff_ax = least_squares(M, ax_true)
 coeff_ay = least_squares(M, ay_true)
 ```
 
-So we solve **four** linear least-squares problems (one per output). The same design matrix M is used for all four; only the target vector changes.
+We save the training values in a json file in calibration with the following format
+```
+{
+  "model_type": "linear_regression",
+  "input_order": ["b1", "s1", "b2", "s2"],
+  "input_mean": [0.01, -0.02, 0.00, 0.03],
+  "input_std":  [0.10,  0.05, 0.11, 0.04],
+
+  "feature_order": [
+    "1",
+    "b1_z", "b2_z", "s1_z", "s2_z",
+    "b1_z*s1_z", "b1_z*s2_z", "b2_z*s1_z", "b2_z*s2_z"
+  ],
+
+  "output_order": ["X", "Y", "ax", "ay"],
+  "W": [
+    [ /* 9 numbers for X */ ],
+    [ /* 9 numbers for Y */ ],
+    [ /* 9 numbers for ax */],
+    [ /* 9 numbers for ay */]
+  ],
+
+  "units": { "X": "m", "Y": "m", "ax": "rad", "ay": "rad" },
+  "dataset": { "grid_shape": [5,5], "tilts": "0, ±θ in ax, ±θ in ay" }
+}
+```
+
+### What to save after training (model artifact)
+
+To run the estimator later you need to serialize:
+
+- **`input_mean`**: `[mean_b1, mean_s1, mean_b2, mean_s2]`
+- **`input_std`**: `[std_b1, std_s1, std_b2, std_s2]` (guard against zeros)
+- **`feature_definition`**: a string or version (so future code changes don’t silently misinterpret coefficients)
+- **`coefficients`**: either four vectors (one per output) or a single matrix `W` of shape `(4, n_features)` for `[X, Y, ax, ay]`
+
+Optionally include metadata: date, grid size, tilt angle, sample count, etc.
 
 ---
 
 ## Runtime estimator
 
-During operation:
+During operation (real time):
 
 ```text
-measure b1, s1, b2, s2
+measure camnorm b1, s1, b2, s2
 
-# Normalize with training mean/std
-b1', s1', b2', s2' = normalize(b1, s1, b2, s2)
+# Standardize with training mean/std (ML feature scaling)
+b1', s1', b2', s2' = standardize(b1, s1, b2, s2)
 
 features = [1, b1', b2', s1', s2', b1'*s1', b1'*s2', b2'*s1', b2'*s2']
 
@@ -182,7 +253,37 @@ ax = dot(coeff_ax, features)
 ay = dot(coeff_ay, features)
 ```
 
-This is a few dot products and can run in **microseconds**.
+This is a few dot products and can run in **microseconds**. This runtime estimator needs to become a class with the values from the JSON training as its attributes and a single method for the estimation.
+
+Implementation note: it’s best to encapsulate this in one runtime class with an explicit API, so nobody accidentally mixes camnorm and standardized values.
+
+## Naming proposals (to reduce confusion)
+
+### Files
+
+- **Dataset (raw samples)**: `perception/calibration_files/dvs_pose_dataset.json`
+- **Trained model (runtime artifact)**: `perception/calibration_files/dvs_pose_regression_model.json`
+
+### Classes
+
+Current position-only calibrator is a lookup/interpolator, so keep “Calibration” there. For the new learned mapping, prefer “Regressor/Model/Estimator” in the name:
+
+- `DVSPoseRegressor`
+- `DVSPoseRegressionModel`
+- `DVSPoseEstimator`
+
+If it lives in `perception/calibration.py`, consider renaming the module later to `perception/dvs_pose_model.py` (or similar) so “calibration” doesn’t imply “(b1,b2) grid only”.
+
+### Methods
+
+- `load(path)` (class method): load weights + scaler stats
+- `predict_pose(b1, s1, b2, s2)` or `estimate(b1, s1, b2, s2)`: returns `(X, Y, ax, ay)`
+- `standardize_inputs(b1, s1, b2, s2)`: internal helper (explicitly *not* called “normalize”)
+
+### Variables
+
+- Use `camnorm_*` prefixes for geometric values: `camnorm_b1`, `camnorm_s1`, ...
+- Use `std_*` or `_z` for standardized values: `b1_z`, `s1_z`, ...
 
 ---
 
@@ -211,12 +312,12 @@ After training:
 | Item | Description |
 |------|-------------|
 | **Name** | Multivariate linear regression calibration / Empirical pose estimator identification |
-| **Inputs** | b1, s1, b2, s2 (normalized, then optional interaction terms) |
+| **Inputs** | camnorm b1, s1, b2, s2 (then standardized for regression; then optional interaction terms) |
 | **Outputs** | X, Y, αx, αy |
 | **Dataset** | Grid × 5 tilts (0, ±θ in αx, ±θ in αy); e.g. 5×5 × 5 = 125 poses |
 | **Per pose** | 200–500 frames averaged to one (b1, s1, b2, s2) + (X, Y, αx, αy) |
-| **Features** | [1, b1, b2, s1, s2, b1*s1, b1*s2, b2*s1, b2*s2]; normalize b1, s1, b2, s2 first |
+| **Features** | [1, b1', b2', s1', s2', b1'*s1', b1'*s2', b2'*s1', b2'*s2'] where \(b',s'\) are standardized |
 | **Training** | Four least-squares fits: same M, targets X_true, Y_true, ax_true, ay_true |
-| **Runtime** | Normalize → build feature vector → four dot products with stored coefficients |
+| **Runtime** | Standardize (ML) → build feature vector → four dot products with stored coefficients |
 
 This document is a **spec for a future implementation**. The current system uses the intercept-only 2D calibration described in [DVS_CALIBRATION.md](DVS_CALIBRATION.md).

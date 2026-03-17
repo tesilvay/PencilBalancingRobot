@@ -1,0 +1,40 @@
+{
+  "column_names": [
+    "b1",
+    "s1",
+    "b2",
+    "s2",
+    "X_true",
+    "Y_true",
+    "ax_true",
+    "ay_true"
+  ],
+  "grid_shape": [
+    3,
+    3
+  ],
+  "tilt_angles_deg": {
+    "0": {
+      "ax": 0.0,
+      "ay": 0.0
+    },
+    "+ax": {
+      "ax": 10.0,
+      "ay": 0.0
+    },
+    "-ax": {
+      "ax": -10.0,
+      "ay": 0.0
+    },
+    "+ay": {
+      "ax": 0.0,
+      "ay": 10.0
+    },
+    "-ay": {
+      "ax": 0.0,
+      "ay": -10.0
+    }
+  },
+  "total_samples": 25,
+  "frames_per_pose_target": 300
+}
