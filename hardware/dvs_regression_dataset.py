@@ -208,7 +208,7 @@ def render_round_intro(
     if tilt_label == "0":
         tilt_text = "Set pencil tilt: 0 (upright)"
     else:
-        tilt_text = f"Set pencil tilt: {tilt_label} (±{tilt_angle_deg:.0f}°)"
+        tilt_text = f"Set pencil tilt: {tilt_label} ({tilt_angle_deg:.0f} deg)"
     (tw, th), _ = cv2.getTextSize(tilt_text, font, 0.6, 2)
     tx = (workspace_size - tw) // 2
     cv2.putText(canvas, tilt_text, (tx, cy), font, 0.6, (220, 220, 220), 2)

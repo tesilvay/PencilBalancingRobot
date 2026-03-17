@@ -29,6 +29,8 @@ class VisionModelBase:
     def __init__(self, camera_params: CameraParams):
         self.xr = camera_params.xr
         self.yr = camera_params.yr
+        # Optional learned regression model; when set, it can override analytic pose.
+        self.dvs_regression = None
 
     # -------------------------------------------------
     # Reconstruct 3D pose from two camera observations
@@ -46,18 +48,21 @@ class VisionModelBase:
         alpha_x = (s1 + b1 * s2) / denom
         alpha_y = (s2 - b2 * s1) / denom
 
-        if getattr(self, "dvs_calibration", None) is not None:
-            X_cal, Y_cal = self.dvs_calibration.apply(b1, b2)
-            if np.isfinite(X_cal) and np.isfinite(Y_cal):
-                X, Y = X_cal, Y_cal
-                print(f"Calibrated pose mm: X={X*1000:.2f}, Y={Y*1000:.2f}")
-
-        return PoseMeasurement(
+        # Default analytic pose
+        pose = PoseMeasurement(
             X=X,
             Y=Y,
             alpha_x=alpha_x,
-            alpha_y=alpha_y
+            alpha_y=alpha_y,
         )
+
+        # Optional learned multivariate regression override
+        if getattr(self, "dvs_regression", None) is not None:
+            reg_pose = self.dvs_regression.estimate(cams)
+            if np.all(np.isfinite([reg_pose.X, reg_pose.Y, reg_pose.alpha_x, reg_pose.alpha_y])):
+                return reg_pose
+
+        return pose
         
     def project(self, state_true: SystemState) -> CameraPair:
 

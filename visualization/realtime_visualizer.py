@@ -105,7 +105,7 @@ class PencilVisualizerRealtime:
                 cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
         return canvas
 
-    def render(self, measurement, command=None, surfaces=None, title: str | None = None, **kwargs):
+    def render(self, measurement, command=None, surfaces=None, title: str | None = None, pose=None, **kwargs):
         if measurement is None:
             key = cv2.waitKey(1) & 0xFF
             return key == ord("q")
@@ -121,7 +121,19 @@ class PencilVisualizerRealtime:
         frame1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
         frame2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2BGR)
         workspace_canvas = self._build_workspace_canvas(command) if self.show_workspace else None
-        title_str = title if title is not None else "Experiment | Q: quit"
+
+        if title is not None:
+            title_str = title
+        else:
+            title_str = "Experiment | Q: quit"
+
+        # Optional pose overlay in mm / degrees
+        if pose is not None:
+            x_mm = pose.X * 1000.0
+            y_mm = pose.Y * 1000.0
+            ax_deg = pose.alpha_x * 180.0 / np.pi
+            ay_deg = pose.alpha_y * 180.0 / np.pi
+            title_str += f" | X={x_mm:6.1f} mm, Y={y_mm:6.1f} mm, ax={ax_deg:5.1f} deg, ay={ay_deg:5.1f} deg"
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
 
@@ -235,7 +247,7 @@ class DVSWorkspaceVisualizer:
 
         return canvas
 
-    def render(self, measurement=None, command=None, surfaces=None, title: str | None = None, paused: bool | None = None):
+    def render(self, measurement=None, command=None, surfaces=None, title: str | None = None, paused: bool | None = None, pose=None):
         if surfaces is not None and len(surfaces) == 2:
             surface1, surface2 = surfaces
             frame1 = np.clip(surface1 * 50, 0, 255).astype(np.uint8)
@@ -255,9 +267,22 @@ class DVSWorkspaceVisualizer:
 
         is_paused = paused is True
         workspace_canvas = self._build_workspace_canvas(command, paused=is_paused) if self.show_workspace else None
-        title_str = title if title is not None else (
-            "Paused - table at center | Space: resume | Q: quit" if is_paused else "Experiment | Space: pause | Q: quit"
-        )
+        if title is not None:
+            title_str = title
+        else:
+            title_str = (
+                "Paused - table at center | Space: resume | Q: quit"
+                if is_paused
+                else "Experiment | Space: pause | Q: quit"
+            )
+
+        # Optional pose overlay in mm / degrees
+        if pose is not None:
+            x_mm = pose.X * 1000.0
+            y_mm = pose.Y * 1000.0
+            ax_deg = pose.alpha_x * 180.0 / np.pi
+            ay_deg = pose.alpha_y * 180.0 / np.pi
+            title_str += f" | X={x_mm:6.1f} mm, Y={y_mm:6.1f} mm, ax={ax_deg:5.1f} deg, ay={ay_deg:5.1f} deg"
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
 

@@ -101,11 +101,14 @@ def build_vision(variant, params, camera_params):
                     cam2_device=cam2_device,
                     noise_filter_duration_ms=noise_filter_duration_ms,
                 )
-                if hw.dvs_calibration_path:
-                    from perception.calibration import DVSGridCalibration
-                    vision.dvs_calibration = DVSGridCalibration.load(hw.dvs_calibration_path)
+                if hw.dvs_use_regression:
+                    from perception.dvs_pose_regression_model import DVSPoseRegressionModel
+
+                    vision.dvs_regression = DVSPoseRegressionModel.load(
+                        "perception/calibration_files/dvs_pose_regression_model.json"
+                    )
                 else:
-                    vision.dvs_calibration = None
+                    vision.dvs_regression = None
                 
             else:
                 vision = SimEventCameraInterface(
@@ -113,11 +116,7 @@ def build_vision(variant, params, camera_params):
                     cam1_algo=cam1_algo,
                     cam2_algo=cam2_algo,
                 )
-                if hw.dvs_calibration_path:
-                    from perception.calibration import DVSGridCalibration
-                    vision.dvs_calibration = DVSGridCalibration.load(hw.dvs_calibration_path)
-                else:
-                    vision.dvs_calibration = None
+                vision.dvs_regression = None
 
         else:
             vision = SimVisionModel(

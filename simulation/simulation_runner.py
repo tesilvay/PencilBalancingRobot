@@ -129,8 +129,11 @@ def run_simulation(
                 else:
                     title = "Experiment - simulation | Q: quit"
                 result = visualizer.render(
-                    measurement, command=command, surfaces=surfaces,
+                    measurement,
+                    command=command,
+                    surfaces=surfaces,
                     title=title,
+                    pose=pose,
                     paused=paused if run_indefinitely else None,
                 )
                 if isinstance(result, tuple) and len(result) == 2:
