@@ -32,7 +32,7 @@ So calibration **replaces** the (X, Y) part of the reconstruct with a data-drive
 3. **Step–wait–record loop** (for each grid point in order):
    - **Step:** Send `TableCommand(x_ref + dx, y_ref + dy)` to the actuator.
    - **Wait:** Wait a settle time (default 2 s) so the table is stable.
-   - **Record:** Drain DVS events, update the line algorithms (Hough or Sam), read the current fitted line from each camera, convert pixel line to **normalized** (b1, b2) via `CameraModel.pixel_to_normalized`, and append `{x_cmd, y_cmd, b1, b2}` to the calibration list.
+   - **Record:** Drain DVS events, update the line algorithms (Hough or Sam), read the current fitted line from each camera, convert pixel line to **normalized** (b1, b2) via `CameraModel.pixel_to_camnorm`, and append `{x_cmd, y_cmd, b1, b2}` to the calibration list.
 4. **Visualization:**
    - Two camera windows: event surface + current fitted line (green); same style as the normal DVS view.
    - Workspace window: circle, grid, and dots — **red** = pending, **green** = saved, **blue** = current point. An arrow from the blue point to the next point shows the upcoming target.

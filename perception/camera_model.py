@@ -21,7 +21,7 @@ class CameraModel:
         self.cx = cx if cx is not None else width / 2
         self.cy = cy if cy is not None else height / 2
 
-    def normalized_to_pixel(self, obs: CameraObservation):
+    def camnorm_to_pixel(self, obs: CameraObservation):
         
         s = obs.slope
         b = obs.intercept
@@ -34,14 +34,14 @@ class CameraModel:
             intercept=b_px
         )
 
-    def pixel_to_normalized(self, obs_px: CameraObservation):
+    def pixel_to_camnorm(self, obs_px: CameraObservation):
 
         s_px = obs_px.slope
         b_px = obs_px.intercept
 
         s = s_px * self.fy / self.fx
 
-        # Expected inverse if normalized_to_pixel is correct:
+        # Expected inverse if camnorm_to_pixel is correct:
         # b_expected = (b_px - cx + s_px*cy)/fx
         b_expected = (b_px - self.cx + s_px * self.cy) / self.fx
         b = b_expected

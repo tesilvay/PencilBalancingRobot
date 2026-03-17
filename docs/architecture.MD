@@ -89,10 +89,10 @@ This split keeps components decoupled and makes it easy to swap implementations 
 
 - **Line model**: A camera line is represented as \(x = s\,y + b\) in both normalized and pixel coordinates (slope \(s\), intercept \(b\)).
 - **Camera conversion**:
-  - `CameraModel.normalized_to_pixel()` applies
+  - `CameraModel.camnorm_to_pixel()` applies
     - \(s_{px} = \frac{f_x}{f_y}\, s\)
     - \(b_{px} = f_x\, b - \frac{f_x}{f_y}\, s\, c_y + c_x\)
-  - `CameraModel.pixel_to_normalized()` uses the **consistent inverse**
+  - `CameraModel.pixel_to_camnorm()` uses the **consistent inverse**
     - \(b = \frac{b_{px} - c_x + s_{px} c_y}{f_x}\)
     - \(s = s_{px}\,\frac{f_y}{f_x}\)
 

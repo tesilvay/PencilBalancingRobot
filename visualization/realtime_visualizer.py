@@ -37,7 +37,7 @@ class PencilVisualizerRealtime:
     def draw_line(self, img, b, s):
 
         # Convert normalized → pixel (line model x = s*y + b)
-        obs_px = self.cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
+        obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
 
         y0 = 0
@@ -157,7 +157,7 @@ class DVSWorkspaceVisualizer:
             self._scale = 4000
 
     def _draw_line(self, frame, b, s):
-        obs_px = self.cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
+        obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
         y0, y1 = 0, self.height - 1
         x0 = int(s_px * y0 + b_px)

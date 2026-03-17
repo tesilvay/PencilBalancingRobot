@@ -37,7 +37,7 @@ from core.plant import BalancerPlant
 
 def generate_events(cam, obs: CameraObservation, n=500, noise_px=1.0):
 
-    obs_px = cam.normalized_to_pixel(obs)
+    obs_px = cam.camnorm_to_pixel(obs)
 
     s_px = obs_px.slope
     b_px = obs_px.intercept
@@ -127,7 +127,7 @@ def run_hough_trial(
             continue
 
         # convert pixel line → normalized line
-        obs_est = cam.pixel_to_normalized(obs_px)
+        obs_est = cam.pixel_to_camnorm(obs_px)
 
         b_est_hist.append(obs_est.intercept)
         s_est_hist.append(obs_est.slope)
@@ -266,8 +266,8 @@ def run_falling_pencil_trial(
             hough_poses.append(None)
             continue
 
-        obs1 = cam.pixel_to_normalized(result1)
-        obs2 = cam.pixel_to_normalized(result2)
+        obs1 = cam.pixel_to_camnorm(result1)
+        obs2 = cam.pixel_to_camnorm(result2)
         cams_hough = CameraPair(
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
             CameraObservation(slope=obs2.slope, intercept=obs2.intercept),
@@ -280,7 +280,7 @@ def run_falling_pencil_trial(
 
 def _generate_events(cam, b, s, n=200, noise_px=1.0):
     """Same as SimEventCameraInterface.generate_events (normalized coords)."""
-    obs_px = cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
+    obs_px = cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
     s_px, b_px = obs_px.slope, obs_px.intercept
 
     ys = np.random.uniform(0, cam.height, n)

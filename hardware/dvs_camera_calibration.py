@@ -377,8 +377,8 @@ def main() -> None:
                     time.sleep(0.001)
 
             if result1 is not None and not isinstance(result1, tuple) and result2 is not None and not isinstance(result2, tuple):
-                obs1 = cam_model.pixel_to_normalized(result1)
-                obs2 = cam_model.pixel_to_normalized(result2)
+                obs1 = cam_model.pixel_to_camnorm(result1)
+                obs2 = cam_model.pixel_to_camnorm(result2)
                 b1, b2 = obs1.intercept, obs2.intercept
                 samples.append({"x": x_cmd, "y": y_cmd, "b1": float(b1), "b2": float(b2)})
                 saved_indices.add(idx)

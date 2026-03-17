@@ -167,8 +167,8 @@ class RealEventCameraInterface(VisionModelBase):
         if obs1_px is None or obs2_px is None:
             return None
 
-        obs1 = self.cam.pixel_to_normalized(obs1_px)
-        obs2 = self.cam.pixel_to_normalized(obs2_px)
+        obs1 = self.cam.pixel_to_camnorm(obs1_px)
+        obs2 = self.cam.pixel_to_camnorm(obs2_px)
 
         return CameraPair(
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
@@ -207,7 +207,7 @@ class SimEventCameraInterface(VisionModelBase):
     def generate_events(self, b, s, n=200):
 
         # convert normalized line → pixel line (x = s*y + b)
-        obs_px = self.cam.normalized_to_pixel(CameraObservation(slope=s, intercept=b))
+        obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
 
         cam_height = self.cam.height
@@ -251,8 +251,8 @@ class SimEventCameraInterface(VisionModelBase):
         if isinstance(result1, tuple) or isinstance(result2, tuple):
             return None
 
-        obs1 = self.cam.pixel_to_normalized(result1)
-        obs2 = self.cam.pixel_to_normalized(result2)
+        obs1 = self.cam.pixel_to_camnorm(result1)
+        obs2 = self.cam.pixel_to_camnorm(result2)
 
         return CameraPair(
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
