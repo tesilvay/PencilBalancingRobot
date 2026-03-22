@@ -142,7 +142,11 @@ class HardwareParams:
     """Real hardware flags and ports."""
     servo: bool = False
     servo_port: str | None = None
+    
     dvs_cam: bool = False
+    
+    vision_mode: str = "sim_analytic" # "real_dvs" | "sim_dvs" | "sim_analytic"
+    
     dvs_cam_x_port: str | None = None
     dvs_cam_y_port: str | None = None
     servo_frequency: int = 250  # Hz; command update rate to servos

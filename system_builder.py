@@ -1,4 +1,5 @@
 import numpy as np
+from warnings import warn
 from visualization.realtime_visualizer import PencilVisualizerRealtime, DVSWorkspaceVisualizer
 from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
@@ -62,72 +63,99 @@ def build_estimator(variant, params):
     
     return estimator
 
-def dvs_cams_connected(params):
+def build_sim_analytic(variant, params, camera_params):
+    
+    if params.hardware.dvs_algo is not None:
+        warn("Line algorithm ignored in sim_analytic mode")
+    
+    vision = SimVisionModel(
+                camera_params,
+                noise_std=variant.noise_std,
+                delay_steps=variant.delay_steps
+            )
+    return vision
+
+def build_line_algo(hw):
+    if hw.dvs_algo is None:
+        raise ValueError("DVS modes require a line detection algorithm")
+    
+    elif hw.dvs_algo == "sam":
+        noise_filter_ms = hw.dvs_sam_noise_filter_duration_ms
+        
+        return SamLineAlgorithm(min_points=50), SamLineAlgorithm(min_points=50), noise_filter_ms
+    else:
+        noise_filter_ms = None # we don't want to filter noise in hough algo
+        
+        return PaperHoughLineAlgorithm(params=hw.dvs_hough), PaperHoughLineAlgorithm(params=hw.dvs_hough), noise_filter_ms
+
+def build_sim_dvs(variant, params, camera_params):
     hw = params.hardware
-    if not hw.dvs_cam:
-        return False
-    return (hw.dvs_cam_x_port is not None and hw.dvs_cam_y_port is not None) or (
-        hw.dvs_cam_x_port is None and hw.dvs_cam_y_port is None
-    )
 
-def build_vision(variant, params, camera_params):
-    if variant.estimator_type is not None:
-        hw = params.hardware
-        if hw.dvs_cam:
-            if hw.dvs_algo == "sam":
-                from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
-                cam1_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
-                cam2_algo = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
-                noise_filter_duration_ms = hw.dvs_sam_noise_filter_duration_ms
-            else:
-                cam1_algo = PaperHoughLineAlgorithm(params=hw.dvs_hough)
-                cam2_algo = PaperHoughLineAlgorithm(params=hw.dvs_hough)
-                noise_filter_duration_ms = None
+    cam1_algo, cam2_algo, _ = build_line_algo(hw)
+    
+    vision = SimEventCameraInterface(
+                    camera_params=camera_params,
+                    cam1_algo=cam1_algo,
+                    cam2_algo=cam2_algo,
+                )
+    
+    return vision
 
-            if dvs_cams_connected(params):
-                from perception.dvs_camera_reader import discover_devices
-                if hw.dvs_cam_x_port is not None and hw.dvs_cam_y_port is not None:
-                    cam1_device, cam2_device = hw.dvs_cam_x_port, hw.dvs_cam_y_port
-                else:
-                    devices = discover_devices()
-                    if len(devices) < 2:
-                        raise RuntimeError("Need at least 2 DVS cameras for real DVS mode.")
-                    cam1_device, cam2_device = devices[0], devices[1]
-                vision = RealEventCameraInterface(
+def connect_dvs_cameras(hw):
+    from perception.dvs_camera_reader import discover_devices
+    
+    if hw.dvs_cam_x_port is not None and hw.dvs_cam_y_port is not None:
+        return hw.dvs_cam_x_port, hw.dvs_cam_y_port
+    else:
+        devices = discover_devices()
+        if len(devices) < 2:
+            raise RuntimeError("Need at least 2 DVS cameras for real DVS mode.")
+        return devices[0], devices[1]
+        
+def load_regression_algo(hw):
+    
+    if hw.dvs_regression:
+        from perception.dvs_pose_regression_model import DVSPoseRegressionModel
+        return DVSPoseRegressionModel.load("perception/calibration_files/dvs_pose_regression_model.json")
+    else:
+        return None
+
+def build_real_dvs(params, camera_params):
+    hw = params.hardware
+    
+    cam1_algo, cam2_algo, noise_filter_duration_ms = build_line_algo(hw)
+    
+    cam1_device, cam2_device = connect_dvs_cameras(hw)
+            
+    dvs_regression_model = load_regression_algo(hw)
+    
+    vision = RealEventCameraInterface(
                     camera_params=camera_params,
                     cam1_algo=cam1_algo,
                     cam2_algo=cam2_algo,
                     cam1_device=cam1_device,
                     cam2_device=cam2_device,
+                    dvs_regression_model=dvs_regression_model,
                     noise_filter_duration_ms=noise_filter_duration_ms,
-                )
-                if hw.dvs_use_regression:
-                    from perception.dvs_pose_regression_model import DVSPoseRegressionModel
-
-                    vision.dvs_regression = DVSPoseRegressionModel.load(
-                        "perception/calibration_files/dvs_pose_regression_model.json"
-                    )
-                else:
-                    vision.dvs_regression = None
-                
-            else:
-                vision = SimEventCameraInterface(
-                    camera_params=camera_params,
-                    cam1_algo=cam1_algo,
-                    cam2_algo=cam2_algo,
-                )
-                vision.dvs_regression = None
-
-        else:
-            vision = SimVisionModel(
-                camera_params,
-                noise_std=variant.noise_std,
-                delay_steps=variant.delay_steps
-            )
-    else:
-        vision = None
-
+    )
+    
     return vision
+
+def build_vision(variant, params, camera_params):
+    
+    mode = params.hardware.vision_mode
+
+    if mode == "real_dvs":
+        return build_real_dvs(params, camera_params)
+
+    elif mode == "sim_dvs":
+        return build_sim_dvs(variant, params, camera_params)
+
+    elif mode == "sim_analytic":
+        return build_sim_analytic(variant, params, camera_params)
+
+    else:
+        return None
 
 def build_mechanism(params):
 
@@ -157,11 +185,15 @@ def build_actuator(params, mech):
     )
 
 def build_visualizer(params):
+    
     if not params.run.realtimerender:
         return None
+    
     show_workspace = params.hardware.servo
-    if dvs_cams_connected(params):
+    
+    if params.hardware.vision_mode == "real_dvs":
         return DVSWorkspaceVisualizer(workspace=params.workspace, show_workspace=show_workspace)
+    
     return PencilVisualizerRealtime(show_workspace=show_workspace, workspace=params.workspace)
 
 def build_system(variant, params, camera_params):

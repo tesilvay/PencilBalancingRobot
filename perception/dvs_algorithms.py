@@ -3,6 +3,8 @@ import math
 import numba
 import numpy as np
 
+from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
+
 from core.sim_types import CameraObservation, HoughQuadraticState, HoughTrackerParams
 
 
@@ -238,7 +240,7 @@ class SamLineAlgorithm(DVSLineAlgorithm):
     Fits directly to event batch; no surface accumulation.
     """
 
-    def __init__(self, width, height, min_points=50):
+    def __init__(self, width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50):
         self.W = width
         self.H = height
         self.min_points = min_points

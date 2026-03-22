@@ -3,6 +3,7 @@ import time
 import numpy as np
 from collections import deque
 from perception.camera_model import CameraModel
+from perception.dvs_pose_regression_model import DVSPoseRegressionModel
 from core.sim_types import (
     SystemState,
     CameraParams,
@@ -29,12 +30,8 @@ class VisionModelBase:
     def __init__(self, camera_params: CameraParams):
         self.xr = camera_params.xr
         self.yr = camera_params.yr
-        # Optional learned regression model; when set, it can override analytic pose.
-        self.dvs_regression = None
 
-    # -------------------------------------------------
-    # Reconstruct 3D pose from two camera observations
-    # -------------------------------------------------
+
     def reconstruct(self, cams: CameraPair) -> PoseMeasurement:
 
         b1, s1, b2, s2 = get_measurements(cams)
@@ -48,19 +45,12 @@ class VisionModelBase:
         alpha_x = (s1 + b1 * s2) / denom
         alpha_y = (s2 - b2 * s1) / denom
 
-        # Default analytic pose
         pose = PoseMeasurement(
             X=X,
             Y=Y,
             alpha_x=alpha_x,
             alpha_y=alpha_y,
         )
-
-        # Optional learned multivariate regression override
-        if getattr(self, "dvs_regression", None) is not None:
-            reg_pose = self.dvs_regression.estimate(cams)
-            if np.all(np.isfinite([reg_pose.X, reg_pose.Y, reg_pose.alpha_x, reg_pose.alpha_y])):
-                return reg_pose
 
         return pose
         
@@ -104,13 +94,18 @@ class RealEventCameraInterface(VisionModelBase):
         cam2_algo,
         cam1_device: str,
         cam2_device: str,
+        dvs_regression_model,
         noise_filter_duration_ms: float | None = None,
     ):
         super().__init__(camera_params)
+        
         self.cam1_algo = cam1_algo
         self.cam2_algo = cam2_algo
+        
         self.cam = CameraModel()
 
+        self.dvs_regression_model = dvs_regression_model
+            
         from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
         self._reader1 = DVSReader(cam1_device, noise_filter_duration_ms=noise_filter_duration_ms)
@@ -179,6 +174,42 @@ class RealEventCameraInterface(VisionModelBase):
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
             CameraObservation(slope=obs2.slope, intercept=obs2.intercept),
         )
+
+    def _is_valid_pose(self, pose) -> bool:
+        
+        # 1. Numerical sanity: protects against NaNs, inf, model explosions
+        if not np.all(np.isfinite([pose.X, pose.Y, pose.alpha_x, pose.alpha_y])):
+            return False
+        
+        # maybe try other checks?:
+        '''
+        # 2. Physical bounds
+        if abs(pose.X) > self.xr * 2:
+            return False
+        if abs(pose.Y) > self.yr * 2:
+            return False
+        if abs(pose.alpha_x) > 10 or abs(pose.alpha_y) > 10:
+            return False
+
+        # 3. Consistency with analytic solution
+        analytic = super().reconstruct(cams)
+
+        if abs(pose.X - analytic.X) > 0.05:  # tune this
+            return False
+        if abs(pose.Y - analytic.Y) > 0.05:
+            return False
+        '''
+        return True
+
+    def reconstruct(self, cams):
+
+        if self.dvs_regression_model is not None:
+            pose_from_model = self.dvs_regression_model.estimate(cams)
+
+            if self._is_valid_pose(pose_from_model):
+                return pose_from_model
+
+        return super().reconstruct(cams)
 
     def reset(self):
         """Reset both Hough algorithms."""

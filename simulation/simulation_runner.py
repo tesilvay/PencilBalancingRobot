@@ -1,14 +1,13 @@
 import numpy as np
 import time
 from simulation.simulator import Simulator
+from perception.vision import RealEventCameraInterface
 from core.sim_types import (
     SystemState,
     TableCommand,
     PhysicalParams,
     SimulationResult
 )
-from system_builder import dvs_cams_connected
-
 
 def initialize_histories(steps, initial_state, x_ref, y_ref):
     state_history = np.zeros((steps + 1, 8))
@@ -44,18 +43,20 @@ def run_simulation(
     realtime: bool = False
 ) -> SimulationResult:
 
-    real_mode = dvs_cams_connected(params)
-    real_cams = real_mode  # run indefinitely when real DVS cams connected
+    has_actuator = actuator is not None
+    has_real_vision = isinstance(vision, RealEventCameraInterface)
+
+    run_indefinitely = has_actuator and has_real_vision
+    
     sim = Simulator(
         plant=plant,
         controller=controller,
         vision=vision,
         estimator=estimator,
         dt=dt,
-        real_mode=real_mode,
+        run_indefinitely=run_indefinitely,
     )
 
-    run_indefinitely = real_cams and realtime
     steps = int(total_time / dt) if not run_indefinitely else 0
     paused = False  # only used when run_indefinitely (real DVS + realtime)
     if run_indefinitely:

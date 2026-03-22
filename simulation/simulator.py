@@ -3,14 +3,14 @@ import numpy as np
 
 class Simulator:
 
-    def __init__(self, plant, controller, vision=None, estimator=None, dt=0.001, real_mode: bool = False):
+    def __init__(self, plant, controller, vision=None, estimator=None, dt=0.001, run_indefinitely: bool = False):
         self.plant = plant
         self.controller = controller
         self.vision = vision
         self.estimator = estimator
         self.dt = dt
         self.servo_timer = 0
-        self.real_mode = real_mode
+        self.run_indefinitely = run_indefinitely
 
     def step(
         self,
@@ -20,7 +20,7 @@ class Simulator:
         actuator_dt: float,
     ) -> tuple[SystemState, TableCommand, TableAccel, object, object]:
 
-        if self.real_mode:
+        if self.run_indefinitely:
             # No plant: use vision -> estimator -> controller. state_x_true is previous state_est.
             table_acc = TableAccel(x_ddot=0.0, y_ddot=0.0)
         else:
@@ -58,5 +58,5 @@ class Simulator:
         self.servo_timer += self.dt
 
         # Real mode: return state_est (no true state). Sim: return state_x_true.
-        state_out = state_x_est if self.real_mode else state_x_true
+        state_out = state_x_est if self.run_indefinitely else state_x_true
         return state_out, command_u, table_acc, measurement, pose

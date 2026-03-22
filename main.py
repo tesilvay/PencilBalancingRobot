@@ -47,11 +47,10 @@ def main(mode):
                 servo_port="/dev/ttyUSB0", # None uses a mock controller
                 servo_frequency=250,
                 
-                dvs_cam=False,
+                vision_mode = "sim_analytic", # "real_dvs" | "sim_dvs" | "sim_analytic"
+                
                 dvs_use_regression=True,
                 
-                dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
-                dvs_cam_y_port=None,
                 dvs_algo="hough",  # "hough" | "sam"
                 dvs_sam_noise_filter_duration_ms=5,  # None = no filter; 5–10 for low-latency
                 dvs_hough=HoughTrackerParams(
