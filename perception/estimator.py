@@ -17,7 +17,7 @@ class BaseEstimator:
         raise NotImplementedError
 
     def reset(self):
-        pass
+        raise NotImplementedError
 
 
 class FiniteDifferenceEstimator(BaseEstimator):
@@ -33,28 +33,26 @@ class FiniteDifferenceEstimator(BaseEstimator):
     ) -> SystemState:
 
         if self.prev_pose is None:
-            # First call: no velocity info
-            x_dot = 0.0
-            y_dot = 0.0
-            alpha_x_dot = 0.0
-            alpha_y_dot = 0.0
+            vel = np.zeros(4)
         else:
-            x_dot = (pose.X - self.prev_pose.X) / dt
-            y_dot = (pose.Y - self.prev_pose.Y) / dt
-            alpha_x_dot = (pose.alpha_x - self.prev_pose.alpha_x) / dt
-            alpha_y_dot = (pose.alpha_y - self.prev_pose.alpha_y) / dt
+            vel = np.array([
+                (pose.X - self.prev_pose.X) / dt,
+                (pose.alpha_x - self.prev_pose.alpha_x) / dt,
+                (pose.Y - self.prev_pose.Y) / dt,
+                (pose.alpha_y - self.prev_pose.alpha_y) / dt
+            ])
 
         self.prev_pose = pose
 
         return SystemState(
             x=pose.X,
-            x_dot=x_dot,
+            x_dot=vel[0],
             alpha_x=pose.alpha_x,
-            alpha_x_dot=alpha_x_dot,
+            alpha_x_dot=vel[1],
             y=pose.Y,
-            y_dot=y_dot,
+            y_dot=vel[2],
             alpha_y=pose.alpha_y,
-            alpha_y_dot=alpha_y_dot
+            alpha_y_dot=vel[3]
         )
     
     def reset(self):
@@ -68,7 +66,12 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
         self.prev_vel = np.zeros(4)
         self.alpha = 0.95 if alpha is None else alpha
 
-    def update(self, pose, dt, command_u: TableCommand | None = None):
+    def update(
+        self,
+        pose: PoseMeasurement,
+        dt: float,
+        command_u: TableCommand | None = None,
+    ) -> SystemState:
 
         if self.prev_pose is None:
             vel = np.zeros(4)
