@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from collections import defaultdict
-from utils.io_utils import load_benchmark_results
 import os
 import json
 
@@ -55,199 +53,131 @@ def json_to_rows(data):
     return rows
 
 
-# ============================================================
-# 1) Robustness Curves: Stability vs Noise
-# ============================================================
-
-def plot_stability_vs_noise(rows):
+def _noise_x_for_semilogx(noise_levels):
     """
-    For each controller, create 4 subplots (one per estimator).
-    Lines show delay levels.
+    σ=0 is invalid on a log axis; place it slightly left of the smallest nonzero tick
+    (same convention as benchmarks/estimator_benchmark.py).
     """
+    noise_arr = np.asarray(noise_levels, dtype=float)
+    pos = noise_arr[noise_arr > 0]
+    min_pos = float(np.min(pos)) if pos.size else 1e-10
+    return np.where(noise_arr > 0, noise_arr, min_pos * 0.2)
 
+
+def _matrix_for_combo(rows, controller, estimator, field, noise_levels, delays):
+    """Rows: noise index × delay index. Missing entries are nan; None settling → nan."""
+    lookup = {}
+    for r in rows:
+        if r["controller"] == controller and r["estimator"] == estimator:
+            lookup[(r["noise"], r["delay"])] = r[field]
+
+    mat = np.full((len(noise_levels), len(delays)), np.nan, dtype=float)
+    for i, n in enumerate(noise_levels):
+        for j, d in enumerate(delays):
+            if (n, d) not in lookup:
+                continue
+            val = lookup[(n, d)]
+            if field == "settling" and val is None:
+                mat[i, j] = np.nan
+            else:
+                mat[i, j] = float(val)
+    return mat
+
+
+def _plot_metric_vs_noise_logx(
+    rows,
+    field,
+    ylabel,
+    title,
+    y_transform=None,
+):
+    """
+    Single figure: x = measurement noise σ (log), one line per controller–estimator
+    pair. Uses the highest delay column (sorted), matching estimator_benchmark curves.
+    """
     controllers = sorted(set(r["controller"] for r in rows))
     estimators = sorted(set(r["estimator"] for r in rows))
     delays = sorted(set(r["delay"] for r in rows))
+    noise_levels = sorted(set(r["noise"] for r in rows))
 
-    for controller in controllers:
+    x_plot = _noise_x_for_semilogx(noise_levels)
 
-        fig, axes = plt.subplots(2, 2, figsize=(12, 8))
-        axes = axes.flatten()
+    fig, ax = plt.subplots(figsize=(10, 6))
 
-        fig.suptitle(f"Stability vs Noise - Controller: {controller}", fontsize=14)
+    for c in controllers:
+        for e in estimators:
+            mat = _matrix_for_combo(rows, c, e, field, noise_levels, delays)
+            if np.all(np.isnan(mat)):
+                continue
+            y_curve = mat[:, -1].copy()
+            if y_transform is not None:
+                y_curve = y_transform(y_curve)
+            if np.all(np.isnan(y_curve)):
+                continue
+            label = f"{c} + {e}"
+            ax.semilogx(x_plot, y_curve, marker="o", label=label)
 
-        for idx, estimator in enumerate(estimators):
-            ax = axes[idx]
-
-            subset = [
-                r for r in rows
-                if r["controller"] == controller
-                and r["estimator"] == estimator
-            ]
-
-            noises = sorted(set(r["noise"] for r in subset))
-
-            for delay in delays:
-                y = []
-                for noise in noises:
-                    val = next(
-                        r["stability"]
-                        for r in subset
-                        if r["noise"] == noise and r["delay"] == delay
-                    )
-                    y.append(val)
-
-                ax.plot(noises, y, marker="o", label=f"Delay={delay}")
-
-            ax.set_title(f"Estimator: {estimator}")
-            ax.set_xlabel("Noise Std")
-            ax.set_ylabel("Stability Rate")
-            ax.set_ylim(0, 1.05)
-            ax.grid(True)
-            ax.legend()
-
-        plt.tight_layout()
-        plt.show()
-
-
-# ============================================================
-# 2) Stability Heatmaps (Noise x Delay)
-# ============================================================
-
-def plot_stability_heatmaps(rows):
-    """
-    Heatmap per (controller, estimator).
-    """
-
-    controllers = sorted(set(r["controller"] for r in rows))
-    estimators = sorted(set(r["estimator"] for r in rows))
-
-    for controller in controllers:
-        for estimator in estimators:
-
-            subset = [
-                r for r in rows
-                if r["controller"] == controller
-                and r["estimator"] == estimator
-            ]
-
-            noises = sorted(set(r["noise"] for r in subset))
-            delays = sorted(set(r["delay"] for r in subset))
-
-            Z = np.zeros((len(delays), len(noises)))
-
-            for r in subset:
-                i = delays.index(r["delay"])
-                j = noises.index(r["noise"])
-                Z[i, j] = r["stability"]
-
-            plt.figure(figsize=(6, 4))
-            plt.imshow(Z, aspect="auto", origin="lower")
-            plt.xticks(range(len(noises)), noises)
-            plt.yticks(range(len(delays)), delays)
-            plt.xlabel("Noise Std")
-            plt.ylabel("Delay Steps")
-            plt.title(f"Stability Heatmap - {controller} + {estimator}")
-            plt.colorbar(label="Stability Rate")
-            plt.tight_layout()
-            plt.show()
-
-
-# ============================================================
-# 3) Effort vs Stability Tradeoff
-# ============================================================
-
-def plot_effort_vs_stability(rows):
-    """
-    Scatter plot showing control effort vs stability.
-    """
-
-    controllers = sorted(set(r["controller"] for r in rows))
-    markers = ["o", "s", "^", "D"]
-    estimator_list = sorted(set(r["estimator"] for r in rows))
-
-    plt.figure(figsize=(8, 6))
-
-    for i, estimator in enumerate(estimator_list):
-        subset = [r for r in rows if r["estimator"] == estimator]
-
-        x = [r["avg_acc"] for r in subset]
-        y = [r["stability"] for r in subset]
-
-        plt.scatter(
-            x,
-            y,
-            marker=markers[i % len(markers)],
-            label=f"{estimator}",
-            alpha=0.7
-        )
-
-    plt.xlabel("Average Acceleration (m/s²)")
-    plt.ylabel("Stability Rate")
-    plt.title("Control Effort vs Stability")
-    plt.grid(True)
-    plt.legend()
+    ax.set_xlabel("Measurement noise σ (std); σ=0 shown at leftmost point")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.legend()
+    ax.grid(True, which="major", ls="-", alpha=0.4)
+    ax.grid(True, which="minor", ls=":", alpha=0.25)
     plt.tight_layout()
     plt.show()
 
 
 # ============================================================
-# 4) Settling Time Comparison (Only Stable Cases)
+# 1) Robustness Curves: Stability vs Noise (log σ)
 # ============================================================
 
-def plot_settling_time(rows, stability_threshold=0.95):
-    """
-    Bar chart of settling times for stable configurations.
-    """
+def plot_stability_vs_noise(rows):
+    """Stability (%) vs noise σ; one line per controller–estimator pair."""
 
-    stable_rows = [
-        r for r in rows
-        if r["stability"] >= stability_threshold
-        and r["settling"] is not None
-    ]
+    def pct(y):
+        out = y * 100.0
+        return out
 
-    labels = []
-    settling_times = []
-
-    for r in stable_rows:
-        label = f"{r['controller']}-{r['estimator']}\nN={r['noise']},D={r['delay']}"
-        labels.append(label)
-        settling_times.append(r["settling"])
-
-    plt.figure(figsize=(14, 6))
-    plt.bar(range(len(settling_times)), settling_times)
-    plt.xticks(range(len(labels)), labels, rotation=90)
-    plt.ylabel("Settling Time (s)")
-    plt.title("Settling Time (Stable Configurations Only)")
-    plt.tight_layout()
-    plt.show()
+    _plot_metric_vs_noise_logx(
+        rows,
+        field="stability",
+        ylabel="Stability (%)",
+        title="Stability vs Measurement Noise",
+        y_transform=pct,
+    )
 
 
 # ============================================================
-# 5) Acceleration Explosion Detection
+# 4) Settling Time vs Noise (log σ)
+# ============================================================
+
+def plot_settling_time(rows):
+    """
+    Average settling time vs noise σ; one line per controller–estimator pair.
+    Missing settling (nan) breaks the line segment at that noise level.
+    """
+    _plot_metric_vs_noise_logx(
+        rows,
+        field="settling",
+        ylabel="Avg settling time (s)",
+        title="Settling Time vs Measurement Noise",
+        y_transform=None,
+    )
+
+
+# ============================================================
+# 5) Max Acceleration vs Noise (log σ)
 # ============================================================
 
 def plot_max_acceleration(rows):
-    """
-    Visualizes worst-case acceleration (log scale useful).
-    """
-
-    labels = []
-    max_accs = []
-
-    for r in rows:
-        label = f"{r['controller']}-{r['estimator']}\nN={r['noise']},D={r['delay']}"
-        labels.append(label)
-        max_accs.append(r["max_acc"])
-
-    plt.figure(figsize=(14, 6))
-    plt.bar(range(len(max_accs)), max_accs)
-    plt.yscale("log")
-    plt.xticks(range(len(labels)), labels, rotation=90)
-    plt.ylabel("Max Acceleration (log scale)")
-    plt.title("Maximum Acceleration Across Configurations")
-    plt.tight_layout()
-    plt.show()
+    """Peak acceleration vs noise σ; one line per controller–estimator pair."""
+    _plot_metric_vs_noise_logx(
+        rows,
+        field="max_acc",
+        ylabel="Max acceleration (m/s²)",
+        title="Max Acceleration vs Measurement Noise",
+        y_transform=None,
+    )
 
 
 # ============================================================
@@ -263,12 +193,8 @@ def run_full_analysis():
     rows = json_to_rows(data)
 
     plot_stability_vs_noise(rows)
-    plot_stability_heatmaps(rows)
-    plot_effort_vs_stability(rows)
     plot_settling_time(rows)
     plot_max_acceleration(rows)
-    
-    
 
 
 def plot_state_history(state_history, x_ref, dt=0.001):

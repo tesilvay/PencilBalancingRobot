@@ -56,7 +56,7 @@ def build_estimator(variant, params):
         elif variant.estimator_type == "kalman":
             Qk = np.eye(8) * 1e-6
             Rk = np.eye(4) * variant.noise_std**2
-            estimator = KalmanEstimator(A, dt=0.001, Q=Qk, R=Rk)
+            estimator = KalmanEstimator(A, B, dt=0.001, Q=Qk, R=Rk)
     else:
         estimator = None
     

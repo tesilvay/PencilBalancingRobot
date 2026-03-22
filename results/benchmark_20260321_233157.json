@@ -1,0 +1,395 @@
+{
+    "metadata": {
+        "timestamp": "20260321_233157",
+        "physical_params": {
+            "plant": {
+                "g": 9.81,
+                "com_length": 0.1,
+                "tau": 0.04,
+                "zeta": 0.7,
+                "num_states": 8,
+                "max_acc": 29.43
+            },
+            "workspace": {
+                "x_ref": 0.0,
+                "y_ref": 0.0,
+                "safe_radius": 0.108
+            },
+            "mechanism": {
+                "O": [
+                    128.77,
+                    178.13
+                ],
+                "B": [
+                    101.77,
+                    210.13
+                ],
+                "la": 175,
+                "lb": 175
+            },
+            "hardware": {
+                "servo": false,
+                "servo_port": "/dev/ttyUSB0",
+                "dvs_cam": false,
+                "dvs_cam_x_port": null,
+                "dvs_cam_y_port": null,
+                "servo_frequency": 250,
+                "dvs_algo": "hough",
+                "dvs_sam_noise_filter_duration_ms": 5,
+                "dvs_hough": {
+                    "mixing_factor": 0.02,
+                    "inlier_stddev_px": 4.0,
+                    "min_determinant": 1e-06
+                },
+                "dvs_use_regression": true
+            },
+            "run": {
+                "save_video": false,
+                "realtimerender": false,
+                "total_time": 5.0,
+                "stability_tolerance": 0.3,
+                "estimator_lpf_alpha": null,
+                "initial_angle_spread_deg": 10,
+                "initial_position_spread_m": 0.05
+            }
+        }
+    },
+    "results": [
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.0007000000000000001,
+                "max_acc": 29.429980779933125,
+                "avg_acc": 25.577226796380927
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.001,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.00075,
+                "max_acc": 29.429837583607586,
+                "avg_acc": 25.10317840405116
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.01,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.007885,
+                "max_acc": 29.429999999944144,
+                "avg_acc": 29.42999016500365
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.05,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.025,
+                "avg_settling_time": 0.0526,
+                "max_acc": 29.429999996533763,
+                "avg_acc": 29.42649378523889
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.1,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 29.429999996051766,
+                "avg_acc": 29.427673299956467
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "lpf",
+                "noise_std": 0.2,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 29.429999998101135,
+                "avg_acc": 29.42854639669312
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "kalman",
+                "noise_std": 0,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.53,
+                "avg_settling_time": 0.0010566037735849057,
+                "max_acc": 29.4299997895099,
+                "avg_acc": 25.24597541589274
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "kalman",
+                "noise_std": 0.001,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.605,
+                "avg_settling_time": 0.01771900826446281,
+                "max_acc": 29.429999993634873,
+                "avg_acc": 25.708516795464046
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "kalman",
+                "noise_std": 0.01,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.655,
+                "avg_settling_time": 0.008687022900763359,
+                "max_acc": 29.429999999042934,
+                "avg_acc": 25.980903469393763
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "kalman",
+                "noise_std": 0.05,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.77,
+                "avg_settling_time": 0.0279025974025974,
+                "max_acc": 29.429999997852132,
+                "avg_acc": 27.576913741625845
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "kalman",
+                "noise_std": 0.1,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.855,
+                "avg_settling_time": 0.013707602339181287,
+                "max_acc": 29.429999893375246,
+                "avg_acc": 28.927222388849295
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "lqr",
+                "estimator_type": "kalman",
+                "noise_std": 0.2,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.725,
+                "avg_settling_time": 0.10747586206896552,
+                "max_acc": 29.429999999883737,
+                "avg_acc": 29.397803719502278
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "lpf",
+                "noise_std": 0,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.0014200000000000003,
+                "max_acc": 29.429960789702736,
+                "avg_acc": 25.83799559327591
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "lpf",
+                "noise_std": 0.001,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.005834999999999999,
+                "max_acc": 29.429997775521034,
+                "avg_acc": 26.255364894720305
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "lpf",
+                "noise_std": 0.01,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 1.0,
+                "avg_settling_time": 0.013919999999999998,
+                "max_acc": 29.429999999999993,
+                "avg_acc": 29.429995707903934
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "lpf",
+                "noise_std": 0.05,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 29.429999999651805,
+                "avg_acc": 29.426111624461193
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "lpf",
+                "noise_std": 0.1,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 29.42999999772907,
+                "avg_acc": 29.427383370119482
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "lpf",
+                "noise_std": 0.2,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.0,
+                "avg_settling_time": null,
+                "max_acc": 29.429999999662478,
+                "avg_acc": 29.428639237096505
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "kalman",
+                "noise_std": 0,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.375,
+                "avg_settling_time": 0.004426666666666667,
+                "max_acc": 29.42999999880609,
+                "avg_acc": 26.261869731444737
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "kalman",
+                "noise_std": 0.001,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.39,
+                "avg_settling_time": 0.001435897435897436,
+                "max_acc": 29.429998992244286,
+                "avg_acc": 26.018097391379243
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "kalman",
+                "noise_std": 0.01,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.545,
+                "avg_settling_time": 0.010256880733944953,
+                "max_acc": 29.42999958970019,
+                "avg_acc": 27.12404738422797
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "kalman",
+                "noise_std": 0.05,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.63,
+                "avg_settling_time": 0.0123015873015873,
+                "max_acc": 29.42999994918285,
+                "avg_acc": 28.293523578826935
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "kalman",
+                "noise_std": 0.1,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.685,
+                "avg_settling_time": 0.022941605839416058,
+                "max_acc": 29.42999998406803,
+                "avg_acc": 29.208238522892643
+            }
+        },
+        {
+            "variant": {
+                "controller_type": "pole",
+                "estimator_type": "kalman",
+                "noise_std": 0.2,
+                "delay_steps": 1
+            },
+            "summary": {
+                "stability_rate": 0.465,
+                "avg_settling_time": 0.09427956989247313,
+                "max_acc": 29.42999999998252,
+                "avg_acc": 29.386927330066364
+            }
+        }
+    ]
+}

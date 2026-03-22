@@ -61,7 +61,7 @@ def run_benchmark_single(setup: ExperimentSetup):
     # prevents dvs from starting in the benchmark
     setup.params.run.realtimerender = False
 
-    plant, controller, vision, estimator, mech, _, _ = build_system(
+    plant, controller, vision, estimator, _, _, _ = build_system(
         setup.default_variant, setup.params, setup.camera_params
     )
 
@@ -71,7 +71,6 @@ def run_benchmark_single(setup: ExperimentSetup):
         controller=controller,
         vision=vision,
         estimator=estimator,
-        mech=mech,
         n_trials=200,
         show_progress=True,
         progress_prefix="Trial",
@@ -83,9 +82,9 @@ def run_benchmark_single(setup: ExperimentSetup):
 
 def run_benchmark_all(setup: ExperimentSetup):
 
-    controllers = ["lqr"]
-    estimators = ["lpf"]
-    noises = [0, 1e-3, 1e-2, 5e-2, 1e-1]
+    controllers = ["lqr", "pole"]
+    estimators = ["lpf", "kalman"]
+    noises = [0, 1e-3, 1e-2, 5e-2, 1e-1, 2e-1]
     delays = [1]
 
     all_results = []

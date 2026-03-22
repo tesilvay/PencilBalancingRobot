@@ -43,11 +43,11 @@ def main(mode):
             ),
             hardware=HardwareParams(
                 
-                servo=True,
+                servo=False,
                 servo_port="/dev/ttyUSB0", # None uses a mock controller
                 servo_frequency=250,
                 
-                dvs_cam=True,
+                dvs_cam=False,
                 dvs_use_regression=True,
                 
                 dvs_cam_x_port=None,  # or serials for real DVS; None uses discovery
@@ -62,19 +62,19 @@ def main(mode):
             ),
             run=RunParams(
                 save_video=False,
-                realtimerender=True,
+                realtimerender=False,
                 total_time=5.0,  # 5s for single-run validation
                 stability_tolerance=0.3,  # max |angle| rad: ~0.05 strict standing; ~0.3 at least upright (fell vs not)
                 estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)
-                initial_angle_spread_deg=12,
-                initial_position_spread_m=0.060,
+                initial_angle_spread_deg=10,
+                initial_position_spread_m=0.050,
             ),
         ),
         camera_params=CameraParams(xr=0.170, yr=0.176),
         default_variant=BenchmarkVariant(
             controller_type="lqr",
-            estimator_type="lpf",
-            noise_std=0.01,
+            estimator_type="kalman",
+            noise_std=0.001,
             delay_steps=1,
         ),
     )
@@ -84,14 +84,14 @@ def main(mode):
         print("\n=== Single Trial ===")
         print(format_summary(summary, setup.default_variant, setup.params))
 
-    elif mode == "benchmark_single":
+    elif mode == "benchmark":
         # Shorter total_time for faster benchmark (200 trials)
         setup.params.run.total_time = 2.0
         summary = run_benchmark_single(setup)
         print("\n=== Monte Carlo Benchmark ===")
         print(format_summary(summary, setup.default_variant, setup.params))
 
-    elif mode == "sweep_workspace":
+    elif mode == "sweep":
         sweep_workspace(
             setup,
             workspace_min_diameter_mm=40,
@@ -99,11 +99,12 @@ def main(mode):
             n_sizes=20,
         )
 
-    elif mode == "benchmark_all_configs":
+    elif mode == "benchmark_all":
+        setup.params.run.total_time = 2.0
         results = run_benchmark_all(setup)
         save_benchmark_results(results)
 
-    elif mode == "graph_results":
+    elif mode == "graph":
         run_full_analysis()
 
     else:
@@ -115,10 +116,10 @@ if __name__ == "__main__":
     parser.add_argument("--mode",
                         default="single",
                         choices=["single",
-                                 "benchmark_single",
-                                 "benchmark_all_configs",
-                                 "graph_results",
-                                 "sweep_workspace"])
+                                 "benchmark",
+                                 "benchmark_all",
+                                 "graph",
+                                 "sweep"])
     args = parser.parse_args()
 
     main(args.mode)

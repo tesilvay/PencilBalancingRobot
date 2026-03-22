@@ -42,7 +42,9 @@ class Simulator:
                 pose = None
             else:
                 pose = self.vision.reconstruct(measurement)
-                state_x_est = self.estimator.update(pose, self.dt)
+                state_x_est = self.estimator.update(
+                    pose, self.dt, command_u
+                )
         else:
             state_x_est = state_x_true
             measurement = None
