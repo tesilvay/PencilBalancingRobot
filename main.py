@@ -1,6 +1,8 @@
 # main.py
 import argparse
-from experiments.experiments import run_single, run_benchmark_single, run_benchmark_all, format_summary, sweep_workspace
+from experiments.experiments import SingleExperiment, MonteCarloExperiment, BenchmarkExperiment, RealExperiment, WorkspaceSweepExperiment
+from experiments.utils import print_summary
+from simulation.engine import RealTimeEngine, SimulationEngine
 from core.sim_types import (
     PhysicalParams,
     PlantParams,
@@ -79,36 +81,81 @@ def main(mode):
         ),
     )
 
+
     if mode == "single":
-        summary = run_single(setup)
-        print("\n=== Single Trial ===")
-        print(format_summary(summary, setup.default_variant, setup.params))
+        engine = SimulationEngine()
+        experiment = SingleExperiment(engine)
+
+    elif mode == "real":
+        engine = RealTimeEngine()
+        experiment = RealExperiment(engine)
+
+    elif mode == "montecarlo":
+        engine = SimulationEngine()
+        experiment = MonteCarloExperiment(engine, n_trials=200)
 
     elif mode == "benchmark":
-        # Shorter total_time for faster benchmark (200 trials)
-        setup.params.run.total_time = 2.0
-        summary = run_benchmark_single(setup)
-        print("\n=== Monte Carlo Benchmark ===")
-        print(format_summary(summary, setup.default_variant, setup.params))
-
-    elif mode == "sweep":
-        sweep_workspace(
-            setup,
-            workspace_min_diameter_mm=40,
-            workspace_max_diameter_mm=80,
-            n_sizes=20,
+        engine = SimulationEngine()
+        experiment = BenchmarkExperiment(
+            engine,
+            variants=build_default_variants(),
+            n_trials=200
         )
 
-    elif mode == "benchmark_all":
-        setup.params.run.total_time = 2.0
-        results = run_benchmark_all(setup)
-        save_benchmark_results(results)
+    elif mode == "sweep":
+        engine = SimulationEngine()
+        experiment = WorkspaceSweepExperiment(
+            engine,
+            min_diameter_mm=40,
+            max_diameter_mm=80,
+            n_sizes=20,
+            n_trials=200,
+        )
 
     elif mode == "graph":
         run_full_analysis()
+        return
 
     else:
-        raise ValueError("Unknown mode")
+        raise ValueError(f"Unknown mode: {mode}")
+
+
+    result = experiment.run(setup)
+    
+    # output
+
+    if mode == "benchmark":
+        save_benchmark_results(result)
+
+    elif mode in ["single", "montecarlo", "real"]:
+        print_summary(result)
+
+    elif mode == "sweep":
+        pass  # already plotted internally
+
+
+def build_default_variants():
+    controllers = ["lqr", "pole"]
+    estimators = ["lpf", "kalman"]
+    noises = [0, 1e-3, 1e-2, 5e-2, 1e-1, 2e-1]
+    delays = [1]
+
+    variants = []
+
+    for c in controllers:
+        for e in estimators:
+            for n in noises:
+                for d in delays:
+                    variants.append(
+                        BenchmarkVariant(
+                            controller_type=c,
+                            estimator_type=e,
+                            noise_std=n,
+                            delay_steps=d,
+                        )
+                    )
+
+    return variants
 
 
 if __name__ == "__main__":
@@ -116,8 +163,9 @@ if __name__ == "__main__":
     parser.add_argument("--mode",
                         default="single",
                         choices=["single",
+                                 "real",
+                                 "montecarlo",
                                  "benchmark",
-                                 "benchmark_all",
                                  "graph",
                                  "sweep"])
     args = parser.parse_args()

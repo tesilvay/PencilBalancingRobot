@@ -1,3 +1,4 @@
+# system_builder.py
 import numpy as np
 from warnings import warn
 from visualization.realtime_visualizer import PencilVisualizerRealtime, DVSWorkspaceVisualizer
@@ -6,7 +7,7 @@ from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDiffere
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
 from core.model import BuildLinearModel
 from core.plant import BalancerPlant
-from core.sim_types import make_reference_state
+from core.sim_types import make_reference_state, StopPolicy
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
 from hardware.Servo_System import ServoSystem
@@ -217,16 +218,11 @@ def build_scheduler(params):
     actuator_dt, render_dt = calculate_rates(params)
     return Scheduler(dt=params.run.dt, actuator_dt=actuator_dt, render_dt=render_dt)
   
-def build_stop_condition(params, n_trials):
+def build_stop_condition(params, policy: str):
     run = params.run
 
-    real_time = run.realtimerender
-    total_time = run.total_time
-    dt = run.dt
+    steps = int(run.total_time / run.dt)
 
-    steps = int(total_time / dt)
-
-    # ---- atomic conditions ----
     max_steps = MaxSteps(steps)
     fall = FallCondition()
     stabilize = StabilizedCondition(
@@ -234,20 +230,17 @@ def build_stop_condition(params, n_trials):
         settle_time=0.5,
     )
 
-    # ---- mode selection ----
-    if real_time:
-        # real system: never stop (or optionally only on failure)
-        return Infinite()
-        # alternative (safer):
-        # return AnyStop([fall])
+    if policy == StopPolicy.FIXED_TIME:
+        return max_steps
 
-    elif n_trials == 1:
-        # visualization: no early stop
-        return AnyStop([max_steps])
+    elif policy == StopPolicy.EARLY_STOP:
+        return AnyStop([max_steps, fall, stabilize])
+
+    elif policy == StopPolicy.INFINITE:
+        return Infinite()
 
     else:
-        # batch experiments: full logic
-        return AnyStop([max_steps, fall, stabilize])
+        raise ValueError(f"Unknown stop policy: {policy}")
   
 def build_pacing(params):
     
@@ -259,7 +252,11 @@ def build_pacing(params):
         return NoPacing()
     
 
-def system_factory(variant, params, camera_params):
+def system_factory(setup):
+    
+    variant = setup.default_variant
+    params = setup.params
+    camera_params = setup.camera_params
     
     plant = build_plant(params)
 
@@ -275,11 +272,11 @@ def system_factory(variant, params, camera_params):
     
     return system
 
-def runner_factory(params, system, n_trials):
+def runner_factory(params, system, stop_policy):
     
     scheduler = build_scheduler(params)
     
-    stop_condition = build_stop_condition(params, n_trials)
+    stop_condition = build_stop_condition(params, stop_policy)
     
     pacing = build_pacing(params)
     
@@ -301,4 +298,4 @@ def runner_factory(params, system, n_trials):
         visualizer=visualizer,
     )
     
-    return runner, logger
+    return runner

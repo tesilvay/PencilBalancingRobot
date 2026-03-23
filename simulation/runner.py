@@ -1,3 +1,5 @@
+from core.sim_types import SimulationResult, TerminalInfo
+
 class ExperimentRunner:
     def __init__(
         self,
@@ -72,5 +74,15 @@ class ExperimentRunner:
 
             i += 1
     
-        if self.logger:
-            return self.logger.get_result()
+        terminal = TerminalInfo(
+            stabilized=self.stop_condition.is_stabilized(),
+            settling_time=self.stop_condition.settling_time()
+        )
+        result = self.logger.get_result()
+        
+        return SimulationResult(
+            state_history=result.state_history,
+            acc_history=result.acc_history,
+            cmd_history=result.cmd_history,
+            terminal=terminal
+        )

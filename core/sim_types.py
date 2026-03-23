@@ -185,14 +185,6 @@ class PhysicalParams:
         if self.run is None:
             self.run = RunParams()
 
-
-@dataclass
-class SimulationResult:
-    state_history: np.ndarray
-    acc_history: np.ndarray
-    mech_history: np.ndarray | None = None
-    cmd_history: np.ndarray | None = None  # (N, 2) table command (x_des, y_des) at sim frequency, N = len(state_history)
-
 @dataclass
 class BenchmarkVariant:
     """One point in the benchmark sweep: controller, estimator, noise, delay."""
@@ -229,3 +221,22 @@ class BenchmarkResult:
     params: PhysicalParams
     variant: BenchmarkVariant
     summary: BenchmarkSummary
+
+@dataclass
+class TerminalInfo:
+    stabilized: bool
+    settling_time: float | None
+
+@dataclass
+class SimulationResult:
+    state_history: np.ndarray
+    acc_history: np.ndarray
+    mech_history: np.ndarray | None = None
+    cmd_history: np.ndarray | None = None 
+    terminal: TerminalInfo | None = None
+
+@dataclass
+class StopPolicy:
+    FIXED_TIME = "fixed_time"
+    EARLY_STOP = "early_stop"
+    INFINITE = "infinite"
