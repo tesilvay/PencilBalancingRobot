@@ -18,7 +18,16 @@ from typing import Any, Dict
 import numpy as np
 
 from core.sim_types import CameraPair, PoseMeasurement
-from perception.vision import get_measurements
+#from perception.vision import get_measurements
+
+def get_measurements(cams: CameraPair):
+    b1 = cams.cam1.intercept
+    s1 = cams.cam1.slope
+
+    b2 = cams.cam2.intercept
+    s2 = cams.cam2.slope
+    
+    return b1, s1, b2, s2
 
 
 class DVSPoseRegressionModel:

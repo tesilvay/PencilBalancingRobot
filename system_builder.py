@@ -3,7 +3,7 @@ from warnings import warn
 from visualization.realtime_visualizer import PencilVisualizerRealtime, DVSWorkspaceVisualizer
 from core.controller import NullController, PolePlacementController, LQRController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
-from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface
+from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
 from core.model import BuildLinearModel
 from core.plant import BalancerPlant
 from core.sim_types import make_reference_state
@@ -11,6 +11,13 @@ from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
 from hardware.Servo_System import ServoSystem
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, SurfaceRegressionAlgorithm
+from simulation.stop_conditions import MaxSteps, FallCondition, StabilizedCondition, AnyStop, Infinite
+from simulation.pacing import NoPacing, RealTimePacing
+from simulation.logger import Logger
+from simulation.system import System
+from simulation.scheduler import Scheduler
+from simulation.runner import ExperimentRunner
+
 
 def build_plant(params):
     plant = BalancerPlant(params)
@@ -196,8 +203,64 @@ def build_visualizer(params):
     
     return PencilVisualizerRealtime(show_workspace=show_workspace, workspace=params.workspace)
 
-def build_system(variant, params, camera_params):
+def calculate_rates(params):
+    
+    actuator_rate = params.hardware.servo_frequency
+    render_rate = 30
+    
+    actuator_dt = 1 / actuator_rate
+    render_dt = 1 / render_rate
+    
+    return actuator_dt, render_dt
 
+def build_scheduler(params):
+    actuator_dt, render_dt = calculate_rates(params)
+    return Scheduler(dt=params.run.dt, actuator_dt=actuator_dt, render_dt=render_dt)
+  
+def build_stop_condition(params, n_trials):
+    run = params.run
+
+    real_time = run.realtimerender
+    total_time = run.total_time
+    dt = run.dt
+
+    steps = int(total_time / dt)
+
+    # ---- atomic conditions ----
+    max_steps = MaxSteps(steps)
+    fall = FallCondition()
+    stabilize = StabilizedCondition(
+        tol=run.stability_tolerance,
+        settle_time=0.5,
+    )
+
+    # ---- mode selection ----
+    if real_time:
+        # real system: never stop (or optionally only on failure)
+        return Infinite()
+        # alternative (safer):
+        # return AnyStop([fall])
+
+    elif n_trials == 1:
+        # visualization: no early stop
+        return AnyStop([max_steps])
+
+    else:
+        # batch experiments: full logic
+        return AnyStop([max_steps, fall, stabilize])
+  
+def build_pacing(params):
+    
+    real_time = params.run.realtimerender
+    
+    if real_time:
+        return RealTimePacing(params.run.dt)
+    else:
+        return NoPacing()
+    
+
+def system_factory(variant, params, camera_params):
+    
     plant = build_plant(params)
 
     controller = build_controller(variant, params)
@@ -205,11 +268,37 @@ def build_system(variant, params, camera_params):
     estimator = build_estimator(variant, params)
     
     vision = build_vision(variant, params, camera_params)
+
+    perception = Perception(vision, estimator)
+    
+    system = System(plant, perception, controller, params.run.dt)
+    
+    return system
+
+def runner_factory(params, system, n_trials):
+    
+    scheduler = build_scheduler(params)
+    
+    stop_condition = build_stop_condition(params, n_trials)
+    
+    pacing = build_pacing(params)
+    
+    logger = Logger()
     
     mech = build_mechanism(params)
     
     actuator = build_actuator(params, mech)
     
     visualizer = build_visualizer(params)
-
-    return plant, controller, vision, estimator, mech, actuator, visualizer
+    
+    runner = ExperimentRunner(
+        system=system,
+        scheduler=scheduler,
+        stop_condition=stop_condition,
+        pacing=pacing,
+        logger=logger,
+        actuator=actuator,
+        visualizer=visualizer,
+    )
+    
+    return runner, logger

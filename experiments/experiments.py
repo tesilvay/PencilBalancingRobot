@@ -3,7 +3,7 @@ import numpy as np
 from experiments.monte_carlo import run_region_trials, summarize_results
 from core.sim_types import BenchmarkResult, BenchmarkVariant, ExperimentSetup
 from analysis.workspace_plotter import plot_workspace_results
-from system_builder import build_system
+
 
 
 def format_summary(summary, variant, params):
@@ -35,22 +35,10 @@ def format_summary(summary, variant, params):
 
 
 def run_single(setup: ExperimentSetup):
-
-    plant, controller, vision, estimator, mech, actuator, visualizer = build_system(
-        setup.default_variant, setup.params, setup.camera_params
-    )
-
+    
     results = run_region_trials(
-        params=setup.params,
-        plant=plant,
-        controller=controller,
-        vision=vision,
-        estimator=estimator,
-        mech=mech,
-        actuator=actuator,
-        visualizer=visualizer,
+        setup=setup,
         n_trials=1,
-        realtime=setup.params.run.realtimerender,
     )
 
     return summarize_results(results)
@@ -58,23 +46,11 @@ def run_single(setup: ExperimentSetup):
 
 def run_benchmark_single(setup: ExperimentSetup):
     
-    # prevents dvs from starting in the benchmark
-    setup.params.run.realtimerender = False
-
-    plant, controller, vision, estimator, _, _, _ = build_system(
-        setup.default_variant, setup.params, setup.camera_params
-    )
-
     results = run_region_trials(
-        params=setup.params,
-        plant=plant,
-        controller=controller,
-        vision=vision,
-        estimator=estimator,
+        setup=setup,
         n_trials=200,
         show_progress=True,
         progress_prefix="Trial",
-        realtime=False,
     )
 
     return summarize_results(results)

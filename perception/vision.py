@@ -12,6 +12,23 @@ from core.sim_types import (
     PoseMeasurement
 )
 
+
+
+class Perception:
+    def __init__(self, vision, estimator):
+        self.vision = vision
+        self.estimator = estimator
+        self.state_est = None
+        
+    def update(self, state_true, command_u, dt):
+        measurement = self.vision.get_observation(state_true)
+        pose = self.vision.reconstruct(measurement)
+
+        state_est = self.estimator.update(pose, dt, command_u)
+
+        return state_est, measurement, pose
+
+
 def get_measurements(cams: CameraPair):
     b1 = cams.cam1.intercept
     s1 = cams.cam1.slope

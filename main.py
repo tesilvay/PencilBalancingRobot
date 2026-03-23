@@ -63,17 +63,18 @@ def main(mode):
                 save_video=False,
                 realtimerender=False,
                 total_time=5.0,  # 5s for single-run validation
+                dt = 0.001,
                 stability_tolerance=0.3,  # max |angle| rad: ~0.05 strict standing; ~0.3 at least upright (fell vs not)
                 estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)
-                initial_angle_spread_deg=10,
-                initial_position_spread_m=0.050,
+                initial_angle_spread_deg=12,
+                initial_position_spread_m=0.070,
             ),
         ),
         camera_params=CameraParams(xr=0.170, yr=0.176),
         default_variant=BenchmarkVariant(
             controller_type="lqr",
             estimator_type="kalman",
-            noise_std=0.001,
+            noise_std=0.1,
             delay_steps=1,
         ),
     )

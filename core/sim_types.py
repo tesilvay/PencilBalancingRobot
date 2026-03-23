@@ -162,6 +162,7 @@ class RunParams:
     save_video: bool = False
     realtimerender: bool = False
     total_time: float = 5.0
+    dt: float = 0.001
     stability_tolerance: float = 0.05
     estimator_lpf_alpha: float | None = None  # None = LPF default (0.95)
     # Monte Carlo initial state: ± spread for angle (degrees) and position (meters)
