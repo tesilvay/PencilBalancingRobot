@@ -3,14 +3,13 @@
 import numpy as np
 from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
-from experiments.utils import print_summary, summarize
+from experiments.utils import summarize
 
 from simulation.metrics import Metrics
 from visualization.progress import ConsoleProgress
 from core.sim_types import (
     BenchmarkResult,
     ExperimentSetup,
-    StopPolicy,
 )
 
 class Experiment(ABC):
@@ -28,10 +27,10 @@ class Experiment(ABC):
 # =========================================================
 
 class SingleExperiment(Experiment):
-    def run(self, setup, stop_policy = StopPolicy.FIXED_TIME,):
+    def run(self, setup):
         self.progress.start(1, "Single run")
         
-        result = self.engine.run(setup, stop_policy)
+        result = self.engine.run(setup)
         metrics = self.evaluator.evaluate(result)
         
         self.progress.update(1)
@@ -71,7 +70,7 @@ class SingleExperiment(Experiment):
         return mech_history
 
     def _animate_experiment(self, params, sim_result):
-        from system_builder import build_mechanism
+        from core.system_builder import build_mechanism
         from visualization.visualizer3d import Visualizer3D
         mech = build_mechanism(params)
 
@@ -96,9 +95,9 @@ class SingleExperiment(Experiment):
         )
 
 class RealExperiment(Experiment):
-    def run(self, setup, stop_policy = StopPolicy.INFINITE,):
+    def run(self, setup):
       
-        result = self.engine.run(setup, stop_policy)
+        result = self.engine.run(setup)
         metrics = self.evaluator.evaluate(result)
         
         return summarize([metrics])
@@ -114,7 +113,7 @@ class MonteCarloExperiment(Experiment):
         self.progress.start(self.n_trials, "Monte Carlo")
         
         for i in range(self.n_trials):
-            m = self.evaluator.evaluate(self.engine.run(setup, StopPolicy.EARLY_STOP))
+            m = self.evaluator.evaluate(self.engine.run(setup))
             results.append(m)
 
             self.progress.update(i + 1)
@@ -147,7 +146,7 @@ class BenchmarkExperiment(Experiment):
             results = []
             for i in range(self.n_trials):
                 m = self.evaluator.evaluate(
-                    self.engine.run(variant_setup, StopPolicy.EARLY_STOP)
+                    self.engine.run(variant_setup)
                 )
                 results.append(m)
 
@@ -167,9 +166,6 @@ class BenchmarkExperiment(Experiment):
             )
 
         return all_results
-
-class RealTimeExperiment(SingleExperiment):
-    pass
 
 class WorkspaceSweepExperiment(Experiment):
     def __init__(

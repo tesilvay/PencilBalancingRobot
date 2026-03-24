@@ -1,5 +1,5 @@
 import numpy as np
-from system_builder import system_factory, runner_factory
+from core.system_builder import system_factory, runner_factory
 
 from core.sim_types import (
     ExperimentSetup,
@@ -10,9 +10,12 @@ from core.sim_types import (
 
 
 class SimulationEngine:
-    def run(self, setup: ExperimentSetup, stop_policy: StopPolicy):
+    def __init__(self, stop_policy: StopPolicy):
+        self.stop_policy = stop_policy
+    
+    def run(self, setup: ExperimentSetup):
         system = system_factory(setup)
-        runner = runner_factory(setup.params, system, stop_policy)
+        runner = runner_factory(setup.params, system, self.stop_policy)
 
         initial_state, initial_command = self._initialize(setup)
 

@@ -21,8 +21,9 @@ def summarize(results):
     )
 
 def print_summary(summary):
+    avg_settling_time = summary.avg_settling_time or -1
     print(f"Stability rate: {summary.stability_rate * 100:.1f}%")
-    print(f"Avg settling: {summary.avg_settling_time:.2f}")
+    print(f"Avg settling: {avg_settling_time:.2f}")
     print(f"Max acc: {summary.max_acc:.2f}")
     print(f"Avg acc: {summary.avg_acc:.2f}")
  

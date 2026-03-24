@@ -14,6 +14,7 @@ from core.sim_types import (
     CameraParams,
     BenchmarkVariant,
     ExperimentSetup,
+    StopPolicy
 )
 from analysis.graphing import run_full_analysis
 from utils.io_utils import save_benchmark_results
@@ -45,8 +46,8 @@ def main(mode):
             ),
             hardware=HardwareParams(
                 
-                servo=False,
-                servo_port="/dev/ttyUSB0", # None uses a mock controller
+                servo=True,
+                servo_port=None,#"/dev/ttyUSB0", # None uses a mock controller
                 servo_frequency=250,
                 
                 vision_mode = "sim_analytic", # "real_dvs" | "sim_dvs" | "sim_analytic"
@@ -63,39 +64,39 @@ def main(mode):
             ),
             run=RunParams(
                 save_video=False,
-                realtimerender=False,
+                realtimerender=True,
                 total_time=5.0,  # 5s for single-run validation
                 dt = 0.001,
                 stability_tolerance=0.3,  # max |angle| rad: ~0.05 strict standing; ~0.3 at least upright (fell vs not)
                 estimator_lpf_alpha=None,  # None = 0.95; 0.99 for lower phase lag (real-time)
                 initial_angle_spread_deg=12,
-                initial_position_spread_m=0.070,
+                initial_position_spread_m=0.020,
             ),
         ),
         camera_params=CameraParams(xr=0.170, yr=0.176),
         default_variant=BenchmarkVariant(
             controller_type="lqr",
             estimator_type="kalman",
-            noise_std=0.1,
+            noise_std=0.01,
             delay_steps=1,
         ),
     )
 
 
     if mode == "single":
-        engine = SimulationEngine()
+        engine = SimulationEngine(stop_policy = StopPolicy.FIXED_TIME)
         experiment = SingleExperiment(engine)
 
     elif mode == "real":
-        engine = RealTimeEngine()
+        engine = RealTimeEngine(stop_policy = StopPolicy.INFINITE)
         experiment = RealExperiment(engine)
 
     elif mode == "montecarlo":
-        engine = SimulationEngine()
+        engine = SimulationEngine(stop_policy = StopPolicy.EARLY_STOP)
         experiment = MonteCarloExperiment(engine, n_trials=200)
 
     elif mode == "benchmark":
-        engine = SimulationEngine()
+        engine = SimulationEngine(stop_policy = StopPolicy.EARLY_STOP)
         experiment = BenchmarkExperiment(
             engine,
             variants=build_default_variants(),
@@ -103,7 +104,7 @@ def main(mode):
         )
 
     elif mode == "sweep":
-        engine = SimulationEngine()
+        engine = SimulationEngine(stop_policy = StopPolicy.EARLY_STOP)
         experiment = WorkspaceSweepExperiment(
             engine,
             min_diameter_mm=40,

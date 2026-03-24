@@ -48,7 +48,7 @@ from perception.dvs_camera_reader import (
     discover_devices,
 )
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
-from system_builder import build_actuator, build_mechanism
+from core.system_builder import build_actuator, build_mechanism
 
 
 DEFAULT_WORKSPACE = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=0.108)

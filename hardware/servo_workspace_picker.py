@@ -18,7 +18,7 @@ from core.sim_types import (
     PhysicalParams,
     TableCommand,
 )
-from system_builder import build_mechanism, build_actuator
+from core.system_builder import build_mechanism, build_actuator
 from visualization.composite_layout import (
     BANNER_HEIGHT,
     ONE_PANEL_MARGIN,
