@@ -96,9 +96,13 @@ listener = keyboard.Listener(on_press=on_press)
 listener.start()
 
 print("Calibration controls:")
-print("W/S servo1")
+print("Q/E servo1")
 print("A/D servo2")
-print("C save calibration")
+print("R/T previous/next cal point")
+print("S save calibration")
+
+# Angles (deg): [155.04013922  65.97390473]
+# for center 110, 110
 
 while True:
     time.sleep(1)

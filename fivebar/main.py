@@ -9,7 +9,7 @@ from mechanism import FiveBarMechanism
 from workspace import FiveBarWorkspace
 from visualization import FiveBarVisualizer
 
-MIN_ANGLE_DEG = 20.0  # Minimum angle (deg) away from straight/collinear; tune for safe workspace margin.
+MIN_ANGLE_DEG = 30.0  # Minimum angle (deg) away from straight/collinear; tune for safe workspace margin.
 
 
 @dataclass
@@ -23,8 +23,8 @@ class MechanismParams:
 if __name__ == "__main__":
 
     mechanism = MechanismParams(
-        O=(239, 288),
-        B=(212, 320),
+        O=(235, 288),
+        B=(213, 320),
         la=175,
         lb=175,
     )

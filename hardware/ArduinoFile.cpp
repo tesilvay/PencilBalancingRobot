@@ -17,8 +17,9 @@ const int US_MAX=2500;
 
 /* calibration angles */
 
-const int CAL_POINTS=4;
-float cal_angles[CAL_POINTS]={0,45,90,135};
+const int CAL_POINTS=3;
+float cal_angles_1[CAL_POINTS]={90, 135, 180};
+float cal_angles_2[CAL_POINTS]={0, 45, 90};
 
 /* lookup tables (microseconds) */
 
@@ -59,20 +60,28 @@ bool invalid_map(float *map) {
 
 /* interpolation */
 
-float interp(float theta,float *map){
+float interp(float theta, float *angles, float *map){
 
-    if(theta<=cal_angles[0]) return map[0];
-    if(theta>=cal_angles[CAL_POINTS-1]) return map[CAL_POINTS-1];
+    if(theta <= angles[0]){
+        float a = angles[0];
+        float b = angles[1];
+        float alpha = (theta - a) / (b - a);
+        return map[0] + alpha * (map[1] - map[0]);
+    }
+
+    if(theta >= angles[CAL_POINTS-1]){
+        float a = angles[CAL_POINTS-2];
+        float b = angles[CAL_POINTS-1];
+        float alpha = (theta - a) / (b - a);
+        return map[CAL_POINTS-2] + alpha * (map[CAL_POINTS-1] - map[CAL_POINTS-2]);
+    }
 
     for(int i=0;i<CAL_POINTS-1;i++){
-
-        float a=cal_angles[i];
-        float b=cal_angles[i+1];
+        float a=angles[i];
+        float b=angles[i+1];
 
         if(theta>=a && theta<=b){
-
             float alpha=(theta-a)/(b-a);
-
             return map[i] + alpha*(map[i+1]-map[i]);
         }
     }
@@ -85,8 +94,14 @@ float interp(float theta,float *map){
 
 void move_servos(float d1,float d2){
 
-    float us1=clamp_us(interp(d1,servo1_map));
-    float us2=clamp_us(interp(d2,servo2_map));
+    float us1=clamp_us(interp(d1,cal_angles_1, servo1_map));
+    float us2=clamp_us(interp(d2,cal_angles_2, servo2_map));
+
+    Serial.print("MOVED TO: ");
+    Serial.print("S1=");
+    Serial.print(us1);
+    Serial.print(" S2=");
+    Serial.println(us2);
 
     servo1.writeMicroseconds(us1);
     servo2.writeMicroseconds(us2);
@@ -125,16 +140,19 @@ void jog_servo(int id,float delta){
 
 void goto_cal_point(){
 
-    float target=cal_angles[cal_index];
+    float target1 = cal_angles_1[cal_index];
+    float target2 = cal_angles_2[cal_index];
 
-    float us1=interp(target,servo1_map);
-    float us2=interp(target,servo2_map);
+    float us1 = interp(target1, cal_angles_1, servo1_map);
+    float us2 = interp(target2, cal_angles_2, servo2_map);
 
     servo1.writeMicroseconds(us1);
     servo2.writeMicroseconds(us2);
 
     Serial.print("CAL ");
-    Serial.println(target);
+    Serial.print(target1);
+    Serial.print("and ");
+    Serial.println(target2);
 }
 
 
@@ -240,16 +258,13 @@ void setup(){
 
         Serial.println("EEPROM invalid → initializing defaults");
 
-        float defaults[CAL_POINTS] = {500, 1000, 1500, 2000};
+        float defaults[CAL_POINTS] = {1000, 1500, 2000};
 
         for(int i=0;i<CAL_POINTS;i++){
             servo1_map[i] = defaults[i];
             servo2_map[i] = defaults[i];
         }
     }
-
-    servo1.writeMicroseconds(1500);
-    servo2.writeMicroseconds(1500);
 
     Serial.println("READY");
 }

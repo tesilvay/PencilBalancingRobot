@@ -125,7 +125,8 @@ if HAS_NUMBA:
     def solve_numba(x_g, y_g, o_g_0, o_g_1, rt_00, rt_01, rt_10, rt_11, r_00, r_01, r_10, r_11, lc, la, lb, r_min, r_max, min_sin):
         """
         Returns (success, theta1, theta4, A_g_x, A_g_y, C_g_x, C_g_y, P_g_x, P_g_y).
-        Input (x_g, y_g) in mm (global). On failure returns (False, 0.0, 0.0, nan, nan, nan, nan, nan, nan).
+        theta1, theta4 are in radians in [0, 2π). Input (x_g, y_g) in mm (global).
+        On failure returns (False, 0.0, 0.0, nan, nan, nan, nan, nan, nan).
         """
         nan = math.nan
         # g2l
@@ -154,6 +155,10 @@ if HAS_NUMBA:
         if disc4 < 0.0:
             return (False, 0.0, 0.0, nan, nan, nan, nan, nan, nan)
         theta4 = 2.0 * math.atan2(-F4 - math.sqrt(disc4), G4 - E4)
+
+        two_pi = 2.0 * math.pi
+        theta1 = theta1 % two_pi
+        theta4 = theta4 % two_pi
 
         ax = la * math.cos(theta1)
         ay = la * math.sin(theta1)

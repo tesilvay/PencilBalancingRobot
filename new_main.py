@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 
 from core.sim_types import (
-    PhysicalParams,
     PlantParams,
     WorkspaceParams,
     MechanismParams,
@@ -28,7 +27,7 @@ class PhysicalParams:
 class SystemConfig:
     plant: str        # "sim" | "real"
     sensor: str       # "sim_analytic" | "sim_dvs" | "real_dvs"
-    actuator: str     # "sim" | "servo"
+    actuator: str     # "sim" | "servo" | "mock"
 
 
 # ---------- RUNTIME (how it runs) ----------
@@ -56,7 +55,27 @@ class ExperimentSetup:
     experiment: ExperimentConfig
     variant: any
     camera_params: any
+    
+@dataclass
+class VisionConfig:
+    mode: str  # sim_analytic | sim_dvs | real_dvs
+    dvs_algo: str = "hough"
+    use_regression: bool = True
+    hough: HoughTrackerParams = ...
+    sam_filter_ms: int | None = 5
 
+@dataclass
+class ActuatorConfig:
+    type: str  # "sim" | "servo"
+    port: str | None = None
+    frequency: int = 250
+
+@dataclass
+class RunConfig:
+    dt: float = 0.001
+    duration: float | None = 5.0
+    realtime: bool = False
+    render: bool = False
 
 from configs import *
 

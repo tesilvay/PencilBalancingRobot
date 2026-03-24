@@ -1,6 +1,11 @@
 import numpy as np
 
 
+def wrap_angle_0_2pi(theta):
+    """Wrap angle(s) in radians to [0, 2π) (hardware convention: 0°–360°)."""
+    return np.mod(theta, 2 * np.pi)
+
+
 class FiveBarMechanism:
 
     def __init__(self, transform, la, lb, min_angle_deg=0.0):
@@ -12,6 +17,7 @@ class FiveBarMechanism:
         self._min_sin = np.sin(np.radians(min_angle_deg))
 
     def ik(self, target_global):
+        """Joint angles θ₁, θ₄ in radians, each in [0, 2π)."""
 
         target_l = self.tf.g2l(target_global)
         xd, yd = target_l
@@ -40,7 +46,7 @@ class FiveBarMechanism:
 
         theta4 = 2*np.arctan2((-F4 - np.sqrt(disc4)), (G4 - E4))
 
-        return theta1, theta4
+        return wrap_angle_0_2pi(theta1), wrap_angle_0_2pi(theta4)
 
     def fk(self, theta1, theta4):
         """Forward kinematics; returns points in local frame."""
@@ -143,6 +149,7 @@ class FiveBarMechanism:
         return theta1, theta4, A_g, C_g, P_g
 
     def solve(self, target_global):
+        """IK + FK; θ₁, θ₄ in radians, each in [0, 2π) (0°–360°)."""
         x_g, y_g = np.asarray(target_global).flatten()[:2]
         try:
             from fivebar.numba_solve import HAS_NUMBA, get_numba_constants, solve_numba
