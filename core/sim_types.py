@@ -151,7 +151,7 @@ class HardwareParams:
     dvs_cam_y_port: str | None = None
     servo_frequency: int = 250  # Hz; command update rate to servos
     dvs_algo: str = "hough"  # "hough" | "sam"
-    dvs_sam_noise_filter_duration_ms: float | None = 30  # None = no filter; > 0 = duration (Sam OLS only)
+    sam_filter_ms: float | None = 30  # None = no filter; > 0 = duration (Sam OLS only)
     dvs_hough: HoughTrackerParams = field(default_factory=HoughTrackerParams)  # Hough only: ignored when dvs_algo="sam"
     dvs_use_regression: bool = False  # When true, use learned multivariate regression for pose instead of pure analytic reconstruct
 
@@ -189,7 +189,7 @@ class PhysicalParams:
 class BenchmarkVariant:
     """One point in the benchmark sweep: controller, estimator, noise, delay."""
     controller_type: str
-    estimator_type: str | None
+    estimator_type: str
     noise_std: float
     delay_steps: int
 

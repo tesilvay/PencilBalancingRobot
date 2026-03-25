@@ -44,6 +44,24 @@ class LQRController(BaseController):
 
         return TableCommand(u[0], u[1])
 
+class CircleController:
+    def __init__(self, x_ref: SystemState, radius: float, period_s: float):
+        self.x_ref = x_ref
+        self.radius = radius
+        self.period_s = period_s
+        self.omega = 2 * np.pi / period_s
+        self.t = 0.0
+
+    def compute(self, state, dt):
+        self.t += dt
+
+        cx = self.x_ref.x
+        cy = self.x_ref.y
+
+        x = cx + self.radius * np.cos(self.omega * self.t)
+        y = cy + self.radius * np.sin(self.omega * self.t)
+
+        return TableCommand(x, y)
 
 class NullController:
     def compute(self, state):

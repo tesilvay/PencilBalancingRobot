@@ -55,7 +55,7 @@ def main(mode):
                 dvs_use_regression=True,
                 
                 dvs_algo="hough",  # "hough" | "sam"
-                dvs_sam_noise_filter_duration_ms=5,  # None = no filter; 5–10 for low-latency
+                sam_filter_ms=5,  # None = no filter; 5–10 for low-latency
                 dvs_hough=HoughTrackerParams(
                     mixing_factor=0.02,  # Hough only: higher tracks faster but gets noisier; 0.01-0.05 is a good starting range.
                     inlier_stddev_px=4.0,  # Hough only: Gaussian inlier width in pixels; 3-6 px is typical, larger admits more background motion.

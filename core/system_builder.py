@@ -2,7 +2,7 @@
 import numpy as np
 from warnings import warn
 from visualization.realtime_visualizer import PencilVisualizerRealtime, DVSWorkspaceVisualizer
-from core.controller import NullController, PolePlacementController, LQRController
+from core.controller import NullController, PolePlacementController, LQRController, CircleController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
 from core.model import BuildLinearModel
@@ -47,6 +47,10 @@ def build_controller(variant, params):
 
         controller = LQRController(A, B, Q, R, x_ref)
 
+    elif variant.controller_type == "circle":
+        radius = params.workspace.safe_radius
+        period_s = 20
+        controller = CircleController(x_ref, radius, period_s)
     else:
         controller = NullController()
 
@@ -88,7 +92,7 @@ def build_line_algo(hw):
         raise ValueError("DVS modes require a line detection algorithm")
     
     elif hw.dvs_algo == "sam":
-        noise_filter_ms = hw.dvs_sam_noise_filter_duration_ms
+        noise_filter_ms = hw.sam_filter_ms
         
         return SamLineAlgorithm(min_points=50), SamLineAlgorithm(min_points=50), noise_filter_ms
     else:
