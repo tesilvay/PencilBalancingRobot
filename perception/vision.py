@@ -19,12 +19,30 @@ class Perception:
         self.vision = vision
         self.estimator = estimator
         self.state_est = None
+
+    def _state_to_pose(self, state: SystemState) -> PoseMeasurement:
+        return PoseMeasurement(
+            X=state.x,
+            Y=state.y,
+            alpha_x=state.alpha_x,
+            alpha_y=state.alpha_y,
+        )
         
     def update(self, state_true, command_u, dt):
         measurement = self.vision.get_observation(state_true)
-        pose = self.vision.reconstruct(measurement)
+
+        if measurement is None:
+            # Real DVS pipelines can be temporarily unavailable while trackers warm up.
+            # Keep estimator stable by reusing the latest estimated pose when possible.
+            if self.state_est is not None:
+                pose = self._state_to_pose(self.state_est)
+            else:
+                pose = self._state_to_pose(state_true)
+        else:
+            pose = self.vision.reconstruct(measurement)
 
         state_est = self.estimator.update(pose, dt, command_u)
+        self.state_est = state_est
 
         return state_est, measurement, pose
 

@@ -51,9 +51,10 @@ class CircleController:
         self.period_s = period_s
         self.omega = 2 * np.pi / period_s
         self.t = 0.0
+        self.dt = 0.001
 
-    def compute(self, state, dt):
-        self.t += dt
+    def compute(self, state):
+        self.t += self.dt
 
         cx = self.x_ref.x
         cy = self.x_ref.y

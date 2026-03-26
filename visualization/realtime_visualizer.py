@@ -6,6 +6,13 @@ from core.sim_types import CameraObservation, TableCommand, WorkspaceParams
 from visualization.composite_layout import build_composite, get_default_window_size
 
 
+def _window_closed(window_name: str) -> bool:
+    try:
+        return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
+    except cv2.error:
+        return True
+
+
 class PencilVisualizerRealtime:
     """
     Simulated camera view with optional workspace. Single composite window (banner + 2 or 3 panels).
@@ -34,19 +41,51 @@ class PencilVisualizerRealtime:
         else:
             self._scale = 4000
 
+    @staticmethod
+    def _to_finite_scalar(x) -> float | None:
+        """
+        Best-effort conversion to a finite python float.
+        Accepts python scalars, numpy scalar types, and 0-d arrays.
+        Returns None when conversion fails or value is not finite.
+        """
+        if isinstance(x, np.ndarray):
+            if x.size != 1:
+                return None
+            x = x.reshape(-1)[0]
+        try:
+            xf = float(x)
+        except (TypeError, ValueError):
+            return None
+        if not np.isfinite(xf):
+            return None
+        return xf
+
     def draw_line(self, img, b, s):
 
         # Convert normalized → pixel (line model x = s*y + b)
         obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
 
+        s_px = self._to_finite_scalar(s_px)
+        b_px = self._to_finite_scalar(b_px)
+        if s_px is None or b_px is None:
+            return
+
         y0 = 0
         y1 = self.height - 1
 
-        x0 = int(s_px * y0 + b_px)
-        x1 = int(s_px * y1 + b_px)
+        x0 = int(round(s_px * y0 + b_px))
+        x1 = int(round(s_px * y1 + b_px))
 
-        cv2.line(img, (x0, y0), (x1, y1), 255, 2)
+        # Prevent any pathological out-of-range values from confusing OpenCV.
+        x0 = max(-10_000, min(10_000, x0))
+        x1 = max(-10_000, min(10_000, x1))
+
+        try:
+            cv2.line(img, (x0, y0), (x1, y1), 255, 2)
+        except cv2.error:
+            # Visualization should never crash the experiment loop.
+            return
 
     def _clamp_to_workspace(self, x_des: float, y_des: float) -> tuple[float, float]:
         if self.workspace is None:
@@ -107,8 +146,10 @@ class PencilVisualizerRealtime:
 
     def render(self, measurement, command=None, surfaces=None, title: str | None = None, pose=None, **kwargs):
         if measurement is None:
+            if _window_closed(self._window_name):
+                return True
             key = cv2.waitKey(1) & 0xFF
-            return key == ord("q")
+            return key in (ord("q"), ord("Q"), 27)
 
         img1 = np.zeros((self.height, self.width), dtype=np.uint8)
         img2 = np.zeros((self.height, self.width), dtype=np.uint8)
@@ -137,8 +178,10 @@ class PencilVisualizerRealtime:
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
 
+        if _window_closed(self._window_name):
+            return True
         key = cv2.waitKey(1) & 0xFF
-        return key == ord("q")
+        return key in (ord("q"), ord("Q"), 27)
 
 
 class DVSWorkspaceVisualizer:
@@ -171,10 +214,20 @@ class DVSWorkspaceVisualizer:
     def _draw_line(self, frame, b, s):
         obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
+
+        s_px = PencilVisualizerRealtime._to_finite_scalar(s_px)
+        b_px = PencilVisualizerRealtime._to_finite_scalar(b_px)
+        if s_px is None or b_px is None:
+            return
         y0, y1 = 0, self.height - 1
-        x0 = int(s_px * y0 + b_px)
-        x1 = int(s_px * y1 + b_px)
-        cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+        x0 = int(round(s_px * y0 + b_px))
+        x1 = int(round(s_px * y1 + b_px))
+        x0 = max(-10_000, min(10_000, x0))
+        x1 = max(-10_000, min(10_000, x1))
+        try:
+            cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+        except cv2.error:
+            return
 
     def _clamp_to_workspace(self, x_des: float, y_des: float) -> tuple[float, float]:
         """Project (x_des, y_des) onto workspace circle edge if outside (same as plant.clamp_command)."""
@@ -286,7 +339,9 @@ class DVSWorkspaceVisualizer:
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
 
+        if _window_closed(self._window_name):
+            return (True, False)
         key = cv2.waitKey(1) & 0xFF
-        quit_requested = key == ord("q")
+        quit_requested = key in (ord("q"), ord("Q"), 27)
         toggle_pause = key == ord(" ")
         return (quit_requested, toggle_pause)

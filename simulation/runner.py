@@ -1,4 +1,5 @@
 from core.sim_types import SimulationResult, TerminalInfo
+import cv2
 
 class ExperimentRunner:
     def __init__(
@@ -54,11 +55,19 @@ class ExperimentRunner:
 
             # ---- 3. visualization ----
             if self.visualizer and self.scheduler.should_render():
-                self.visualizer.render(
+                viz_result = self.visualizer.render(
                     measurement=measurement,
                     command=self.command,
                     pose=pose,
                 )
+                quit_requested = False
+                if isinstance(viz_result, tuple):
+                    # DVS visualizer returns (quit_requested, toggle_pause)
+                    quit_requested = bool(viz_result[0])
+                elif isinstance(viz_result, bool):
+                    quit_requested = viz_result
+                if quit_requested:
+                    break
 
             # ---- 4. logging ----
             if self.logger:
@@ -79,6 +88,7 @@ class ExperimentRunner:
             settling_time=self.stop_condition.settling_time()
         )
         result = self.logger.get_result()
+        cv2.destroyAllWindows()
         
         return SimulationResult(
             state_history=result.state_history,

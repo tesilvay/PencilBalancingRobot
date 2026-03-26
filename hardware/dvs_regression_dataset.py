@@ -51,6 +51,13 @@ from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
 from core.system_builder import build_actuator, build_mechanism
 
 
+def _window_closed(window_name: str) -> bool:
+    try:
+        return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
+    except cv2.error:
+        return True
+
+
 DEFAULT_WORKSPACE = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=0.108)
 DEFAULT_MECHANISM = MechanismParams(
     O=(128.77, 178.13),
@@ -431,10 +438,16 @@ def main() -> None:
         title = "Regression dataset - Press SPACE to begin | Q: abort"
         composite = build_composite(title, frame1, frame2, ws_canvas)
         cv2.imshow(WINDOW_NAME, composite)
+        if _window_closed(WINDOW_NAME):
+            print("Aborted by user (window closed).")
+            reader1.close()
+            reader2.close()
+            cv2.destroyAllWindows()
+            return
         key = cv2.waitKey(1) & 0xFF
         if key == ord(" "):
             started = True
-        elif key == ord("q"):
+        elif key in (ord("q"), ord("Q"), 27):
             print("Aborted by user (Q).")
             reader1.close()
             reader2.close()
@@ -460,10 +473,13 @@ def main() -> None:
                 title = f"Round {tilt_idx + 1}/{len(TILT_CONDITIONS)} - Tilt {tilt_label} | SPACE: begin, Q: abort"
                 composite = build_composite(title, frame1, frame2, ws_canvas)
                 cv2.imshow(WINDOW_NAME, composite)
+                if _window_closed(WINDOW_NAME):
+                    print("Aborted by user (window closed).")
+                    return
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord(" "):
                     round_started = True
-                elif key == ord("q"):
+                elif key in (ord("q"), ord("Q"), 27):
                     print("Aborted by user (Q).")
                     return
 
@@ -495,7 +511,10 @@ def main() -> None:
                         )
                         composite = build_composite(title, frame1, frame2, ws_canvas)
                         cv2.imshow(WINDOW_NAME, composite)
-                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                        if _window_closed(WINDOW_NAME):
+                            print("Aborted by user (window closed).")
+                            return
+                        if cv2.waitKey(1) & 0xFF in (ord("q"), ord("Q"), 27):
                             print("Aborted by user (Q).")
                             return
                         while next_display <= now:
@@ -546,7 +565,10 @@ def main() -> None:
                         )
                         composite = build_composite(title, frame1, frame2, ws_canvas)
                         cv2.imshow(WINDOW_NAME, composite)
-                        if cv2.waitKey(1) & 0xFF == ord("q"):
+                        if _window_closed(WINDOW_NAME):
+                            print("Aborted by user (window closed).")
+                            return
+                        if cv2.waitKey(1) & 0xFF in (ord("q"), ord("Q"), 27):
                             print("Aborted by user (Q).")
                             return
                         while next_display <= now:

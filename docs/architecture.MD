@@ -28,21 +28,18 @@ In code:
 
 ## Entry point and modes
 
-The top-level entry point is `main.py`. It creates one `ExperimentSetup`, chooses an engine + experiment based on `--mode`, then executes.
+The top-level entry point is `main.py`. It builds one `ExperimentSetup` from **`--preset`** (sim / vision_real / actuation_real / real), selects the high-level workflow with **`--experiment`** (single / montecarlo / benchmark / sweep), applies optional overrides (`--controller`, `--estimator`, `--actuator`, `--trials`, `--radius`), then runs.
 
-Available modes:
+- **`--experiment single`**: one run; sim preset uses `SingleExperiment` (finite sim + 3D playback); realtime presets use `RealExperiment` (infinite stop, no post-run 3D replay).
+- **`--experiment montecarlo`**: repeated randomized initial conditions (sim preset only).
+- **`--experiment benchmark`**: grid of controller/estimator/noise variants (sim preset only); optional `--controller` / `--estimator` narrow the sweep.
+- **`--experiment sweep`**: workspace radius sweep + plot (sim preset only).
+- **`--graph`**: post-processing/plotting of saved benchmark artifacts (standalone flag).
 
-- `single`: one finite simulation run + 3D playback
-- `real`: real-time run with infinite stop policy (hardware-facing path)
-- `montecarlo`: repeated randomized initial conditions, summarized metrics
-- `benchmark`: grid of controller/estimator/noise variants over many trials
-- `sweep`: workspace radius sweep, stability/effort tradeoff plot
-- `graph`: post-processing/plotting of saved benchmark artifacts
+Preset-to-engine defaults (typical):
 
-Mode-to-engine defaults:
-
-- `single`: `SimulationEngine(stop_policy=fixed_time)`
-- `real`: `RealTimeEngine(stop_policy=infinite)`
+- sim + `single`: `SimulationEngine(stop_policy=fixed_time)`
+- realtime presets + `single`: `RealTimeEngine(stop_policy=infinite)`
 - `montecarlo`, `benchmark`, `sweep`: `SimulationEngine(stop_policy=early_stop)`
 
 ---
@@ -211,7 +208,7 @@ Metric evaluation and summarization:
 
 ## Module map (quick reference)
 
-- `main.py`: CLI mode selection and setup assembly
+- `main.py`: CLI (`--preset`, `--experiment`, overrides) and `ExperimentSetup` assembly
 - `core/`: plant, linear model, controllers, dataclasses, builders
 - `simulation/`: system loop, runner, engine, scheduler, stopping, pacing, metrics, logger
 - `perception/`: camera geometry, DVS readers/algorithms, vision backends, estimators

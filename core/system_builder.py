@@ -49,7 +49,7 @@ def build_controller(variant, params):
 
     elif variant.controller_type == "circle":
         radius = params.workspace.safe_radius
-        period_s = 20
+        period_s = 18
         controller = CircleController(x_ref, radius, period_s)
     else:
         controller = NullController()
@@ -60,7 +60,7 @@ def build_estimator(variant, params):
     A, B = BuildLinearModel(params)
     
     if variant.estimator_type is not None:
-        if variant.estimator_type == "fd":
+        if variant.estimator_type in ("fd", "fde"):
             estimator = FiniteDifferenceEstimator()
 
         elif variant.estimator_type == "lpf":
@@ -126,7 +126,7 @@ def connect_dvs_cameras(hw):
         
 def load_regression_algo(hw):
     
-    if hw.dvs_regression:
+    if hw.dvs_use_regression:
         from perception.dvs_pose_regression_model import DVSPoseRegressionModel
         return DVSPoseRegressionModel.load("perception/calibration_files/dvs_pose_regression_model.json")
     else:

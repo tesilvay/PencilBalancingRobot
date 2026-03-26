@@ -33,6 +33,13 @@ from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_W
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
 
 
+def _window_closed(window_name: str) -> bool:
+    try:
+        return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
+    except cv2.error:
+        return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="Visualize DVS cams with Hough line overlay")
     parser.add_argument("--cam1", help="Camera 1 serial or device (omit to use discovery)")
@@ -206,7 +213,9 @@ def main():
             composite = build_composite(title, frame1, frame2, None)
             cv2.imshow(WINDOW_NAME, composite)
 
-            if cv2.waitKey(1) & 0xFF == ord("q"):
+            if _window_closed(WINDOW_NAME):
+                break
+            if cv2.waitKey(1) & 0xFF in (ord("q"), ord("Q"), 27):
                 break
 
             while next_display <= now:

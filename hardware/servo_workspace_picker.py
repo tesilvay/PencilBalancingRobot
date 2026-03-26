@@ -27,11 +27,18 @@ from visualization.composite_layout import (
 )
 
 
+def _window_closed(window_name: str) -> bool:
+    try:
+        return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
+    except cv2.error:
+        return True
+
+
 # Same defaults as main.py for workspace and mechanism
 DEFAULT_WORKSPACE = WorkspaceParams(
-    x_ref=0.0,
-    y_ref=0.0,
-    safe_radius=0.108,
+    x_ref=0.010,
+    y_ref=-0.020,
+    safe_radius=0.018,
 )
 DEFAULT_MECHANISM = MechanismParams(
     O=(128.77, 178.13),
@@ -196,7 +203,9 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
         )
         composite = build_composite(title, None, None, canvas)
         cv2.imshow(WINDOW_NAME, composite)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
+        if _window_closed(WINDOW_NAME):
+            break
+        if cv2.waitKey(1) & 0xFF in (ord("q"), ord("Q"), 27):
             break
     cv2.destroyAllWindows()
 
@@ -207,7 +216,7 @@ def main():
     )
     parser.add_argument(
         "--port",
-        default="/dev/ttyUSB1",
+        default="/dev/ttyUSB0",
         help="Serial port for servos (e.g. /dev/ttyUSB1). Use 'None' for mock.",
     )
     parser.add_argument(
