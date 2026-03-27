@@ -153,7 +153,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     elif preset == "vision_real":
         hw = _default_hardware()
         hw.vision_mode = "real_dvs"
-        hw.dvs_use_regression = False
+        hw.dvs_use_regression = True
         run = _default_run_realtime()
     elif preset == "actuation_real":
         hw = _default_hardware()
@@ -165,7 +165,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
         hw.vision_mode = "real_dvs"
         hw.servo = True
         hw.servo_port = None
-        hw.dvs_use_regression = False
+        hw.dvs_use_regression = True
         run = _default_run_realtime()
     else:
         raise ValueError(f"Unknown preset: {preset}")

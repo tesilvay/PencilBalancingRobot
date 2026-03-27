@@ -9,7 +9,7 @@ Two artifact kinds:
 2) **Calibration dataset** (`hardware/.../dvs_calibration_dataset.json`): staged b1/b2/s1/s2
    tables; runtime uses four 1D linear interpolations after converting camnorm lines to pixels.
 
-Public estimate API: ``estimate_pose(cams: CameraPair, cam: CameraModel)`` — observations
+Public estimate API: ``estimate(cams: CameraPair, cam: CameraModel)`` — observations
 are **normalized** line parameters; the model converts with ``camnorm_to_pixel`` then evaluates
 ``x_at_mask`` via ``x = slope * y + intercept`` at each camera's mask line.
 """
@@ -107,9 +107,9 @@ class SimpleDVSRegressionModel:
         if has_affine == has_ds:
             raise ValueError("Set exactly one of: (cam1, cam2) affine pair or full dataset tables")
 
-    def estimate_pose(self, cams: CameraPair, cam: CameraModel) -> PoseMeasurement:
-        obs1_px = cam.camnorm_to_pixel(cams.cam1)
-        obs2_px = cam.camnorm_to_pixel(cams.cam2)
+    def estimate(self, cams: CameraPair) -> PoseMeasurement:
+        obs1_px = cams.cam1
+        obs2_px = cams.cam2
         if self.cam1 is not None and self.cam2 is not None:
             X, alpha_x = self.cam1.estimate_axis(obs1_px, mask_y=int(self.mask_y_cam1))
             Y, alpha_y = self.cam2.estimate_axis(obs2_px, mask_y=int(self.mask_y_cam2))

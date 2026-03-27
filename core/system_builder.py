@@ -132,8 +132,9 @@ def connect_dvs_cameras(hw):
 def load_regression_algo(hw):
     
     if hw.dvs_use_regression:
-        from perception.dvs_pose_regression_model import DVSPoseRegressionModel
-        return DVSPoseRegressionModel.load("perception/calibration_files/dvs_pose_regression_model.json")
+        from perception.simple_dvs_regression_model import SimpleDVSRegressionModel
+        return SimpleDVSRegressionModel.load("hardware/calibration_files/dvs_calibration_dataset.json")
+    
     else:
         return None
 

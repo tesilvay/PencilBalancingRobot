@@ -253,7 +253,12 @@ class RealEventCameraInterface(VisionModelBase):
     def reconstruct(self, cams):
 
         if self.dvs_regression_model is not None:
-            pose_from_model = self.dvs_regression_model.estimate(cams)
+            # get_observation() returns camnorm; SimpleDVSRegressionModel expects pixel lines.
+            obs1_px = self.cam.camnorm_to_pixel(cams.cam1)
+            obs2_px = self.cam.camnorm_to_pixel(cams.cam2)
+
+            cams_px = CameraPair(cam1=obs1_px, cam2=obs2_px)
+            pose_from_model = self.dvs_regression_model.estimate(cams_px)
 
             if self._is_valid_pose(pose_from_model):
                 return pose_from_model

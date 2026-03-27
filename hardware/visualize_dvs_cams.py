@@ -282,10 +282,10 @@ def main():
                 and not isinstance(result2, tuple)
             ):
                 cams = CameraPair(
-                    cam1=cam_model.pixel_to_camnorm(result1),
-                    cam2=cam_model.pixel_to_camnorm(result2),
+                    cam1=result1,
+                    cam2=result2,
                 )
-                pose = pose_model.estimate_pose(cams, cam_model)
+                pose = pose_model.estimate(cams)
                 title = (
                     f"{args.mode} | "
                     f"X={pose.X*1000:+.1f} mm Y={pose.Y*1000:+.1f} mm "
