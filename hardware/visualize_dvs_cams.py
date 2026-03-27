@@ -17,20 +17,30 @@ Usage:
 
     # Or specify serials explicitly:
     python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
-    
+
+    # Title shows regression pose (camnorm s,b via SimpleDVSRegressionModel):
+    python -m hardware.visualize_dvs_cams --estimate-pose
+    python -m hardware.visualize_dvs_cams --estimate-pose --model path/to/calibration.json
+
     sudo .venv/bin/python -m hardware.visualize_dvs_cams
 """
+
+from __future__ import annotations
 
 import argparse
 import sys
 import time
+from pathlib import Path
+
 import cv2
 import numpy as np
 
-from core.sim_types import HoughTrackerParams
+from core.sim_types import CameraPair, HoughTrackerParams
 from visualization.composite_layout import build_composite, get_default_window_size
+from perception.camera_model import CameraModel
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y
+from perception.simple_dvs_regression_model import SimpleDVSRegressionModel
 
 
 def _window_closed(window_name: str) -> bool:
@@ -115,6 +125,17 @@ def main():
         help="Hough only: cap events fed to the algorithm per iteration (newest N kept). "
              "Omit to process all events (Numba JIT handles typical rates).",
     )
+    parser.add_argument(
+        "--estimate-pose",
+        action="store_true",
+        help="Show SimpleDVSRegressionModel pose (X,Y,alpha_x,alpha_y) in the title instead of per-cam s/x_at_mask.",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="hardware/calibration_files/dvs_calibration_dataset.json",
+        help="With --estimate-pose: path to affine v1 JSON or b1/b2/s1/s2 dataset JSON.",
+    )
     args = parser.parse_args()
 
     if args.cam1 is not None and args.cam2 is not None:
@@ -154,9 +175,14 @@ def main():
         algo2 = SamLineAlgorithm(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT, min_points=50)
 
     print(f"Using {args.mode} line algorithm.")
-    # cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
 
     W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
+    cam_model: CameraModel | None = None
+    pose_model: SimpleDVSRegressionModel | None = None
+    if args.estimate_pose:
+        cam_model = CameraModel(width=W, height=H)
+        pose_model = SimpleDVSRegressionModel.load(Path(args.model))
+        print(f"Pose estimation: loaded {args.model}")
     decay_display = args.decay_display
     surface_intensity_gain = args.surface_intensity_gain
     display_period = 1.0 / args.display_fps
@@ -246,11 +272,31 @@ def main():
                     return "s=?, x_at_mask=?"
                 return f"s={s:+.4f}, x_at_mask={x_at_mask:+.1f}"
 
-            title = (
-                f"{args.mode} | "
-                f"cam1({_fmt_s_xatmask(result1, args.mask_y_cam1)}) "
-                f"cam2({_fmt_s_xatmask(result2, args.mask_y_cam2)}) | Q: quit"
-            )
+            if (
+                args.estimate_pose
+                and pose_model is not None
+                and cam_model is not None
+                and result1 is not None
+                and not isinstance(result1, tuple)
+                and result2 is not None
+                and not isinstance(result2, tuple)
+            ):
+                cams = CameraPair(
+                    cam1=cam_model.pixel_to_camnorm(result1),
+                    cam2=cam_model.pixel_to_camnorm(result2),
+                )
+                pose = pose_model.estimate_pose(cams, cam_model)
+                title = (
+                    f"{args.mode} | "
+                    f"X={pose.X*1000:+.1f} mm Y={pose.Y*1000:+.1f} mm "
+                    f"ax={np.rad2deg(pose.alpha_x):+.1f} ay={np.rad2deg(pose.alpha_y):+.1f} | Q: quit"
+                )
+            else:
+                title = (
+                    f"{args.mode} | "
+                    f"cam1({_fmt_s_xatmask(result1, args.mask_y_cam1)}) "
+                    f"cam2({_fmt_s_xatmask(result2, args.mask_y_cam2)}) | Q: quit"
+                )
             composite = build_composite(title, frame1, frame2, None)
             cv2.imshow(WINDOW_NAME, composite)
 

@@ -31,291 +31,291 @@
   ],
   "b1": {
     "stage": "b1",
-    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x7b88b4757d30>",
+    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x740aed9477b0>",
     "mask_y_cam1": 160,
     "samples": [
       {
         "x_pos_m": -0.06,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 227.0,
+        "b1_camnorm": 0.31213872832369943,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 227.0,
         "mask_y": 160
       },
       {
         "x_pos_m": -0.05,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 217.0,
+        "b1_camnorm": 0.2543352601156069,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 217.0,
         "mask_y": 160
       },
       {
         "x_pos_m": -0.04,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 212.0,
+        "b1_camnorm": 0.2254335260115607,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 212.0,
         "mask_y": 160
       },
       {
         "x_pos_m": -0.03,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 203.0,
+        "b1_camnorm": 0.17341040462427745,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 203.0,
         "mask_y": 160
       },
       {
         "x_pos_m": -0.02,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 196.0,
+        "b1_camnorm": 0.1329479768786127,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 196.0,
         "mask_y": 160
       },
       {
         "x_pos_m": -0.01,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 192.0,
+        "b1_camnorm": 0.10982658959537572,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 192.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.0,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 182.0,
+        "b1_camnorm": 0.05202312138728324,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 182.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.01,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 173.0,
+        "b1_camnorm": 0.0,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 173.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.02,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 165.0,
+        "b1_camnorm": -0.046242774566473986,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 165.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.03,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 159.0,
+        "b1_camnorm": -0.08092485549132948,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 159.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.04,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 152.0,
+        "b1_camnorm": -0.12138728323699421,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 152.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.05,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 145.0,
+        "b1_camnorm": -0.16184971098265896,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 145.0,
         "mask_y": 160
       },
       {
         "x_pos_m": 0.06,
-        "b1_px": 193.0,
-        "b1_camnorm": 0.11560693641618497,
+        "b1_px": 136.0,
+        "b1_camnorm": -0.2138728323699422,
         "s1_px": 0.0,
-        "x_at_mask_px": 193.0,
+        "x_at_mask_px": 136.0,
         "mask_y": 160
       }
     ]
   },
   "b2": {
     "stage": "b2",
-    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x7b890de11970>",
+    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x740aed9acff0>",
     "mask_y_cam2": 190,
     "samples": [
       {
         "y_pos_m": -0.06,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 60.0,
+        "b2_camnorm": -0.653179190751445,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 60.0,
         "mask_y": 190
       },
       {
         "y_pos_m": -0.05,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 76.0,
+        "b2_camnorm": -0.5606936416184971,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 76.0,
         "mask_y": 190
       },
       {
         "y_pos_m": -0.04,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 85.0,
+        "b2_camnorm": -0.5086705202312138,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 85.0,
         "mask_y": 190
       },
       {
         "y_pos_m": -0.03,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 103.0,
+        "b2_camnorm": -0.4046242774566474,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 103.0,
         "mask_y": 190
       },
       {
         "y_pos_m": -0.02,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 122.0,
+        "b2_camnorm": -0.2947976878612717,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 122.0,
         "mask_y": 190
       },
       {
         "y_pos_m": -0.01,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 143.0,
+        "b2_camnorm": -0.17341040462427745,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 143.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.0,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 167.0,
+        "b2_camnorm": -0.03468208092485549,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 167.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.01,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 187.0,
+        "b2_camnorm": 0.08092485549132948,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 187.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.02,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 205.0,
+        "b2_camnorm": 0.18497109826589594,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 205.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.03,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 219.0,
+        "b2_camnorm": 0.2658959537572254,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 219.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.04,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 233.0,
+        "b2_camnorm": 0.3468208092485549,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 233.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.05,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 246.0,
+        "b2_camnorm": 0.42196531791907516,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 246.0,
         "mask_y": 190
       },
       {
         "y_pos_m": 0.06,
-        "b2_px": 173.0,
-        "b2_camnorm": 0.0,
+        "b2_px": 263.0,
+        "b2_camnorm": 0.5202312138728323,
         "s2_px": 0.0,
-        "x_at_mask_px": 173.0,
+        "x_at_mask_px": 263.0,
         "mask_y": 190
       }
     ]
   },
   "s1": {
     "stage": "s1",
-    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x7b88b4757d30>",
+    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x740aed9477b0>",
     "mask_y_cam1": 160,
     "samples": [
       {
         "alpha_x_rad": -0.17453292519943295,
         "alpha_x_deg": -10.0,
-        "s1_px": 0.0
+        "s1_px": -0.18500000000000008
       },
       {
         "alpha_x_rad": -0.08726646259971647,
         "alpha_x_deg": -5.0,
-        "s1_px": 0.0
+        "s1_px": -0.11000000000000001
       },
       {
         "alpha_x_rad": 0.0,
         "alpha_x_deg": 0.0,
-        "s1_px": 0.0
+        "s1_px": 1.5612511283791264e-17
       },
       {
         "alpha_x_rad": 0.08726646259971647,
         "alpha_x_deg": 5.0,
-        "s1_px": 0.0
+        "s1_px": 0.08000000000000002
       },
       {
         "alpha_x_rad": 0.17453292519943295,
         "alpha_x_deg": 10.0,
-        "s1_px": 0.0
+        "s1_px": 0.1900000000000001
       }
     ]
   },
   "s2": {
     "stage": "s2",
-    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x7b890de11970>",
+    "camera_id": "<dv_processing.io.camera.USBDevice.DeviceDescriptor object at 0x740aed9acff0>",
     "mask_y_cam2": 190,
     "samples": [
       {
         "alpha_y_rad": -0.17453292519943295,
         "alpha_y_deg": -10.0,
-        "s2_px": 0.0
+        "s2_px": 0.1950000000000001
       },
       {
         "alpha_y_rad": -0.08726646259971647,
         "alpha_y_deg": -5.0,
-        "s2_px": 0.0
+        "s2_px": 0.12000000000000002
       },
       {
         "alpha_y_rad": 0.0,
         "alpha_y_deg": 0.0,
-        "s2_px": 0.0
+        "s2_px": -1.5612511283791264e-17
       },
       {
         "alpha_y_rad": 0.08726646259971647,
         "alpha_y_deg": 5.0,
-        "s2_px": 0.0
+        "s2_px": -0.09500000000000003
       },
       {
         "alpha_y_rad": 0.17453292519943295,
         "alpha_y_deg": 10.0,
-        "s2_px": 0.0
+        "s2_px": -0.1900000000000001
       }
     ]
   },
-  "created_at": "2026-03-27T20:17:02.365304+00:00",
+  "created_at": "2026-03-27T21:39:43.693459+00:00",
   "metadata": {
     "notes": "B: b vs position; S: slope vs tilt at ref. S stages: A/D slope, x@mask centered."
   }
