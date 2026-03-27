@@ -4,6 +4,7 @@ from perception.vision import get_measurements
 from perception.camera_model import CameraModel
 from core.sim_types import CameraObservation, TableCommand, WorkspaceParams
 from visualization.composite_layout import build_composite, get_default_window_size
+from perception.dvs_algorithms import line_x_at_pixel_y
 
 
 def _window_closed(window_name: str) -> bool:
@@ -27,10 +28,10 @@ class PencilVisualizerRealtime:
         self.workspace = workspace
 
         self.cam = CameraModel(width, height)
-
-        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
-        w, h = get_default_window_size(has_cams=True, has_workspace=self.show_workspace)
-        cv2.resizeWindow(self._window_name, w, h)
+        # Delay window creation until first render call so that any pre-run
+        # calibration (e.g. servo offset calibration) can happen without
+        # popping up the render UI.
+        self._window_ready = False
 
         self._workspace_size = 350
         self._center = self._workspace_size // 2
@@ -40,6 +41,14 @@ class PencilVisualizerRealtime:
             self._scale = (self._workspace_size - 2 * self._workspace_margin) / (2 * self.workspace.safe_radius)
         else:
             self._scale = 4000
+
+    def _ensure_window(self) -> None:
+        if self._window_ready:
+            return
+        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+        w, h = get_default_window_size(has_cams=True, has_workspace=self.show_workspace)
+        cv2.resizeWindow(self._window_name, w, h)
+        self._window_ready = True
 
     @staticmethod
     def _to_finite_scalar(x) -> float | None:
@@ -145,6 +154,7 @@ class PencilVisualizerRealtime:
         return canvas
 
     def render(self, measurement, command=None, surfaces=None, title: str | None = None, pose=None, **kwargs):
+        self._ensure_window()
         if measurement is None:
             if _window_closed(self._window_name):
                 return True
@@ -191,16 +201,26 @@ class DVSWorkspaceVisualizer:
 
     _window_name = "Pencil Balancer"
 
-    def __init__(self, workspace: WorkspaceParams, width=346, height=260, show_workspace: bool = True):
+    def __init__(
+        self,
+        workspace: WorkspaceParams,
+        width=346,
+        height=260,
+        show_workspace: bool = True,
+        mask_y_cam1: int = 160,
+        mask_y_cam2: int = 190,
+    ):
         self.width = width
         self.height = height
         self.workspace = workspace
         self.show_workspace = show_workspace
         self.cam = CameraModel(width, height)
-
-        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
-        w, h = get_default_window_size(has_cams=True, has_workspace=show_workspace)
-        cv2.resizeWindow(self._window_name, w, h)
+        self.mask_y_cam1 = int(mask_y_cam1)
+        self.mask_y_cam2 = int(mask_y_cam2)
+        # Delay window creation until first render call so that any pre-run
+        # calibration (e.g. servo offset calibration) can happen without
+        # popping up the render UI.
+        self._window_ready = False
 
         self._workspace_size = 350
         self._center = self._workspace_size // 2
@@ -211,7 +231,15 @@ class DVSWorkspaceVisualizer:
         else:
             self._scale = 4000
 
-    def _draw_line(self, frame, b, s):
+    def _ensure_window(self) -> None:
+        if self._window_ready:
+            return
+        cv2.namedWindow(self._window_name, cv2.WINDOW_NORMAL)
+        w, h = get_default_window_size(has_cams=True, has_workspace=self.show_workspace)
+        cv2.resizeWindow(self._window_name, w, h)
+        self._window_ready = True
+
+    def _draw_line(self, frame, b, s, mask_y: int | None = None):
         obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
 
@@ -219,7 +247,11 @@ class DVSWorkspaceVisualizer:
         b_px = PencilVisualizerRealtime._to_finite_scalar(b_px)
         if s_px is None or b_px is None:
             return
-        y0, y1 = 0, self.height - 1
+        y0 = 0
+        if mask_y is not None and 0 < mask_y < self.height:
+            y1 = min(mask_y - 1, self.height - 1)
+        else:
+            y1 = self.height - 1
         x0 = int(round(s_px * y0 + b_px))
         x1 = int(round(s_px * y1 + b_px))
         x0 = max(-10_000, min(10_000, x0))
@@ -228,6 +260,10 @@ class DVSWorkspaceVisualizer:
             cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
         except cv2.error:
             return
+        if mask_y is not None and 0 < mask_y < self.height:
+            xi = int(round(line_x_at_pixel_y(obs_px, mask_y)))
+            if 0 <= xi < self.width:
+                cv2.circle(frame, (xi, mask_y), 5, (0, 255, 0), -1)
 
     def _clamp_to_workspace(self, x_des: float, y_des: float) -> tuple[float, float]:
         """Project (x_des, y_des) onto workspace circle edge if outside (same as plant.clamp_command)."""
@@ -301,6 +337,7 @@ class DVSWorkspaceVisualizer:
         return canvas
 
     def render(self, measurement=None, command=None, surfaces=None, title: str | None = None, paused: bool | None = None, pose=None):
+        self._ensure_window()
         if surfaces is not None and len(surfaces) == 2:
             surface1, surface2 = surfaces
             frame1 = np.clip(surface1 * 50, 0, 255).astype(np.uint8)
@@ -315,8 +352,12 @@ class DVSWorkspaceVisualizer:
 
         if measurement is not None:
             b1, s1, b2, s2 = get_measurements(measurement)
-            self._draw_line(frame1, b1, s1)
-            self._draw_line(frame2, b2, s2)
+            if 0 < self.mask_y_cam1 < self.height:
+                cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
+            if 0 < self.mask_y_cam2 < self.height:
+                cv2.line(frame2, (0, self.mask_y_cam2), (self.width - 1, self.mask_y_cam2), (0, 165, 255), 2)
+            self._draw_line(frame1, b1, s1, mask_y=self.mask_y_cam1)
+            self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
 
         is_paused = paused is True
         workspace_canvas = self._build_workspace_canvas(command, paused=is_paused) if self.show_workspace else None

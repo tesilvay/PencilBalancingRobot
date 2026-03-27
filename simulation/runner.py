@@ -55,10 +55,19 @@ class ExperimentRunner:
 
             # ---- 3. visualization ----
             if self.visualizer and self.scheduler.should_render():
+                surfaces = None
+                try:
+                    vision = getattr(self.system, "perception", None)
+                    vision = getattr(vision, "vision", None)
+                    if vision is not None and hasattr(vision, "get_surfaces"):
+                        surfaces = vision.get_surfaces()
+                except Exception:
+                    surfaces = None
                 viz_result = self.visualizer.render(
                     measurement=measurement,
                     command=self.command,
                     pose=pose,
+                    surfaces=surfaces,
                 )
                 quit_requested = False
                 if isinstance(viz_result, tuple):

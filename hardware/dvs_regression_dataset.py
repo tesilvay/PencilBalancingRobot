@@ -48,6 +48,7 @@ from perception.dvs_camera_reader import (
     discover_devices,
 )
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
+from perception.dvs_algorithms import mask_events_below_line
 from core.system_builder import build_actuator, build_mechanism
 
 
@@ -291,6 +292,20 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--display-fps", type=float, default=30.0, help="Display refresh rate")
     p.add_argument("--decay-display", type=float, default=0.5, help="Event surface decay")
     p.add_argument("--surface-intensity-gain", type=float, default=50.0, help="Surface brightness")
+    p.add_argument(
+        "--mask-y-cam1",
+        type=int,
+        default=160,
+        metavar="Y",
+        help="ROI mask line y for cam1. Events with y >= Y are ignored (keeps y < Y).",
+    )
+    p.add_argument(
+        "--mask-y-cam2",
+        type=int,
+        default=190,
+        metavar="Y",
+        help="ROI mask line y for cam2. Events with y >= Y are ignored (keeps y < Y).",
+    )
     return p.parse_args()
 
 
@@ -402,13 +417,17 @@ def main() -> None:
             batches2.append(b)
         if batches1:
             ev1 = np.concatenate(batches1)
+            ev1 = mask_events_below_line(ev1, mask_line_y=args.mask_y_cam1, frame_height=H)
             surface1 *= decay
-            np.add.at(surface1, (ev1["y"], ev1["x"]), 1.0)
+            if len(ev1) > 0:
+                np.add.at(surface1, (ev1["y"], ev1["x"]), 1.0)
             result1 = algo1.update(ev1)
         if batches2:
             ev2 = np.concatenate(batches2)
+            ev2 = mask_events_below_line(ev2, mask_line_y=args.mask_y_cam2, frame_height=H)
             surface2 *= decay
-            np.add.at(surface2, (ev2["y"], ev2["x"]), 1.0)
+            if len(ev2) > 0:
+                np.add.at(surface2, (ev2["y"], ev2["x"]), 1.0)
             result2 = algo2.update(ev2)
         frame1 = np.clip(surface1 * gain, 0, 255).astype(np.uint8)
         frame2 = np.clip(surface2 * gain, 0, 255).astype(np.uint8)

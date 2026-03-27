@@ -129,14 +129,14 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     plant = PlantParams(
         g=9.81,
         com_length=0.1,
-        tau=0.04,
+        tau=0.03,
         zeta=0.7,
         num_states=8,
         max_acc=9.81 * 10,
     )
     workspace = WorkspaceParams(
-        x_ref=0.010,
-        y_ref=-0.015,
+        x_ref=0.0,
+        y_ref=-0.0,
         safe_radius=0.068,
     )
     mechanism = MechanismParams(
@@ -153,7 +153,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     elif preset == "vision_real":
         hw = _default_hardware()
         hw.vision_mode = "real_dvs"
-        hw.dvs_use_regression = True
+        hw.dvs_use_regression = False
         run = _default_run_realtime()
     elif preset == "actuation_real":
         hw = _default_hardware()
@@ -165,7 +165,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
         hw.vision_mode = "real_dvs"
         hw.servo = True
         hw.servo_port = None
-        hw.dvs_use_regression = True
+        hw.dvs_use_regression = False
         run = _default_run_realtime()
     else:
         raise ValueError(f"Unknown preset: {preset}")
@@ -174,7 +174,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
 
     variant = BenchmarkVariant(
         controller_type="lqr",
-        estimator_type="lpf",
+        estimator_type="kalman",
         noise_std=0.01,
         delay_steps=1,
     )

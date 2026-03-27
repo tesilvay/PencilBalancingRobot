@@ -1,6 +1,7 @@
 import numpy as np
 import control as ct
 from core.sim_types import SystemState, PoseMeasurement, TableCommand
+from scipy.linalg import solve_discrete_are
 
 
 # -------------------------------------------------
@@ -133,7 +134,8 @@ class KalmanEstimator(BaseEstimator):
         self.Q = Q
         self.R = R
 
-        self.P = np.eye(8) * 0.01
+        self.P = np.eye(8) * 0.01 #guess
+        #self.P = solve_discrete_are(A.T, self.H.T, self.Q, self.R)
         self.x_hat = np.zeros((8, 1))
 
     def update(

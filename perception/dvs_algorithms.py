@@ -1,6 +1,5 @@
 import math
 
-import numba
 import numpy as np
 
 from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
@@ -8,7 +7,41 @@ from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
 from core.sim_types import CameraObservation, HoughQuadraticState, HoughTrackerParams
 
 
-@numba.njit(cache=True)
+try:
+    import numba as _numba  # type: ignore
+
+    njit = _numba.njit
+except ModuleNotFoundError:  # pragma: no cover
+    # Allow running visualization/tools without numba installed.
+    def njit(*_args, **_kwargs):  # type: ignore
+        def _decorator(fn):
+            return fn
+
+        return _decorator
+
+
+def mask_events_below_line(events_np: np.ndarray, mask_line_y: int, frame_height: int) -> np.ndarray:
+    """
+    Keep only events with y < mask_line_y.
+
+    Edge cases:
+    - mask_line_y <= 0: return empty array (same dtype)
+    - mask_line_y >= frame_height: no masking (return input)
+    """
+    if events_np is None:
+        return events_np
+    if mask_line_y >= frame_height:
+        return events_np
+    if mask_line_y <= 0:
+        return events_np[:0]
+    return events_np[events_np["y"] < mask_line_y]
+
+
+def line_x_at_pixel_y(obs_px: CameraObservation, y: float) -> float:
+    """Evaluate pixel-space line model x = slope*y + intercept at a given y."""
+    return float(obs_px.slope) * float(y) + float(obs_px.intercept)
+
+@njit(cache=True)
 def _hough_update_events_jit(
     xs_centered, ys_centered,
     q_m2, cross_mb, q_b2, lin_m, lin_b,

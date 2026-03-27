@@ -30,7 +30,7 @@ import numpy as np
 from core.sim_types import HoughTrackerParams
 from visualization.composite_layout import build_composite, get_default_window_size
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
-from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm
+from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y
 
 
 def _window_closed(window_name: str) -> bool:
@@ -74,6 +74,20 @@ def main():
         default=None,
         metavar="MS",
         help="Noise filter duration (ms). Omit = no filter. Use 30 to match main.py with Sam.",
+    )
+    parser.add_argument(
+        "--mask-y-cam1",
+        type=int,
+        default=160,
+        metavar="Y",
+        help="ROI mask line y for cam1. Events with y >= Y are ignored (keeps y < Y).",
+    )
+    parser.add_argument(
+        "--mask-y-cam2",
+        type=int,
+        default=190,
+        metavar="Y",
+        help="ROI mask line y for cam2. Events with y >= Y are ignored (keeps y < Y).",
     )
     parser.add_argument(
         "--decay-display",
@@ -178,14 +192,18 @@ def main():
 
         if batches1:
             events1 = np.concatenate(batches1)
+            events1 = mask_events_below_line(events1, mask_line_y=args.mask_y_cam1, frame_height=H)
             surface1 *= decay_display
-            np.add.at(surface1, (events1["y"], events1["x"]), 1.0)
+            if len(events1) > 0:
+                np.add.at(surface1, (events1["y"], events1["x"]), 1.0)
             result1 = algo1.update(events1)
 
         if batches2:
             events2 = np.concatenate(batches2)
+            events2 = mask_events_below_line(events2, mask_line_y=args.mask_y_cam2, frame_height=H)
             surface2 *= decay_display
-            np.add.at(surface2, (events2["y"], events2["x"]), 1.0)
+            if len(events2) > 0:
+                np.add.at(surface2, (events2["y"], events2["x"]), 1.0)
             result2 = algo2.update(events2)
 
         if not batches1 and not batches2:
@@ -200,16 +218,39 @@ def main():
             frame2 = cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
 
             # Draw detected line on each frame.
-            for frame, result in [(frame1, result1), (frame2, result2)]:
+            for frame, result, mask_y in [(frame1, result1, args.mask_y_cam1), (frame2, result2, args.mask_y_cam2)]:
+                if 0 < mask_y < H:
+                    cv2.line(frame, (0, mask_y), (W - 1, mask_y), (0, 165, 255), 2)
                 if result is not None and not isinstance(result, tuple):
                     obs_px = result
                     s_px, b_px = obs_px.slope, obs_px.intercept
-                    y0, y1 = 0, H - 1
-                    x0 = int(s_px * y0 + b_px)
-                    x1 = int(s_px * y1 + b_px)
+                    y0 = 0
+                    y1 = (min(mask_y - 1, H - 1) if 0 < mask_y < H else (H - 1))
+                    x0 = int(round(s_px * y0 + b_px))
+                    x1 = int(round(s_px * y1 + b_px))
                     cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+                    if 0 < mask_y < H:
+                        xi = int(round(line_x_at_pixel_y(obs_px, mask_y)))
+                        if 0 <= xi < W:
+                            cv2.circle(frame, (xi, mask_y), 5, (0, 255, 0), -1)
 
-            title = f"DVS cam preview - {args.mode} | Q: quit"
+            def _fmt_s_xatmask(res, mask_y: int) -> str:
+                if res is None or isinstance(res, tuple):
+                    return "s=?, x_at_mask=?"
+                try:
+                    s = float(res.slope)
+                    x_at_mask = float(line_x_at_pixel_y(res, mask_y))
+                except (TypeError, ValueError):
+                    return "s=?, x_at_mask=?"
+                if not np.isfinite(s) or not np.isfinite(x_at_mask):
+                    return "s=?, x_at_mask=?"
+                return f"s={s:+.4f}, x_at_mask={x_at_mask:+.1f}"
+
+            title = (
+                f"{args.mode} | "
+                f"cam1({_fmt_s_xatmask(result1, args.mask_y_cam1)}) "
+                f"cam2({_fmt_s_xatmask(result2, args.mask_y_cam2)}) | Q: quit"
+            )
             composite = build_composite(title, frame1, frame2, None)
             cv2.imshow(WINDOW_NAME, composite)
 

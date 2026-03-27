@@ -149,6 +149,8 @@ class HardwareParams:
     
     dvs_cam_x_port: str | None = None
     dvs_cam_y_port: str | None = None
+    dvs_mask_line_y_cam1: int = 160
+    dvs_mask_line_y_cam2: int = 190
     servo_frequency: int = 250  # Hz; command update rate to servos
     dvs_algo: str = "hough"  # "hough" | "sam"
     sam_filter_ms: float | None = 30  # None = no filter; > 0 = duration (Sam OLS only)

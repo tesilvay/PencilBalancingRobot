@@ -68,7 +68,7 @@ def build_estimator(variant, params):
 
         elif variant.estimator_type == "kalman":
             Qk = np.eye(8) * 1e-6
-            Rk = np.eye(4) * variant.noise_std**2
+            Rk = np.eye(4) * variant.noise_std**2 #proportional to dynamics trust
             estimator = KalmanEstimator(A, B, dt=0.001, Q=Qk, R=Rk)
     else:
         estimator = None
@@ -148,6 +148,8 @@ def build_real_dvs(params, camera_params):
                     cam1_device=cam1_device,
                     cam2_device=cam2_device,
                     dvs_regression_model=dvs_regression_model,
+                    dvs_mask_line_y_cam1=hw.dvs_mask_line_y_cam1,
+                    dvs_mask_line_y_cam2=hw.dvs_mask_line_y_cam2,
                     noise_filter_duration_ms=noise_filter_duration_ms,
     )
     
@@ -204,7 +206,12 @@ def build_visualizer(params):
     show_workspace = params.hardware.servo
     
     if params.hardware.vision_mode == "real_dvs":
-        return DVSWorkspaceVisualizer(workspace=params.workspace, show_workspace=show_workspace)
+        return DVSWorkspaceVisualizer(
+            workspace=params.workspace,
+            show_workspace=show_workspace,
+            mask_y_cam1=params.hardware.dvs_mask_line_y_cam1,
+            mask_y_cam2=params.hardware.dvs_mask_line_y_cam2,
+        )
     
     return PencilVisualizerRealtime(show_workspace=show_workspace, workspace=params.workspace)
 

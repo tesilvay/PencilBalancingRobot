@@ -130,6 +130,8 @@ class RealEventCameraInterface(VisionModelBase):
         cam1_device: str,
         cam2_device: str,
         dvs_regression_model,
+        dvs_mask_line_y_cam1: int = 160,
+        dvs_mask_line_y_cam2: int = 190,
         noise_filter_duration_ms: float | None = None,
     ):
         super().__init__(camera_params)
@@ -140,6 +142,8 @@ class RealEventCameraInterface(VisionModelBase):
         self.cam = CameraModel()
 
         self.dvs_regression_model = dvs_regression_model
+        self._dvs_mask_line_y_cam1 = int(dvs_mask_line_y_cam1)
+        self._dvs_mask_line_y_cam2 = int(dvs_mask_line_y_cam2)
             
         from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
@@ -162,7 +166,11 @@ class RealEventCameraInterface(VisionModelBase):
 
     def _reader_loop(self, reader, algo, _cam_id: int):
         """Background loop: drain all queued batches, update algo, store latest."""
+        from perception.dvs_algorithms import mask_events_below_line
+        from perception.dvs_camera_reader import DAVIS346_HEIGHT
+
         surface = self._surface1 if _cam_id == 1 else self._surface2
+        mask_y = self._dvs_mask_line_y_cam1 if _cam_id == 1 else self._dvs_mask_line_y_cam2
         while not self._stop.is_set() and reader.is_running():
             batches = []
             while True:
@@ -173,8 +181,10 @@ class RealEventCameraInterface(VisionModelBase):
 
             if batches:
                 events = np.concatenate(batches)
+                events = mask_events_below_line(events, mask_line_y=mask_y, frame_height=DAVIS346_HEIGHT)
                 surface *= self._decay_display
-                np.add.at(surface, (events["y"], events["x"]), 1.0)
+                if len(events) > 0:
+                    np.add.at(surface, (events["y"], events["x"]), 1.0)
                 result = algo.update(events)
                 if not isinstance(result, tuple):
                     with self._lock:
@@ -370,6 +380,7 @@ class SimVisionModel(VisionModelBase):
     def _add_noise(self, cams: CameraPair):
         
         b1, s1, b2, s2 = get_measurements(cams)
+        b1old=b1
         
         if self.noise_std is not None:
             s1 += np.random.normal(0, self.noise_std)

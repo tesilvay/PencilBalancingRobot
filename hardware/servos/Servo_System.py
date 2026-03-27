@@ -40,11 +40,17 @@ class MechanismAdapter:
 
     def __init__(self, mech):
         self.mech = mech
+        # Translation applied in workspace coordinates before inverse kinematics.
+        # Calibrator updates this to compensate for real-vs-model zero offsets.
+        self.workspace_offset = (0.0, 0.0)
+
+    def set_workspace_offset(self, dx: float, dy: float) -> None:
+        self.workspace_offset = (float(dx), float(dy))
 
     def command_to_angles(self, command):
 
-        x = command.x_des
-        y = command.y_des
+        x = command.x_des + self.workspace_offset[0]
+        y = command.y_des + self.workspace_offset[1]
 
         target_mm = np.array([x, y]) * 1000.0
         
@@ -79,3 +85,7 @@ class ServoSystem:
         self.controller.send_angles(theta1, theta2)
 
         self.last_send = now
+
+    def set_workspace_offset(self, dx: float, dy: float) -> None:
+        """Update the workspace translation offset applied before IK."""
+        self.adapter.set_workspace_offset(dx, dy)
