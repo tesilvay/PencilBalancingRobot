@@ -8,7 +8,7 @@ from core.sim_types import (
     StopPolicy,
 )
 
-from hardware.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
+from hardware.servos.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 
 
 class SimulationEngine:

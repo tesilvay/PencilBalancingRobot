@@ -200,6 +200,10 @@ class RealEventCameraInterface(VisionModelBase):
         with self._lock:
             return self._surface1.copy(), self._surface2.copy()
 
+    def get_event_accumulator_frames(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Alias for :meth:`get_surfaces` — decaying event-accumulator images for display."""
+        return self.get_surfaces()
+
     def get_observation(self, state_true=None) -> CameraPair | None:
         """
         Return latest CameraPair from Hough (same interface as sim).

@@ -171,7 +171,7 @@ docs/                   # Architecture, tasks, this guide
 ## Recent Changes
 
 - **Real DVS + simulated servos**: Real DAVIS346 cameras measure the physical pencil; controller computes (x_des, y_des); servos stay disconnected. Run indefinitely until `q` or pencil fall.
-- **DVSWorkspaceVisualizer**: Three windows — Cam 1, Cam 2 (event footage + line overlay), Workspace (circle + desired point). Point clamped to circle edge when outside limits.
+- **Realtime DVS visualization** (`RealDvsVisualizer` / `RealDvsWorkspaceVisualizer`): One composite window — Cam 1, Cam 2 (event-accumulator footage + line overlay), optional workspace (circle + desired point + tilt arrows). Desired point clamped to circle edge when outside limits.
 - **`dvs_algo`**: Choose `"hough"` or `"sam"` in `HardwareParams`.
 - **`dvs_hough`**: Java-style Hough tuneables in `HardwareParams` (`mixing_factor`, `inlier_stddev_px`, `min_determinant`).
 - **`dvs_sam_noise_filter_duration_ms`**: `None` = no filter; `30` = default (Sam OLS only). Use `5`–`10` for low-latency, or `None` to disable.
@@ -185,7 +185,7 @@ docs/                   # Architecture, tasks, this guide
 
 - **`main.py`**: `ExperimentSetup` — params, camera_params, default_variant
 - **`core/sim_types.py`**: `PhysicalParams`, `HardwareParams` (servo, dvs_cam, dvs_cam_x_port, dvs_cam_y_port, dvs_algo, dvs_sam_noise_filter_duration_ms, dvs_hough), `RunParams` (estimator_lpf_alpha), `BenchmarkVariant`, `ExperimentSetup`
-- **`system_builder.py`**: Vision selection (`dvs_cam`, `dvs_algo`), controller/estimator choice, DVSWorkspaceVisualizer when real DVS + realtime
+- **`system_builder.py`**: Vision selection (`dvs_cam`, `dvs_algo`), controller/estimator choice, `build_visualizer(params, perception)` picks `SimDvsVisualizer` / `SimDvsWorkspaceVisualizer` or `RealDvsVisualizer` / `RealDvsWorkspaceVisualizer` from `vision_mode` and servo (workspace) flags
 
 ---
 

@@ -1,5 +1,7 @@
 from core.sim_types import SimulationResult, TerminalInfo
+from visualization.realtime_visualizer import VizResult
 import cv2
+
 
 class ExperimentRunner:
     def __init__(
@@ -23,10 +25,12 @@ class ExperimentRunner:
 
         self.command = None
         self.state = None
+        self._viz_paused = False
 
     def initialize(self, initial_state, initial_command):
         self.state = initial_state
         self.command = initial_command
+        self._viz_paused = False
 
         if self.logger:
             self.logger.reset(initial_state, initial_command)
@@ -55,27 +59,21 @@ class ExperimentRunner:
 
             # ---- 3. visualization ----
             if self.visualizer and self.scheduler.should_render():
-                surfaces = None
-                try:
-                    vision = getattr(self.system, "perception", None)
-                    vision = getattr(vision, "vision", None)
-                    if vision is not None and hasattr(vision, "get_surfaces"):
-                        surfaces = vision.get_surfaces()
-                except Exception:
-                    surfaces = None
                 viz_result = self.visualizer.render(
                     measurement=measurement,
                     command=self.command,
                     pose=pose,
-                    surfaces=surfaces,
+                    paused=self._viz_paused,
                 )
-                quit_requested = False
-                if isinstance(viz_result, tuple):
-                    # DVS visualizer returns (quit_requested, toggle_pause)
-                    quit_requested = bool(viz_result[0])
-                elif isinstance(viz_result, bool):
-                    quit_requested = viz_result
-                if quit_requested:
+                if isinstance(viz_result, VizResult):
+                    if viz_result.toggle_pause:
+                        self._viz_paused = not self._viz_paused
+                    if viz_result.quit:
+                        break
+                elif isinstance(viz_result, tuple):
+                    if bool(viz_result[0]):
+                        break
+                elif viz_result:
                     break
 
             # ---- 4. logging ----

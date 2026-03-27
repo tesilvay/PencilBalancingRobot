@@ -136,7 +136,7 @@ Optional learned pose regression is loaded for real DVS when enabled (`dvs_use_r
 - pacing (`NoPacing` or `RealTimePacing`)
 - `Logger`
 - optional five-bar mechanism + optional `ServoSystem` actuator
-- optional realtime visualizer (`PencilVisualizerRealtime` or `DVSWorkspaceVisualizer`)
+- optional realtime visualizer (`SimDvsVisualizer`, `SimDvsWorkspaceVisualizer`, `RealDvsVisualizer`, or `RealDvsWorkspaceVisualizer`, selected in `build_visualizer`)
 
 Result is one `ExperimentRunner`.
 

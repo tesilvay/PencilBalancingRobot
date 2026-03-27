@@ -1,4 +1,11 @@
-from core.sim_types import SystemState, TableCommand, TableAccel, PhysicalParams
+from core.sim_types import (
+    PhysicalParams,
+    SystemState,
+    TableAccel,
+    TableCommand,
+    WorkspaceParams,
+    clamp_table_command_to_workspace,
+)
 import numpy as np
 
 # We could use the linear state-space model (A,B) for the plant dynamics
@@ -102,26 +109,10 @@ class BalancerPlant:
     # ------------------------------------------------------------------
 
     def clamp_command(self, command_u):
-
-        x_des = command_u.x_des
-        y_des = command_u.y_des
-    
-        # vector from workspace center
-        dx = x_des - self.x_ref
-        dy = y_des - self.y_ref
-
-        dist = np.sqrt(dx*dx + dy*dy)
-
-        # radial projection
-        if self.safe_radius is not None and dist > self.safe_radius and dist > 0:
-            scale = self.safe_radius / dist
-            dx *= scale
-            dy *= scale
-
-            x_des = self.x_ref + dx
-            y_des = self.y_ref + dy
-
-        return TableCommand(x_des, y_des)
+        return clamp_table_command_to_workspace(
+            command_u,
+            WorkspaceParams(self.x_ref, self.y_ref, self.safe_radius),
+        )
 
     def _clamp_acceleration(self, x_ddot, y_ddot):
         """

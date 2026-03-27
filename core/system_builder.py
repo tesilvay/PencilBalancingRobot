@@ -1,7 +1,12 @@
 # system_builder.py
 import numpy as np
 from warnings import warn
-from visualization.realtime_visualizer import PencilVisualizerRealtime, DVSWorkspaceVisualizer
+from visualization.realtime_visualizer import (
+    RealDvsVisualizer,
+    RealDvsWorkspaceVisualizer,
+    SimDvsVisualizer,
+    SimDvsWorkspaceVisualizer,
+)
 from core.controller import NullController, PolePlacementController, LQRController, CircleController
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
@@ -10,7 +15,7 @@ from core.plant import BalancerPlant
 from core.sim_types import make_reference_state, StopPolicy
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
-from hardware.Servo_System import ServoSystem
+from hardware.servos.Servo_System import ServoSystem
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, SurfaceRegressionAlgorithm
 from simulation.stop_conditions import MaxSteps, FallCondition, StabilizedCondition, AnyStop, Infinite
 from simulation.pacing import NoPacing, RealTimePacing
@@ -198,22 +203,42 @@ def build_actuator(params, mech):
         frequency=params.hardware.servo_frequency,
     )
 
-def build_visualizer(params):
-    
+def _event_frames_fn_from_perception(perception):
+    if perception is None:
+        return None
+    vision = getattr(perception, "vision", None)
+    if vision is None:
+        return None
+    fn = getattr(vision, "get_event_accumulator_frames", None)
+    if fn is None:
+        fn = getattr(vision, "get_surfaces", None)
+    return fn
+
+
+def build_visualizer(params, perception):
     if not params.run.realtimerender:
         return None
-    
+
     show_workspace = params.hardware.servo
-    
+    frames_fn = _event_frames_fn_from_perception(perception)
+
     if params.hardware.vision_mode == "real_dvs":
-        return DVSWorkspaceVisualizer(
-            workspace=params.workspace,
-            show_workspace=show_workspace,
+        if show_workspace:
+            return RealDvsWorkspaceVisualizer(
+                params.workspace,
+                frames_fn,
+                mask_y_cam1=params.hardware.dvs_mask_line_y_cam1,
+                mask_y_cam2=params.hardware.dvs_mask_line_y_cam2,
+            )
+        return RealDvsVisualizer(
+            frames_fn,
             mask_y_cam1=params.hardware.dvs_mask_line_y_cam1,
             mask_y_cam2=params.hardware.dvs_mask_line_y_cam2,
         )
-    
-    return PencilVisualizerRealtime(show_workspace=show_workspace, workspace=params.workspace)
+
+    if show_workspace:
+        return SimDvsWorkspaceVisualizer(params.workspace)
+    return SimDvsVisualizer()
 
 def calculate_rates(params):
     
@@ -279,7 +304,7 @@ def system_factory(setup):
 
     perception = Perception(vision, estimator)
     
-    system = System(plant, perception, controller, params.run.dt)
+    system = System(plant, perception, controller, params.run.dt, params.workspace)
     
     return system
 
@@ -297,7 +322,7 @@ def runner_factory(params, system, stop_policy):
     
     actuator = build_actuator(params, mech)
     
-    visualizer = build_visualizer(params)
+    visualizer = build_visualizer(params, system.perception)
     
     runner = ExperimentRunner(
         system=system,
