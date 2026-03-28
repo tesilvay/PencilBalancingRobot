@@ -40,5 +40,7 @@ class System:
 
         u_raw = self.controller.compute(state_est)
         command = clamp_table_command_to_workspace(u_raw, self.workspace)
+        if hasattr(self.controller, "set_applied_command"):
+            self.controller.set_applied_command(command)
 
         return state_true, state_est, command, acc, measurement, pose

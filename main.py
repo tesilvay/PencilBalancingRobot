@@ -356,7 +356,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--controller",
         default=None,
-        choices=["lqr", "pole", "circle", "null"],
+        choices=["lqr", "pole", "smooth_pole", "circle", "null"],
         help="Override default_variant controller",
     )
     parser.add_argument(

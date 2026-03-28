@@ -1,6 +1,11 @@
-from core.sim_types import SimulationResult, TerminalInfo
+from core.sim_types import SimulationResult, TableCommand, TerminalInfo, clamp_table_command_to_workspace
 from visualization.realtime_visualizer import VizResult
 import cv2
+
+
+def _workspace_center_command(system) -> TableCommand:
+    ws = system.workspace
+    return clamp_table_command_to_workspace(TableCommand(ws.x_ref, ws.y_ref), ws)
 
 
 class ExperimentRunner:
@@ -54,8 +59,14 @@ class ExperimentRunner:
             self.state = state_true
 
             # ---- 2. actuator ----
+            # Paused UI means "table at center": drive real servos there, not the live controller output.
             if self.actuator and self.scheduler.should_actuate():
-                self.actuator.send(self.command)
+                cmd_out = (
+                    _workspace_center_command(self.system)
+                    if self._viz_paused
+                    else self.command
+                )
+                self.actuator.send(cmd_out)
 
             # ---- 3. visualization ----
             if self.visualizer and self.scheduler.should_render():
@@ -68,6 +79,9 @@ class ExperimentRunner:
                 if isinstance(viz_result, VizResult):
                     if viz_result.toggle_pause:
                         self._viz_paused = not self._viz_paused
+                        # Same frame as keypress we may have already sent the controller command above.
+                        if self._viz_paused and self.actuator:
+                            self.actuator.send(_workspace_center_command(self.system))
                     if viz_result.quit:
                         break
                 elif isinstance(viz_result, tuple):

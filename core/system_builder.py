@@ -7,7 +7,13 @@ from visualization.realtime_visualizer import (
     SimDvsVisualizer,
     SimDvsWorkspaceVisualizer,
 )
-from core.controller import NullController, PolePlacementController, LQRController, CircleController
+from core.controller import (
+    NullController,
+    PolePlacementController,
+    LQRController,
+    CircleController,
+    SmoothPolePlacementController,
+)
 from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
 from core.model import BuildLinearModel
@@ -51,6 +57,16 @@ def build_controller(variant, params):
         R = np.eye(2) * 1e6
 
         controller = LQRController(A, B, Q, R, x_ref)
+
+    elif variant.controller_type == "smooth_pole":
+        dt = params.run.dt
+        s_poles = np.array([-14, -16, -18, -20, -14, -16, -18, -20], dtype=float)
+        # z-plane poles: map continuous-style poles, plus two for the u_{k-1} part of ξ
+        z_plant = np.exp(s_poles * dt)
+        slew_knob = 0.99
+        z_extra = np.array([slew_knob, slew_knob])
+        desired_poles_z = np.concatenate([z_plant, z_extra])
+        controller = SmoothPolePlacementController(A, B, dt, desired_poles_z, x_ref)
 
     elif variant.controller_type == "circle":
         radius = params.workspace.safe_radius
