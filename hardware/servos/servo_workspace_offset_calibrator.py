@@ -204,8 +204,8 @@ def calibrate_servo_workspace_offset(
     """
     Run a blocking terminal calibration to compute (x_offset, y_offset).
 
-    This should only be used in real-servo + real-DVS mode where pose measurement
-    is meaningful.
+    Pass system=None when no perception stack is available (e.g. workspace picker);
+    measured pose lines in the UI stay idle. With a real system, vision readouts are best-effort.
     """
     if not hasattr(actuator, "send"):
         raise TypeError("actuator must provide a send(TableCommand) method")

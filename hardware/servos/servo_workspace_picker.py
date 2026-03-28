@@ -3,8 +3,11 @@ Standalone tool: connect to servos, show workspace (same view as main with cams+
 let the user pick a point by clicking. The point is checked against workspace (x_ref, y_ref, safe_radius),
 a TableCommand is generated and sent to the servos. Use this to verify the table moves to the chosen point.
 
-Run: python -m hardware.servo_workspace_picker [--port /dev/ttyUSB1]
-     Use --port None or omit for mock (no real hardware).
+With a real serial port, the same pre-run calibration as main runs first (terminal UI: arrow keys
+to align origin, Enter to accept), then the OpenCV workspace picker opens.
+
+Run: python -m hardware.servos.servo_workspace_picker [--port /dev/ttyUSB1]
+     Use --port None for mock (no real hardware, no calibration).
 """
 import argparse
 import numpy as np
@@ -19,6 +22,7 @@ from core.sim_types import (
     TableCommand,
 )
 from core.system_builder import build_mechanism, build_actuator
+from hardware.servos.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from visualization.composite_layout import (
     BANNER_HEIGHT,
     ONE_PANEL_MARGIN,
@@ -38,7 +42,7 @@ def _window_closed(window_name: str) -> bool:
 DEFAULT_WORKSPACE = WorkspaceParams(
     x_ref=0.010,
     y_ref=-0.020,
-    safe_radius=0.018,
+    safe_radius=0.068,
 )
 DEFAULT_MECHANISM = MechanismParams(
     O=(128.77, 178.13),
@@ -127,7 +131,13 @@ def _render_workspace_canvas(
     return canvas, center, scale
 
 
-def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_port: str | None):
+def run(
+    workspace: WorkspaceParams,
+    mechanism_params: MechanismParams,
+    servo_port: str | None,
+    *,
+    skip_calibration: bool = False,
+):
     params = PhysicalParams(
         plant=PlantParams(
             g=9.81,
@@ -153,6 +163,16 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
     actuator = build_actuator(params, mech)
     if actuator is None:
         raise RuntimeError("Actuator not built (servo disabled?)")
+
+    if servo_port is not None and not skip_calibration:
+        if not hasattr(actuator, "set_workspace_offset"):
+            raise RuntimeError("Actuator must support set_workspace_offset for real-servo calibration.")
+        x_offset, y_offset = calibrate_servo_workspace_offset(
+            system=None,
+            actuator=actuator,
+            workspace=workspace,
+        )
+        actuator.set_workspace_offset(x_offset, y_offset)
 
     # Same workspace view as main (grid, circle, point) — single composite window with banner
     WINDOW_NAME = "Workspace picker"
@@ -195,6 +215,8 @@ def run(workspace: WorkspaceParams, mechanism_params: MechanismParams, servo_por
 
     cv2.setMouseCallback(WINDOW_NAME, on_mouse)
 
+    if servo_port is not None and skip_calibration:
+        print("Calibration skipped (--skip-calibration).")
     print("Click in the Workspace window to send table command. Press 'q' to quit.")
     title = "Workspace picker - click to move table | Q: quit"
     while True:
@@ -225,6 +247,11 @@ def main():
         default=DEFAULT_WORKSPACE.safe_radius,
         help="Workspace safe_radius in m (default: from main).",
     )
+    parser.add_argument(
+        "--skip-calibration",
+        action="store_true",
+        help="Skip terminal arrow-key workspace offset calibration (real servo only).",
+    )
     args = parser.parse_args()
     port = None if args.port.strip().lower() == "none" else args.port
     workspace = WorkspaceParams(
@@ -232,7 +259,7 @@ def main():
         y_ref=DEFAULT_WORKSPACE.y_ref,
         safe_radius=args.workspace_radius,
     )
-    run(workspace, DEFAULT_MECHANISM, port)
+    run(workspace, DEFAULT_MECHANISM, port, skip_calibration=args.skip_calibration)
 
 
 if __name__ == "__main__":
