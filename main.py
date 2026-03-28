@@ -112,8 +112,8 @@ def _default_run_offline() -> RunParams:
         dt=0.001,
         stability_tolerance=0.3,
         estimator_lpf_alpha=None,
-        initial_angle_spread_deg=8,
-        initial_position_spread_m=0.020,
+        initial_angle_spread_deg=0,
+        initial_position_spread_m=0.000,
     )
 
 
@@ -174,7 +174,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
 
     variant = BenchmarkVariant(
         controller_type="lqr",
-        estimator_type="kalman",
+        estimator_type="lpf",
         noise_std=0.01,
         delay_steps=1,
     )
@@ -356,7 +356,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--controller",
         default=None,
-        choices=["lqr", "pole", "circle"],
+        choices=["lqr", "pole", "circle", "null"],
         help="Override default_variant controller",
     )
     parser.add_argument(

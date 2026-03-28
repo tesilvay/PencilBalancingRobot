@@ -80,6 +80,9 @@ class VisionModelBase:
         alpha_x = (s1 + b1 * s2) / denom
         alpha_y = (s2 - b2 * s1) / denom
 
+        alpha_x = float(np.clip(alpha_x, -np.pi / 2, np.pi / 2))
+        alpha_y = float(np.clip(alpha_y, -np.pi / 2, np.pi / 2))
+
         pose = PoseMeasurement(
             X=X,
             Y=Y,
