@@ -29,7 +29,7 @@ class ManualLineState:
 
     def to_obs_px(self, mask_y: int) -> tuple[float, float]:
         b_px = float(self.x_at_mask_px) - float(self.slope_px) * float(mask_y)
-        return float(self.slope_px), float(b_px)
+        return CameraObservation(slope=float(self.slope_px), intercept=float(b_px))
 
 
 def line_angle_deg_from_slope_px(slope_px: float) -> float:
@@ -37,14 +37,14 @@ def line_angle_deg_from_slope_px(slope_px: float) -> float:
 
 
 def manual_state_to_cam1_pair(state: ManualLineState, mask_y: int, cam: CameraModel) -> CameraPair:
-    s_px, b_px = state.to_obs_px(mask_y=mask_y)
-    n = cam.pixel_to_camnorm(CameraObservation(slope=s_px, intercept=b_px))
+    obs_px = state.to_obs_px(mask_y=mask_y)
+    n = cam.pixel_to_camnorm(obs_px)
     return CameraPair(cam1=n, cam2=CameraObservation(slope=0.0, intercept=0.0))
 
 
 def manual_state_to_cam2_pair(state: ManualLineState, mask_y: int, cam: CameraModel) -> CameraPair:
-    s_px, b_px = state.to_obs_px(mask_y=mask_y)
-    n = cam.pixel_to_camnorm(CameraObservation(slope=s_px, intercept=b_px))
+    obs_px = state.to_obs_px(mask_y=mask_y)
+    n = cam.pixel_to_camnorm(obs_px)
     return CameraPair(cam1=CameraObservation(slope=0.0, intercept=0.0), cam2=n)
 
 

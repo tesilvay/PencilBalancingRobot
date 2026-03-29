@@ -146,13 +146,15 @@ def connect_dvs_cameras(hw):
         return devices[0], devices[1]
         
 def load_regression_algo(hw):
-    
     if hw.dvs_use_regression:
-        from perception.simple_dvs_regression_model import SimpleDVSRegressionModel
-        return SimpleDVSRegressionModel.load("hardware/calibration_files/dvs_calibration_dataset.json")
-    
-    else:
-        return None
+        # Default: v1 affine JSON from interactive calibrator (same default as calibrator --output).
+        # Dataset JSON (e.g. hardware/calibration_files/dvs_calibration_dataset.json) still loads via
+        # SimpleDVSRegressionModel.load(path) if you point an explicit path here later.
+        from perception.simple_dvs_regression_model import SimpleDVSRegressionModel, default_affine_calibration_path
+
+        return SimpleDVSRegressionModel.load(default_affine_calibration_path())
+
+    return None
 
 def build_real_dvs(params, camera_params):
     hw = params.hardware

@@ -1,156 +1,539 @@
-"""
-Interactive simple DVS regression calibrator.
-
-Default workflow: **b1** → **b2** → **s1** → **s2** (see ``hardware/dvs_bx_calibration.py`` and
-``hardware/dvs_sx_calibration.py``), then one combined JSON dataset.
-
-B1/B2: A/D moves lateral line position (``x_at_mask``); slope fixed.
-
-S1/S2: A/D adjusts slope only; line kept at image center (``x_at_mask`` pinned); b changes only
-as required by geometry for that slope.
-
-Optional ``--full-regression``: legacy four-stage affine fit (both cameras) and save
-``simple_dvs_regression.json``.
-"""
-
 from __future__ import annotations
 
 import argparse
-import json
+import math
 import time
-from dataclasses import asdict
-from datetime import datetime, timezone
-from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 import cv2
 import numpy as np
-
-from core.sim_types import MechanismParams, PhysicalParams, PlantParams, RunParams, TableCommand, WorkspaceParams
+from core.sim_types import WorkspaceParams, CameraObservation, CameraPair
 from perception.camera_model import CameraModel
 from perception.dvs_algorithms import mask_events_below_line
 from perception.dvs_camera_reader import DAVIS346_HEIGHT, DAVIS346_WIDTH, DVSReader, discover_devices
-from perception.simple_dvs_regression_model import SimpleDVSCameraCalibration, SimpleDVSRegressionModel, fit_affine
-from visualization.composite_layout import build_composite, get_default_window_size
+from perception.simple_dvs_regression_model import default_affine_calibration_path, save_affine_v1_calibration
 
-from hardware.dvs_calibration.dvs_bx_calibration import (
-    B1InterceptCalibration,
-    B1Sample,
-    B2InterceptCalibration,
-    B2Sample,
-    ManualLineState,
-    x_positions_from_safe_radius,
-)
-from hardware.dvs_calibration.dvs_sx_calibration import (
-    DEFAULT_TILT_CALIB_DEGS,
-    S1Sample,
-    S1SlopeCalibration,
-    S2Sample,
-    S2SlopeCalibration,
-    tilt_degs_to_rads,
-)
+
 from visualization.realtime_visualizer import OneDvsVisualizer
 
 
-def _window_closed(window_name: str) -> bool:
-    try:
-        return cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1
-    except cv2.error:
-        return True
 
+
+def x_positions_from_safe_radius(safe_radius_m: float, step_m: float = 0.01) -> list[float]:
+    r = float(safe_radius_m)
+    step = float(step_m)
+    if step <= 0 or not math.isfinite(step):
+        raise ValueError("step_m must be positive and finite")
+    n = int(math.floor((r - 1e-9) / step))
+    if n < 0:
+        n = 0
+    return [k * step for k in range(-n, n + 1)]
+
+
+# Default tilt grid for both cameras (deg), converted to rad at runtime.
+DEFAULT_TILT_CALIB_DEGS: tuple[float, ...] = (-10.0, -5.0, 0.0, 5.0, 10.0)
 
 DEFAULT_WORKSPACE = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=0.068)
-DEFAULT_MECHANISM = MechanismParams(
-    O=(128.77, 178.13),
-    B=(101.77, 210.13),
-    la=175,
-    lb=175,
-)
 
 
-def draw_manual_overlay(frame: np.ndarray, state: ManualLineState, mask_y: int) -> None:
-    H, W = frame.shape[:2]
-    if 0 < mask_y < H:
-        cv2.line(frame, (0, mask_y), (W - 1, mask_y), (0, 165, 255), 2)
-    s_px, b_px = state.to_obs_px(mask_y=mask_y)
-    y0 = 0
-    y1 = min(mask_y - 1, H - 1) if 0 < mask_y < H else (H - 1)
-    x0 = int(round(s_px * y0 + b_px))
-    x1 = int(round(s_px * y1 + b_px))
-    x0 = max(-10_000, min(10_000, x0))
-    x1 = max(-10_000, min(10_000, x1))
-    try:
-        cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
-    except cv2.error:
-        return
-    if 0 < mask_y < H:
-        xi = int(round(state.x_at_mask_px))
-        if 0 <= xi < W:
-            cv2.circle(frame, (xi, mask_y), 5, (0, 255, 0), -1)
+def tilt_degs_to_rads(degs: list[float] | tuple[float, ...]) -> list[float]:
+    return [float(np.deg2rad(d)) for d in degs]
 
 
-def save_calibration_dataset_json(
-    path: Path,
-    *,
-    b1_samples: list[B1Sample],
-    b2_samples: list[B2Sample],
-    s1_samples: list[S1Sample],
-    s2_samples: list[S2Sample],
-    x_targets_m: list[float],
-    tilt_targets_deg: list[float],
-    device_id_cam1: str,
-    device_id_cam2: str,
-    mask_y_cam1: int,
-    mask_y_cam2: int,
-    safe_radius_m: float,
-    x_step_m: float,
-    metadata: dict[str, Any] | None = None,
-) -> None:
-    payload: dict[str, Any] = {
-        "stages": ["b1", "b2", "s1", "s2"],
-        "safe_radius_m": float(safe_radius_m),
-        "x_step_m": float(x_step_m),
-        "position_targets_m": [float(x) for x in x_targets_m],
-        "tilt_targets_deg": [float(t) for t in tilt_targets_deg],
-        "b1": {
-            "stage": "b1",
-            "camera_id": device_id_cam1,
-            "mask_y_cam1": int(mask_y_cam1),
-            "samples": [asdict(s) for s in b1_samples],
-        },
-        "b2": {
-            "stage": "b2",
-            "camera_id": device_id_cam2,
-            "mask_y_cam2": int(mask_y_cam2),
-            "samples": [asdict(s) for s in b2_samples],
-        },
-        "s1": {
-            "stage": "s1",
-            "camera_id": device_id_cam1,
-            "mask_y_cam1": int(mask_y_cam1),
-            "samples": [asdict(s) for s in s1_samples],
-        },
-        "s2": {
-            "stage": "s2",
-            "camera_id": device_id_cam2,
-            "mask_y_cam2": int(mask_y_cam2),
-            "samples": [asdict(s) for s in s2_samples],
-        },
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "metadata": metadata or {},
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
+def manual_state_to_cam1_pair(state: ManualLineState, mask_y: int, cam: CameraModel) -> CameraPair:
+    obs_px = state.to_obs_px(mask_y=mask_y)
+    n = cam.pixel_to_camnorm(obs_px)
+    return CameraPair(cam1=n, cam2=CameraObservation(slope=0.0, intercept=0.0))
+
+
+def manual_state_to_cam2_pair(state: ManualLineState, mask_y: int, cam: CameraModel) -> CameraPair:
+    obs_px = state.to_obs_px(mask_y=mask_y)
+    n = cam.pixel_to_camnorm(obs_px)
+    return CameraPair(cam1=CameraObservation(slope=0.0, intercept=0.0), cam2=n)
+
+
+# =========================
+# DATA LAYER (pure storage)
+# =========================
+
+@dataclass
+class ManualLineState:
+    slope_px: float = 0.0
+    x_at_mask_px: float = 0.0
+
+    def to_obs_px(self, mask_y: int) -> tuple[float, float]:
+        b_px = float(self.x_at_mask_px) - float(self.slope_px) * float(mask_y)
+        return CameraObservation(slope=float(self.slope_px), intercept=float(b_px))
+
+@dataclass
+class X_Samples:
+    x_pos_m: list[float]
+    x_at_mask_px: list[float | None]
+    mask_y: int
+
+
+@dataclass
+class Y_Samples:
+    y_pos_m: list[float]
+    x_at_mask_px: list[float | None]
+    mask_y: int
+
+
+@dataclass
+class AX_Samples:
+    ax_pos_rad: list[float]
+    s_px: list[float | None]
+
+
+@dataclass
+class AY_Samples:
+    ay_pos_rad: list[float]
+    s_px: list[float | None]
+
+
+@dataclass
+class Samples:
+    x: X_Samples
+    y: Y_Samples
+    ax: AX_Samples
+    ay: AY_Samples
+
+
+def build_samples(args, init_state, position_targets, tilt_degs):
+    tilt_rads = tilt_degs_to_rads(tilt_degs)
+
+    n_pos = len(position_targets)
+    n_tilt = len(tilt_rads)
+
+    return Samples(
+        x=X_Samples(
+            x_pos_m=list(position_targets),
+            x_at_mask_px=[init_state.x_at_mask_px] + [None] * (n_pos - 1),
+            mask_y=args.mask_y_cam1,
+        ),
+        y=Y_Samples(
+            y_pos_m=list(position_targets),
+            x_at_mask_px=[init_state.x_at_mask_px] + [None] * (n_pos - 1),
+            mask_y=args.mask_y_cam2,
+        ),
+        ax=AX_Samples(
+            ax_pos_rad=list(tilt_rads),
+            s_px=[init_state.slope_px] + [None] * (n_tilt - 1),
+        ),
+        ay=AY_Samples(
+            ay_pos_rad=list(tilt_rads),
+            s_px=[init_state.slope_px] + [None] * (n_tilt - 1),
+        ),
+    )
+
+
+def _affine_sample_arrays(samples: Samples) -> tuple[list[float], list[float], list[float], list[float], list[float], list[float], list[float], list[float]]:
+    """Raises ValueError if any sample slot is unset (None) or lengths disagree."""
+
+    def floats_no_none(vals: list[float | None], label: str) -> list[float]:
+        if any(v is None for v in vals):
+            raise ValueError(f"Incomplete calibration: unset entries in {label}")
+        return [float(v) for v in vals]  # type: ignore[misc]
+
+    x, y, ax, ay = samples.x, samples.y, samples.ax, samples.ay
+    if len(x.x_pos_m) != len(x.x_at_mask_px):
+        raise ValueError("X position samples: x_pos_m and x_at_mask_px length mismatch")
+    if len(y.y_pos_m) != len(y.x_at_mask_px):
+        raise ValueError("Y position samples: y_pos_m and x_at_mask_px length mismatch")
+    if len(ax.ax_pos_rad) != len(ax.s_px):
+        raise ValueError("AX samples: length mismatch")
+    if len(ay.ay_pos_rad) != len(ay.s_px):
+        raise ValueError("AY samples: length mismatch")
+
+    x_at_1 = floats_no_none(x.x_at_mask_px, "cam1 x_at_mask_px")
+    x_at_2 = floats_no_none(y.x_at_mask_px, "cam2 x_at_mask_px")
+    s_ax = floats_no_none(ax.s_px, "cam1 tilt slope_px")
+    s_ay = floats_no_none(ay.s_px, "cam2 tilt slope_px")
+
+    return (
+        x_at_1,
+        [float(v) for v in x.x_pos_m],
+        x_at_2,
+        [float(v) for v in y.y_pos_m],
+        s_ax,
+        [float(v) for v in ax.ax_pos_rad],
+        s_ay,
+        [float(v) for v in ay.ay_pos_rad],
+    )
+
+
+def _calibration_title(prefix: str, idx: int, total: int, extras: str, adjust_hint: str) -> str:
+    return (
+        f"{prefix} | {idx + 1}/{total} | {extras} | {adjust_hint} | "
+        "SPACE save | Z back | Q quit"
+    )
+
+
+# =========================
+# STAGE LAYER (semantics)
+# =========================
+
+
+class Stage:
+    """Owns mask, camera model, and how state maps to a CameraPair for the renderer."""
+
+    def __init__(
+        self,
+        name: str,
+        cam: str,
+        *,
+        cam_index: int,
+        surface_index: int,
+        cam_model: CameraModel,
+    ) -> None:
+        self.name = name
+        self.cam = cam
+        self.cam_index = int(cam_index)
+        self.surface_index = int(surface_index)
+        self.cam_model = cam_model
+
+    def measure(self, state: ManualLineState) -> Any:
+        raise NotImplementedError
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        raise NotImplementedError
+
+    def mask(self) -> int:
+        raise NotImplementedError
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        raise NotImplementedError
+
+    def size(self) -> int:
+        raise NotImplementedError
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        raise NotImplementedError
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        raise NotImplementedError
+
+
+class XStage(Stage):
+    def __init__(self, name: str, cam: str, cam_index: int, surface_index: int, cam_model: CameraModel, samples: X_Samples) -> None:
+        super().__init__(name, cam, cam_index=cam_index, surface_index=surface_index, cam_model=cam_model)
+        self.samples = samples
+
+    def measure(self, state: ManualLineState):
+        return manual_state_to_cam1_pair(state, self.samples.mask_y, self.cam_model)
+
+    def mask(self) -> int:
+        return int(self.samples.mask_y)
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        obs = state.to_obs_px(mask_y=self.samples.mask_y)
+        ang = math.degrees(math.atan(obs.slope))
+        x = self.samples.x_pos_m[idx]
+        extras = (
+            f"target X={x * 100:+.1f} cm | deg={ang:+.2f} | "
+            f"b1_px={obs.intercept:+.2f} | x@mask={state.x_at_mask_px:+.1f}"
+        )
+        return _calibration_title("X cam1", idx, total, extras, "A/D move")
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        del step_s
+        if key == "a":
+            state.x_at_mask_px -= step_x
+        elif key == "d":
+            state.x_at_mask_px += step_x
+
+    def size(self) -> int:
+        return len(self.samples.x_pos_m)
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        v = self.samples.x_at_mask_px[idx]
+        if v is not None:
+            state.x_at_mask_px = float(v)
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        self.samples.x_at_mask_px[idx] = state.x_at_mask_px
+
+
+class YStage(Stage):
+    def __init__(self, name: str, cam: str, cam_index: int, surface_index: int, cam_model: CameraModel, samples: Y_Samples) -> None:
+        super().__init__(name, cam, cam_index=cam_index, surface_index=surface_index, cam_model=cam_model)
+        self.samples = samples
+
+    def measure(self, state: ManualLineState):
+        return manual_state_to_cam2_pair(state, self.samples.mask_y, self.cam_model)
+
+    def mask(self) -> int:
+        return int(self.samples.mask_y)
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        obs = state.to_obs_px(mask_y=self.samples.mask_y)
+        ang = math.degrees(math.atan(obs.slope))
+        y = self.samples.y_pos_m[idx]
+        extras = (
+            f"target Y={y * 100:+.1f} cm | deg={ang:+.2f} | "
+            f"b2_px={obs.intercept:+.2f} | x@mask={state.x_at_mask_px:+.1f}"
+        )
+        return _calibration_title("Y cam2", idx, total, extras, "A/D move")
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        del step_s
+        if key == "a":
+            state.x_at_mask_px -= step_x
+        elif key == "d":
+            state.x_at_mask_px += step_x
+
+    def size(self) -> int:
+        return len(self.samples.y_pos_m)
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        v = self.samples.x_at_mask_px[idx]
+        if v is not None:
+            state.x_at_mask_px = float(v)
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        self.samples.x_at_mask_px[idx] = state.x_at_mask_px
+
+
+class AXStage(Stage):
+    """AX on camera 1; mask y matches X stage (events below mask discarded)."""
+
+    def __init__(self, cam_model: CameraModel, samples: AX_Samples, mask_y_cam1: int) -> None:
+        super().__init__("AX", "x", cam_index=0, surface_index=0, cam_model=cam_model)
+        self.samples = samples
+        self._mask_y_val = int(mask_y_cam1)
+
+    def measure(self, state: ManualLineState):
+        return manual_state_to_cam1_pair(state, self._mask_y_val, self.cam_model)
+
+    def mask(self) -> int:
+        return self._mask_y_val
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        tgt = self.samples.ax_pos_rad[idx]
+        deg = math.degrees(tgt)
+        extras = f"set alpha_x={deg:+.1f} | s_px={state.slope_px:+.4f}"
+        return _calibration_title("AX cam1", idx, total, extras, "A/D slope")
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        del step_x
+        if key == "a":
+            state.slope_px += step_s
+        elif key == "d":
+            state.slope_px -= step_s
+
+    def size(self) -> int:
+        return len(self.samples.ax_pos_rad)
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        v = self.samples.s_px[idx]
+        if v is not None:
+            state.slope_px = float(v)
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        self.samples.s_px[idx] = state.slope_px
+
+
+class AYStage(Stage):
+    """AY on camera 2."""
+
+    def __init__(self, cam_model: CameraModel, samples: AY_Samples, mask_y_cam2: int) -> None:
+        super().__init__("AY", "y", cam_index=1, surface_index=1, cam_model=cam_model)
+        self.samples = samples
+        self._mask_y_val = int(mask_y_cam2)
+
+    def measure(self, state: ManualLineState):
+        return manual_state_to_cam2_pair(state, self._mask_y_val, self.cam_model)
+
+    def mask(self) -> int:
+        return self._mask_y_val
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        tgt = self.samples.ay_pos_rad[idx]
+        deg = math.degrees(tgt)
+        extras = f"set alpha_y={deg:+.1f} | s_px={state.slope_px:+.4f}"
+        return _calibration_title("AY cam2", idx, total, extras, "A/D slope")
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        del step_x
+        if key == "a":
+            state.slope_px += step_s
+        elif key == "d":
+            state.slope_px -= step_s
+
+    def size(self) -> int:
+        return len(self.samples.ay_pos_rad)
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        v = self.samples.s_px[idx]
+        if v is not None:
+            state.slope_px = float(v)
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        self.samples.s_px[idx] = state.slope_px
+
+
+def _drain_events(reader: DVSReader) -> np.ndarray | None:
+    batches = []
+    while True:
+        b = reader.get_event_batch()
+        if b is None or len(b) == 0:
+            break
+        batches.append(b)
+    if not batches:
+        return None
+    return np.concatenate(batches)
+
+
+# =========================
+# CONTROLLER (sequencing only)
+# =========================
+
+
+class Calibrator:
+    def __init__(
+        self,
+        stages: list[Stage],
+        reader_x: DVSReader,
+        reader_y: DVSReader,
+        viz: OneDvsVisualizer,
+        step_x: float,
+        step_s: float,
+        decay: float,
+        display_period: float,
+    ) -> None:
+        self.stages = stages
+        self.reader_x = reader_x
+        self.reader_y = reader_y
+        self.viz = viz
+        self.step_x = step_x
+        self.step_s = step_s
+        self.decay = decay
+        self.display_period = display_period
+
+        self.stage_idx = 0
+        self.sample_idx = 0
+
+        self.state = ManualLineState(
+            slope_px=0.0,
+            x_at_mask_px=DAVIS346_WIDTH / 2,
+        )
+
+    def current_stage(self) -> Stage:
+        return self.stages[self.stage_idx]
+
+    def current_reader(self) -> DVSReader:
+        return self.reader_x if self.current_stage().cam == "x" else self.reader_y
+
+    def save_and_advance(self) -> bool:
+        stage = self.current_stage()
+        stage.save_state_to_sample(self.sample_idx, self.state)
+
+        self.sample_idx += 1
+
+        if self.sample_idx >= stage.size():
+            self.stage_idx += 1
+            self.sample_idx = 0
+
+            if self.stage_idx >= len(self.stages):
+                return True
+
+        self.load_current()
+        return False
+
+    def go_back(self) -> None:
+        if self.sample_idx > 0:
+            self.sample_idx -= 1
+        elif self.stage_idx > 0:
+            self.stage_idx -= 1
+            self.sample_idx = self.current_stage().size() - 1
+
+        self.load_current()
+
+    def load_current(self) -> None:
+        self.current_stage().load_sample_into_state(self.state, self.sample_idx)
+
+    def _clamp_x_at_mask(self, stage: Stage) -> None:
+        if isinstance(stage, (XStage, YStage)):
+            self.state.x_at_mask_px = float(max(0.0, min(DAVIS346_WIDTH - 1.0, self.state.x_at_mask_px)))
+
+    def run(self) -> bool:
+        W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
+        surface1 = np.zeros((H, W), dtype=np.float32)
+        surface2 = np.zeros((H, W), dtype=np.float32)
+
+        def event_frames_fn():
+            return surface1, surface2
+
+        self.viz._event_frames_fn = event_frames_fn  # type: ignore[attr-defined]
+
+        next_display = time.perf_counter()
+        self.load_current()
+
+        while self.reader_x.is_running() and self.reader_y.is_running():
+            stage = self.current_stage()
+            reader = self.current_reader()
+            my = stage.mask()
+            si = stage.surface_index
+
+            ev = _drain_events(reader)
+            if ev is not None:
+                ev = mask_events_below_line(ev, mask_line_y=my, frame_height=H)
+                if si == 0:
+                    surface1 *= self.decay
+                else:
+                    surface2 *= self.decay
+                if len(ev) > 0:
+                    if si == 0:
+                        np.add.at(surface1, (ev["y"], ev["x"]), 1.0)
+                    else:
+                        np.add.at(surface2, (ev["y"], ev["x"]), 1.0)
+            else:
+                time.sleep(0.0002)
+
+            now = time.perf_counter()
+            if now < next_display:
+                continue
+
+            self.viz.cam_index = stage.cam_index
+
+            measurement = stage.measure(self.state)
+            title = stage.title(self.sample_idx, stage.size(), self.state)
+
+            vr = self.viz.render(
+                measurement,
+                title=title,
+                mask_line_y=stage.mask(),
+            )
+
+            k = vr.key
+            if vr.quit or k in (ord("q"), ord("Q"), 27):
+                return False
+
+            if k == ord(" "):
+                if self.save_and_advance():
+                    return True
+
+            elif k == ord("z"):
+                self.go_back()
+
+            elif k in (ord("a"), ord("d")):
+                stage.apply_key(self.state, chr(k), self.step_x, self.step_s)
+                self._clamp_x_at_mask(stage)
+
+            while next_display <= now:
+                next_display += self.display_period
+
+        return False
+
+
+# =========================
+# MAIN
+# =========================
 
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Interactive simple DVS regression calibrator")
-    p.add_argument(
-        "--full-regression",
-        action="store_true",
-        help="Legacy: fit affine model for both cameras and save simple_dvs_regression.json",
-    )
     p.add_argument("--cam1", help="Camera 1 serial/device (omit for discovery)")
     p.add_argument("--cam2", help="Camera 2 serial/device (omit for discovery)")
     p.add_argument("--noise-filter-duration", type=float, default=30.0, metavar="MS", help="Noise filter ms")
@@ -170,8 +553,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--output",
         type=str,
-        default="perception/calibration_files/simple_dvs_regression.json",
-        help="Output JSON model path (full regression only)",
+        default=str(default_affine_calibration_path()),
+        help="Output path for simple_dvs_regression_v1 affine JSON (default: perception/calibration_files/ next to package)",
     )
     p.add_argument(
         "--dataset-output",
@@ -189,293 +572,7 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-def _build_optional_actuator(port: str):
-    port_norm = port.strip().lower()
-    if port_norm == "none":
-        return None
-    # Lazy imports to avoid hardware deps for dry runs.
-    from core.system_builder import build_actuator, build_mechanism
-
-    params = PhysicalParams(
-        plant=PlantParams(g=9.81, com_length=0.1, tau=0.04, zeta=0.7, num_states=8, max_acc=9.81 * 3),
-        workspace=WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=DEFAULT_WORKSPACE.safe_radius),
-        mechanism=DEFAULT_MECHANISM,
-        hardware=None,
-        run=RunParams(),
-    )
-    params.workspace.safe_radius = DEFAULT_WORKSPACE.safe_radius
-    mech = build_mechanism(params)
-    actuator = build_actuator(params, mech)
-    from hardware.servos.Servo_System import ServoSystem
-
-    return ServoSystem(mech, port=port, frequency=250)
-
-
-def _drain_events(reader: DVSReader) -> np.ndarray | None:
-    batches = []
-    while True:
-        b = reader.get_event_batch()
-        if b is None or len(b) == 0:
-            break
-        batches.append(b)
-    if not batches:
-        return None
-    return np.concatenate(batches)
-
-
-def _collect_alignment_for_target(
-    *,
-    reader: DVSReader,
-    mask_y: int,
-    title_prefix: str,
-    target_str: str,
-    decay_display: float,
-    surface_intensity_gain: float,
-    display_period: float,
-    step_x: float,
-    step_s: float,
-    initial_state: ManualLineState,
-) -> tuple[ManualLineState | None, bool]:
-    """
-    Legacy full-regression: WASD + Space. Returns (state, quit_requested).
-    state=None if user quits.
-    """
-    W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
-    surface = np.zeros((H, W), dtype=np.float32)
-    state = ManualLineState(slope_px=initial_state.slope_px, x_at_mask_px=initial_state.x_at_mask_px)
-
-    WINDOW_NAME = "Simple DVS regression calibrator"
-    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-    w, h = get_default_window_size(has_cams=True, has_workspace=False)
-    cv2.resizeWindow(WINDOW_NAME, w, h)
-
-    next_display = time.perf_counter()
-    while reader.is_running():
-        ev = _drain_events(reader)
-        if ev is not None:
-            ev = mask_events_below_line(ev, mask_line_y=mask_y, frame_height=H)
-            surface *= decay_display
-            if len(ev) > 0:
-                np.add.at(surface, (ev["y"], ev["x"]), 1.0)
-        else:
-            time.sleep(0.0002)
-
-        now = time.perf_counter()
-        if now < next_display:
-            continue
-
-        frame = np.clip(surface * surface_intensity_gain, 0, 255).astype(np.uint8)
-        frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        draw_manual_overlay(frame, state, mask_y=mask_y)
-
-        x_at_mask = float(state.x_at_mask_px)
-        s_px = float(state.slope_px)
-        title = f"{title_prefix} | {target_str} | s={s_px:+.4f}, x_at_mask={x_at_mask:+.1f} | WASD adjust, SPACE save, Q quit"
-        composite = build_composite(title, frame, frame, None)
-        cv2.imshow(WINDOW_NAME, composite)
-
-        if _window_closed(WINDOW_NAME):
-            return None, True
-
-        key = cv2.waitKey(1) & 0xFF
-        if key in (ord("q"), ord("Q"), 27):
-            return None, True
-        if key == ord(" "):
-            return state, False
-
-        if key == ord("a"):
-            state.x_at_mask_px -= step_x
-        elif key == ord("d"):
-            state.x_at_mask_px += step_x
-        elif key == ord("w"):
-            state.slope_px -= step_s
-        elif key == ord("s"):
-            state.slope_px += step_s
-
-        state.x_at_mask_px = float(max(0.0, min(W - 1.0, state.x_at_mask_px)))
-
-        while next_display <= now:
-            next_display += display_period
-
-    return None, True
-
-
-def main() -> None:
-    args = parse_args()
-
-    if args.full_regression:
-        if args.cam1 is not None and args.cam2 is not None:
-            device1, device2 = args.cam1, args.cam2
-        elif args.cam1 is not None or args.cam2 is not None:
-            raise SystemExit("Provide both --cam1 and --cam2, or omit both for discovery.")
-        else:
-            devices = discover_devices()
-            if len(devices) < 2:
-                raise SystemExit("Need at least 2 DVS cameras connected.")
-            device1, device2 = devices[0], devices[1]
-
-        noise_ms = args.noise_filter_duration
-        reader1 = DVSReader(device1, noise_filter_duration_ms=noise_ms)
-        reader2 = DVSReader(device2, noise_filter_duration_ms=noise_ms)
-
-        actuator = _build_optional_actuator(args.port)
-
-        r = float(args.workspace_radius)
-        x_vals = np.linspace(-0.8 * r, 0.8 * r, int(args.n_position_points))
-        y_vals = np.linspace(-0.8 * r, 0.8 * r, int(args.n_position_points))
-
-        tilt_degs = np.arange(args.tilt_deg_min, args.tilt_deg_max + 1e-9, args.tilt_deg_step, dtype=float)
-        tilt_rads = np.deg2rad(tilt_degs)
-
-        decay = float(args.decay_display)
-        gain = float(args.surface_intensity_gain)
-        display_period = 1.0 / float(args.display_fps)
-
-        init_state_cam1 = ManualLineState(slope_px=0.0, x_at_mask_px=DAVIS346_WIDTH / 2)
-        init_state_cam2 = ManualLineState(slope_px=0.0, x_at_mask_px=DAVIS346_WIDTH / 2)
-
-        try:
-            x_at_mask_samples_1: list[float] = []
-            X_true_samples: list[float] = []
-
-            for i, X in enumerate(x_vals):
-                if actuator is not None:
-                    actuator.send(TableCommand(x_des=float(X), y_des=0.0))
-                    time.sleep(args.settle)
-                target = f"cam1 position {i+1}/{len(x_vals)} (upright): set X={X:+.4f} m, Y=+0.0000 m, then align"
-                st, quit_req = _collect_alignment_for_target(
-                    reader=reader1,
-                    mask_y=int(args.mask_y_cam1),
-                    title_prefix="Cam1",
-                    target_str=target,
-                    decay_display=decay,
-                    surface_intensity_gain=gain,
-                    display_period=display_period,
-                    step_x=float(args.step_x),
-                    step_s=float(args.step_s),
-                    initial_state=init_state_cam1,
-                )
-                if quit_req or st is None:
-                    return
-                init_state_cam1 = st
-                x_at_mask_samples_1.append(float(st.x_at_mask_px))
-                X_true_samples.append(float(X))
-
-            kx, bx = fit_affine(np.array(x_at_mask_samples_1), np.array(X_true_samples))
-
-            slope_samples_1: list[float] = []
-            ax_true_samples: list[float] = []
-
-            for i, (deg, ax) in enumerate(zip(tilt_degs, tilt_rads)):
-                target = f"cam1 tilt {i+1}/{len(tilt_degs)}: set alpha_x={deg:+.1f} deg at (X=0,Y=0), then align"
-                st, quit_req = _collect_alignment_for_target(
-                    reader=reader1,
-                    mask_y=int(args.mask_y_cam1),
-                    title_prefix="Cam1",
-                    target_str=target,
-                    decay_display=decay,
-                    surface_intensity_gain=gain,
-                    display_period=display_period,
-                    step_x=float(args.step_x),
-                    step_s=float(args.step_s),
-                    initial_state=init_state_cam1,
-                )
-                if quit_req or st is None:
-                    return
-                init_state_cam1 = st
-                slope_samples_1.append(float(st.slope_px))
-                ax_true_samples.append(float(ax))
-
-            kax, bax = fit_affine(np.array(slope_samples_1), np.array(ax_true_samples))
-
-            cam1_cal = SimpleDVSCameraCalibration(k_pos=kx, b_pos=bx, k_alpha=kax, b_alpha=bax)
-
-            x_at_mask_samples_2: list[float] = []
-            Y_true_samples: list[float] = []
-
-            for i, Y in enumerate(y_vals):
-                if actuator is not None:
-                    actuator.send(TableCommand(x_des=0.0, y_des=float(Y)))
-                    time.sleep(args.settle)
-                target = f"cam2 position {i+1}/{len(y_vals)} (upright): set X=+0.0000 m, Y={Y:+.4f} m, then align"
-                st, quit_req = _collect_alignment_for_target(
-                    reader=reader2,
-                    mask_y=int(args.mask_y_cam2),
-                    title_prefix="Cam2",
-                    target_str=target,
-                    decay_display=decay,
-                    surface_intensity_gain=gain,
-                    display_period=display_period,
-                    step_x=float(args.step_x),
-                    step_s=float(args.step_s),
-                    initial_state=init_state_cam2,
-                )
-                if quit_req or st is None:
-                    return
-                init_state_cam2 = st
-                x_at_mask_samples_2.append(float(st.x_at_mask_px))
-                Y_true_samples.append(float(Y))
-
-            ky, by = fit_affine(np.array(x_at_mask_samples_2), np.array(Y_true_samples))
-
-            slope_samples_2: list[float] = []
-            ay_true_samples: list[float] = []
-
-            for i, (deg, ay) in enumerate(zip(tilt_degs, tilt_rads)):
-                target = f"cam2 tilt {i+1}/{len(tilt_degs)}: set alpha_y={deg:+.1f} deg at (X=0,Y=0), then align"
-                st, quit_req = _collect_alignment_for_target(
-                    reader=reader2,
-                    mask_y=int(args.mask_y_cam2),
-                    title_prefix="Cam2",
-                    target_str=target,
-                    decay_display=decay,
-                    surface_intensity_gain=gain,
-                    display_period=display_period,
-                    step_x=float(args.step_x),
-                    step_s=float(args.step_s),
-                    initial_state=init_state_cam2,
-                )
-                if quit_req or st is None:
-                    return
-                init_state_cam2 = st
-                slope_samples_2.append(float(st.slope_px))
-                ay_true_samples.append(float(ay))
-
-            kay, bay = fit_affine(np.array(slope_samples_2), np.array(ay_true_samples))
-
-            cam2_cal = SimpleDVSCameraCalibration(k_pos=ky, b_pos=by, k_alpha=kay, b_alpha=bay)
-
-            model = SimpleDVSRegressionModel(
-                cam1=cam1_cal,
-                cam2=cam2_cal,
-                mask_y_cam1=int(args.mask_y_cam1),
-                mask_y_cam2=int(args.mask_y_cam2),
-                metadata={
-                    "position_points": int(args.n_position_points),
-                    "tilt_deg_min": float(args.tilt_deg_min),
-                    "tilt_deg_max": float(args.tilt_deg_max),
-                    "tilt_deg_step": float(args.tilt_deg_step),
-                    "notes": "cam1: X/alpha_x, cam2: Y/alpha_y; affine fits",
-                },
-            )
-            out_path = Path(args.output)
-            model.save(out_path)
-            print(f"Saved simple regression model to {out_path}")
-
-        finally:
-            reader1.close()
-            reader2.close()
-            if actuator is not None:
-                try:
-                    actuator.close()
-                except Exception:
-                    pass
-            cv2.destroyAllWindows()
-        return
-
-    # ------------------------------------------------------------------
-    # Default: B1 then B2 (two cameras, shared OneDvsVisualizer)
-    # ------------------------------------------------------------------
+def _init_cams(args):
     if args.cam1 is not None and args.cam2 is not None:
         device1, device2 = args.cam1, args.cam2
     elif args.cam1 is None and args.cam2 is None:
@@ -486,150 +583,87 @@ def main() -> None:
     else:
         raise SystemExit("Provide both --cam1 and --cam2, or omit both for discovery.")
 
-    noise_ms = args.noise_filter_duration
-    reader1 = DVSReader(device1, noise_filter_duration_ms=noise_ms)
-    reader2 = DVSReader(device2, noise_filter_duration_ms=noise_ms)
-    actuator = _build_optional_actuator(args.port)
+    return device1, device2
 
-    r = float(args.workspace_radius)
-    x_step = float(args.x_step_m)
-    position_targets = x_positions_from_safe_radius(r, step_m=x_step)
 
-    decay = float(args.decay_display)
-    gain = float(args.surface_intensity_gain)
-    display_period = 1.0 / float(args.display_fps)
+def main():
+    args = parse_args()
 
-    W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
-    cam_model = CameraModel(width=W, height=H)
+    device1, device2 = _init_cams(args)
+
+    reader1 = DVSReader(device1, noise_filter_duration_ms=args.noise_filter_duration)
+    reader2 = DVSReader(device2, noise_filter_duration_ms=args.noise_filter_duration)
+
     viz = OneDvsVisualizer(
         cam_index=0,
-        width=W,
-        height=H,
+        width=DAVIS346_WIDTH,
+        height=DAVIS346_HEIGHT,
         event_frames_fn=None,
-        surface_gain=gain,
+        surface_gain=args.surface_intensity_gain,
     )
 
-    init_cam1 = ManualLineState(slope_px=0.0, x_at_mask_px=DAVIS346_WIDTH / 2)
-    init_cam2 = ManualLineState(slope_px=0.0, x_at_mask_px=DAVIS346_WIDTH / 2)
+    cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
 
-    b1 = B1InterceptCalibration(
-        reader=reader1,
-        mask_y=int(args.mask_y_cam1),
-        viz=viz,
-        cam_model=cam_model,
-        position_targets_m=position_targets,
-        decay_display=decay,
-        display_period=display_period,
-        step_x=float(args.step_x),
-        initial_state=init_cam1,
-        device_id=str(device1),
-        safe_radius_m=r,
-        x_step_m=x_step,
-        settle_s=float(args.settle),
-        actuator=actuator,
+    init_state = ManualLineState(
+        slope_px=0.0,
+        x_at_mask_px=DAVIS346_WIDTH / 2,
     )
 
-    b2 = B2InterceptCalibration(
-        reader=reader2,
-        mask_y=int(args.mask_y_cam2),
-        viz=viz,
-        cam_model=cam_model,
-        position_targets_m=position_targets,
-        decay_display=decay,
-        display_period=display_period,
-        step_x=float(args.step_x),
-        initial_state=init_cam2,
-        device_id=str(device2),
-        safe_radius_m=r,
-        x_step_m=x_step,
-        settle_s=float(args.settle),
-        actuator=actuator,
-    )
-
+    r = float(args.workspace_radius)
+    position_targets = x_positions_from_safe_radius(r, step_m=args.x_step_m)
     tilt_degs = list(DEFAULT_TILT_CALIB_DEGS)
-    tilt_rads = tilt_degs_to_rads(tilt_degs)
-    cx = float(W) / 2.0
-    init_s_tilt = ManualLineState(slope_px=0.0, x_at_mask_px=cx)
 
-    s1 = S1SlopeCalibration(
-        reader=reader1,
-        mask_y=int(args.mask_y_cam1),
-        viz=viz,
-        cam_model=cam_model,
-        angle_targets_rad=tilt_rads,
-        decay_display=decay,
-        display_period=display_period,
-        step_s=float(args.step_s),
-        initial_state=init_s_tilt,
-        device_id=str(device1),
-        settle_s=float(args.settle),
-        actuator=actuator,
-        center_x_at_mask_px=cx,
-    )
+    samples = build_samples(args, init_state, position_targets, tilt_degs)
 
-    s2 = S2SlopeCalibration(
-        reader=reader2,
-        mask_y=int(args.mask_y_cam2),
+    stages: list[Stage] = [
+        XStage("X", "x", 0, 0, cam_model, samples.x),
+        YStage("Y", "y", 1, 1, cam_model, samples.y),
+        AXStage(cam_model, samples.ax, args.mask_y_cam1),
+        AYStage(cam_model, samples.ay, args.mask_y_cam2),
+    ]
+
+    calibrator = Calibrator(
+        stages=stages,
+        reader_x=reader1,
+        reader_y=reader2,
         viz=viz,
-        cam_model=cam_model,
-        angle_targets_rad=tilt_rads,
-        decay_display=decay,
-        display_period=display_period,
-        step_s=float(args.step_s),
-        initial_state=ManualLineState(slope_px=0.0, x_at_mask_px=cx),
-        device_id=str(device2),
-        settle_s=float(args.settle),
-        actuator=actuator,
-        center_x_at_mask_px=cx,
+        step_x=args.step_x,
+        step_s=args.step_s,
+        decay=args.decay_display,
+        display_period=1.0 / args.display_fps,
     )
 
     try:
-        if not b1.run():
-            print("Calibration aborted during B1.")
-            return
-        if not b2.run():
-            print("Calibration aborted during B2.")
-            return
-        if not s1.run():
-            print("Calibration aborted during S1.")
-            return
-        if not s2.run():
-            print("Calibration aborted during S2.")
-            return
-        out_ds = Path(args.dataset_output)
-        save_calibration_dataset_json(
-            out_ds,
-            b1_samples=b1.samples,
-            b2_samples=b2.samples,
-            s1_samples=s1.samples,
-            s2_samples=s2.samples,
-            x_targets_m=position_targets,
-            tilt_targets_deg=tilt_degs,
-            device_id_cam1=str(device1),
-            device_id_cam2=str(device2),
-            mask_y_cam1=int(args.mask_y_cam1),
-            mask_y_cam2=int(args.mask_y_cam2),
-            safe_radius_m=r,
-            x_step_m=x_step,
-            metadata={
-                "notes": (
-                    "B: b vs position; S: slope vs tilt at ref. "
-                    "S stages: A/D slope, x@mask centered."
+        success = calibrator.run()
+        if success:
+            print("Calibration complete")
+            try:
+                x1, xp, x2, yp, s1, axr, s2, ayr = _affine_sample_arrays(samples)
+                save_affine_v1_calibration(
+                    args.output,
+                    mask_y_cam1=args.mask_y_cam1,
+                    mask_y_cam2=args.mask_y_cam2,
+                    x_at_mask_px_cam1=x1,
+                    x_pos_m=xp,
+                    x_at_mask_px_cam2=x2,
+                    y_pos_m=yp,
+                    slope_px_cam1=s1,
+                    alpha_x_rad=axr,
+                    slope_px_cam2=s2,
+                    alpha_y_rad=ayr,
+                    metadata={
+                        "workspace_radius_m": float(args.workspace_radius),
+                        "x_step_m": float(args.x_step_m),
+                        "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
+                        "source": "simple_dvs_regression_calibrator",
+                    },
                 )
-            },
-        )
-        print(
-            f"Saved dataset ({len(b1.samples)} b1, {len(b2.samples)} b2, "
-            f"{len(s1.samples)} s1, {len(s2.samples)} s2) to {out_ds}"
-        )
+            except ValueError as e:
+                raise SystemExit(f"Affine save failed: {e}") from e
+            print(f"Saved affine model to {args.output}")
     finally:
         reader1.close()
         reader2.close()
-        if actuator is not None:
-            try:
-                actuator.close()
-            except Exception:
-                pass
         cv2.destroyAllWindows()
 
 

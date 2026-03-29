@@ -4,14 +4,15 @@ Simple per-camera regression model for DVS pose estimation.
 Two artifact kinds:
 
 1) **Affine** (`model_type: simple_dvs_regression_v1`): per-camera affine maps from
-   pixel `x_at_mask` and slope to position/tilt (legacy `--full-regression`).
+   pixel `x_at_mask` and slope to position/tilt. Written by
+   ``save_affine_v1_calibration`` after interactive calibration; loaded at runtime via
+   ``load``.
 
 2) **Calibration dataset** (`hardware/.../dvs_calibration_dataset.json`): staged b1/b2/s1/s2
    tables; runtime uses four 1D linear interpolations after converting camnorm lines to pixels.
 
-Public estimate API: ``estimate(cams: CameraPair, cam: CameraModel)`` — observations
-are **normalized** line parameters; the model converts with ``camnorm_to_pixel`` then evaluates
-``x_at_mask`` via ``x = slope * y + intercept`` at each camera's mask line.
+Public estimate API: ``estimate(cams: CameraPair)`` — pixel-space observations per camera;
+``x_at_mask`` is ``line_x_at_pixel_y`` at each camera's mask line.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Sequence
 
 import numpy as np
 
@@ -241,17 +242,64 @@ class SimpleDVSRegressionModel:
         )
 
 
-def fit_affine(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
-    """
-    Fit y ≈ k*x + b in least squares sense.
-    Returns (k, b).
-    """
+def default_affine_calibration_path() -> Path:
+    """Absolute path next to this package (avoids cwd / permission surprises)."""
+    return Path(__file__).resolve().parent / "calibration_files" / "simple_dvs_regression.json"
+
+
+def _fit_affine_ls(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
     x = np.asarray(x, dtype=float).reshape(-1)
     y = np.asarray(y, dtype=float).reshape(-1)
     if x.size != y.size:
         raise ValueError("x and y must have same length")
     if x.size < 2:
         raise ValueError("Need at least 2 samples to fit affine model")
+    if not np.all(np.isfinite(x)) or not np.all(np.isfinite(y)):
+        raise ValueError("All sample values must be finite")
     A = np.column_stack([x, np.ones_like(x)])
     (k, b), *_ = np.linalg.lstsq(A, y, rcond=None)
     return float(k), float(b)
+
+
+def save_affine_v1_calibration(
+    path: str | Path,
+    *,
+    mask_y_cam1: int,
+    mask_y_cam2: int,
+    x_at_mask_px_cam1: Sequence[float],
+    x_pos_m: Sequence[float],
+    x_at_mask_px_cam2: Sequence[float],
+    y_pos_m: Sequence[float],
+    slope_px_cam1: Sequence[float],
+    alpha_x_rad: Sequence[float],
+    slope_px_cam2: Sequence[float],
+    alpha_y_rad: Sequence[float],
+    metadata: Dict[str, Any] | None = None,
+) -> None:
+    """
+    Fit four least-squares affine maps and write ``simple_dvs_regression_v1`` JSON
+    (same schema as ``SimpleDVSRegressionModel.to_dict`` / ``load``).
+    """
+    xa1 = np.asarray(x_at_mask_px_cam1, dtype=float).reshape(-1)
+    xp = np.asarray(x_pos_m, dtype=float).reshape(-1)
+    xa2 = np.asarray(x_at_mask_px_cam2, dtype=float).reshape(-1)
+    yp = np.asarray(y_pos_m, dtype=float).reshape(-1)
+    s1 = np.asarray(slope_px_cam1, dtype=float).reshape(-1)
+    ax = np.asarray(alpha_x_rad, dtype=float).reshape(-1)
+    s2 = np.asarray(slope_px_cam2, dtype=float).reshape(-1)
+    ay = np.asarray(alpha_y_rad, dtype=float).reshape(-1)
+
+    k1p, b1p = _fit_affine_ls(xa1, xp)
+    k1a, b1a = _fit_affine_ls(s1, ax)
+    k2p, b2p = _fit_affine_ls(xa2, yp)
+    k2a, b2a = _fit_affine_ls(s2, ay)
+
+    model = SimpleDVSRegressionModel(
+        mask_y_cam1=int(mask_y_cam1),
+        mask_y_cam2=int(mask_y_cam2),
+        metadata=dict(metadata or {}),
+        cam1=SimpleDVSCameraCalibration(k_pos=k1p, b_pos=b1p, k_alpha=k1a, b_alpha=b1a),
+        cam2=SimpleDVSCameraCalibration(k_pos=k2p, b_pos=b2p, k_alpha=k2a, b_alpha=b2a),
+    )
+    model.save(path)
+
