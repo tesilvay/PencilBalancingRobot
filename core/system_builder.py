@@ -164,7 +164,13 @@ def build_real_dvs(params, camera_params):
     cam1_device, cam2_device = connect_dvs_cameras(hw)
             
     dvs_regression_model = load_regression_algo(hw)
-    
+
+    mask_y_cam1 = hw.dvs_mask_line_y_cam1
+    mask_y_cam2 = hw.dvs_mask_line_y_cam2
+    if dvs_regression_model is not None:
+        mask_y_cam1 = dvs_regression_model.mask_y_cam1
+        mask_y_cam2 = dvs_regression_model.mask_y_cam2
+
     vision = RealEventCameraInterface(
                     camera_params=camera_params,
                     cam1_algo=cam1_algo,
@@ -172,8 +178,8 @@ def build_real_dvs(params, camera_params):
                     cam1_device=cam1_device,
                     cam2_device=cam2_device,
                     dvs_regression_model=dvs_regression_model,
-                    dvs_mask_line_y_cam1=hw.dvs_mask_line_y_cam1,
-                    dvs_mask_line_y_cam2=hw.dvs_mask_line_y_cam2,
+                    dvs_mask_line_y_cam1=mask_y_cam1,
+                    dvs_mask_line_y_cam2=mask_y_cam2,
                     noise_filter_duration_ms=noise_filter_duration_ms,
     )
     
@@ -242,17 +248,24 @@ def build_visualizer(params, perception):
     frames_fn = _event_frames_fn_from_perception(perception)
 
     if params.hardware.vision_mode == "real_dvs":
+        vision_obj = getattr(perception, "vision", None)
+        if vision_obj is not None and hasattr(vision_obj, "_dvs_mask_line_y_cam1"):
+            my1 = getattr(vision_obj, "_dvs_mask_line_y_cam1")
+            my2 = getattr(vision_obj, "_dvs_mask_line_y_cam2")
+        else:
+            my1 = params.hardware.dvs_mask_line_y_cam1
+            my2 = params.hardware.dvs_mask_line_y_cam2
         if show_workspace:
             return RealDvsWorkspaceVisualizer(
                 params.workspace,
                 frames_fn,
-                mask_y_cam1=params.hardware.dvs_mask_line_y_cam1,
-                mask_y_cam2=params.hardware.dvs_mask_line_y_cam2,
+                mask_y_cam1=my1,
+                mask_y_cam2=my2,
             )
         return RealDvsVisualizer(
             frames_fn,
-            mask_y_cam1=params.hardware.dvs_mask_line_y_cam1,
-            mask_y_cam2=params.hardware.dvs_mask_line_y_cam2,
+            mask_y_cam1=my1,
+            mask_y_cam2=my2,
         )
 
     if show_workspace:

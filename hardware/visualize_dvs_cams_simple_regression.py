@@ -2,10 +2,9 @@
 Standalone DVS camera visualization with line overlay + simple regression pose preview.
 
 Same as `hardware/visualize_dvs_cams.py` for camera IO, masking, and line tracking,
-but the window title shows pose estimates (X, Y, alpha_x, alpha_y) from
-`SimpleDVSRegressionModel` (affine v1 or `dvs_calibration_dataset.json`). Pixel
-line fits are converted to camnorm with `CameraModel.pixel_to_camnorm` before
-`estimate_pose`, matching the model API.
+but the window title always shows pose from `SimpleDVSRegressionModel.estimate`
+(affine v1 or b1/b2/s1/s2 dataset). Line fits are **pixel** `CameraObservation`s,
+matching `RealEventCameraInterface.reconstruct` and the calibrator.
 """
 
 from __future__ import annotations
@@ -22,8 +21,7 @@ from core.sim_types import CameraPair, HoughTrackerParams
 from visualization.composite_layout import build_composite, get_default_window_size
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y
-from perception.camera_model import CameraModel
-from perception.simple_dvs_regression_model import SimpleDVSRegressionModel
+from perception.simple_dvs_regression_model import SimpleDVSRegressionModel, default_affine_calibration_path
 
 
 def _window_closed(window_name: str) -> bool:
@@ -44,8 +42,6 @@ def parse_args() -> argparse.Namespace:
         help="Line algorithm: hough (paper tracker) or sam (OLS on events)",
     )
     parser.add_argument("--noise-filter-duration", type=float, default=None, metavar="MS", help="Noise filter (ms)")
-    parser.add_argument("--mask-y-cam1", type=int, default=160, metavar="Y", help="ROI mask y for cam1")
-    parser.add_argument("--mask-y-cam2", type=int, default=190, metavar="Y", help="ROI mask y for cam2")
     parser.add_argument("--decay-display", type=float, default=0.5, help="Event surface decay")
     parser.add_argument("--surface-intensity-gain", type=float, default=50.0, help="Surface brightness")
     parser.add_argument("--display-fps", type=float, default=30.0, help="GUI refresh rate")
@@ -59,7 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        default="hardware/calibration_files/dvs_calibration_dataset.json",
+        default=str(default_affine_calibration_path()),
         help="Affine v1 JSON (simple_dvs_regression_v1) or combined b1/b2/s1/s2 dataset JSON",
     )
     return parser.parse_args()
@@ -69,6 +65,9 @@ def main() -> None:
     args = parse_args()
 
     model = SimpleDVSRegressionModel.load(Path(args.model))
+    mask_y_cam1 = int(model.mask_y_cam1)
+    mask_y_cam2 = int(model.mask_y_cam2)
+    print(f"Loaded {args.model} (mask y: cam1={mask_y_cam1}, cam2={mask_y_cam2})")
 
     if args.cam1 is not None and args.cam2 is not None:
         device1, device2 = args.cam1, args.cam2
@@ -127,7 +126,7 @@ def main() -> None:
 
         if batches1:
             events1 = np.concatenate(batches1)
-            events1 = mask_events_below_line(events1, mask_line_y=args.mask_y_cam1, frame_height=H)
+            events1 = mask_events_below_line(events1, mask_line_y=mask_y_cam1, frame_height=H)
             surface1 *= decay_display
             if len(events1) > 0:
                 np.add.at(surface1, (events1["y"], events1["x"]), 1.0)
@@ -135,7 +134,7 @@ def main() -> None:
 
         if batches2:
             events2 = np.concatenate(batches2)
-            events2 = mask_events_below_line(events2, mask_line_y=args.mask_y_cam2, frame_height=H)
+            events2 = mask_events_below_line(events2, mask_line_y=mask_y_cam2, frame_height=H)
             surface2 *= decay_display
             if len(events2) > 0:
                 np.add.at(surface2, (events2["y"], events2["x"]), 1.0)
@@ -156,14 +155,10 @@ def main() -> None:
         # Draw overlays + compute pose if available.
         pose_str = "pose=?"
         if result1 is not None and not isinstance(result1, tuple) and result2 is not None and not isinstance(result2, tuple):
-            cams = CameraPair(
-                cam1=cam_model.pixel_to_camnorm(result1),
-                cam2=cam_model.pixel_to_camnorm(result2),
-            )
-            pose = model.estimate_pose(cams, cam_model)
+            pose = model.estimate(CameraPair(cam1=result1, cam2=result2))
             pose_str = f"X={pose.X:+.4f} Y={pose.Y:+.4f} ax={pose.alpha_x:+.3f} ay={pose.alpha_y:+.3f}"
 
-        for frame, result, mask_y in [(frame1, result1, args.mask_y_cam1), (frame2, result2, args.mask_y_cam2)]:
+        for frame, result, mask_y in [(frame1, result1, mask_y_cam1), (frame2, result2, mask_y_cam2)]:
             if 0 < mask_y < H:
                 cv2.line(frame, (0, mask_y), (W - 1, mask_y), (0, 165, 255), 2)
             if result is not None and not isinstance(result, tuple):

@@ -18,7 +18,7 @@ Usage:
     # Or specify serials explicitly:
     python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
 
-    # Title shows regression pose (camnorm s,b via SimpleDVSRegressionModel):
+    # Title shows regression pose from SimpleDVSRegressionModel (pixel lines; mask y from model when --estimate-pose):
     python -m hardware.visualize_dvs_cams --estimate-pose
     python -m hardware.visualize_dvs_cams --estimate-pose --model path/to/calibration.json
 
@@ -40,7 +40,7 @@ from visualization.composite_layout import build_composite, get_default_window_s
 from perception.camera_model import CameraModel
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y
-from perception.simple_dvs_regression_model import SimpleDVSRegressionModel
+from perception.simple_dvs_regression_model import SimpleDVSRegressionModel, default_affine_calibration_path
 
 
 def _window_closed(window_name: str) -> bool:
@@ -133,10 +133,13 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        default="hardware/calibration_files/dvs_calibration_dataset.json",
-        help="With --estimate-pose: path to affine v1 JSON or b1/b2/s1/s2 dataset JSON.",
+        default=str(default_affine_calibration_path()),
+        help="With --estimate-pose: path to simple_dvs_regression_v1 affine JSON or b1/b2/s1/s2 dataset JSON (default matches calibrator / main).",
     )
     args = parser.parse_args()
+
+    mask_y_cam1 = args.mask_y_cam1
+    mask_y_cam2 = args.mask_y_cam2
 
     if args.cam1 is not None and args.cam2 is not None:
         device1, device2 = args.cam1, args.cam2
@@ -182,7 +185,12 @@ def main():
     if args.estimate_pose:
         cam_model = CameraModel(width=W, height=H)
         pose_model = SimpleDVSRegressionModel.load(Path(args.model))
-        print(f"Pose estimation: loaded {args.model}")
+        mask_y_cam1 = int(pose_model.mask_y_cam1)
+        mask_y_cam2 = int(pose_model.mask_y_cam2)
+        print(
+            f"Pose estimation: loaded {args.model} "
+            f"(mask y from model: cam1={mask_y_cam1}, cam2={mask_y_cam2})"
+        )
     decay_display = args.decay_display
     surface_intensity_gain = args.surface_intensity_gain
     display_period = 1.0 / args.display_fps
@@ -218,7 +226,7 @@ def main():
 
         if batches1:
             events1 = np.concatenate(batches1)
-            events1 = mask_events_below_line(events1, mask_line_y=args.mask_y_cam1, frame_height=H)
+            events1 = mask_events_below_line(events1, mask_line_y=mask_y_cam1, frame_height=H)
             surface1 *= decay_display
             if len(events1) > 0:
                 np.add.at(surface1, (events1["y"], events1["x"]), 1.0)
@@ -226,7 +234,7 @@ def main():
 
         if batches2:
             events2 = np.concatenate(batches2)
-            events2 = mask_events_below_line(events2, mask_line_y=args.mask_y_cam2, frame_height=H)
+            events2 = mask_events_below_line(events2, mask_line_y=mask_y_cam2, frame_height=H)
             surface2 *= decay_display
             if len(events2) > 0:
                 np.add.at(surface2, (events2["y"], events2["x"]), 1.0)
@@ -244,7 +252,7 @@ def main():
             frame2 = cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
 
             # Draw detected line on each frame.
-            for frame, result, mask_y in [(frame1, result1, args.mask_y_cam1), (frame2, result2, args.mask_y_cam2)]:
+            for frame, result, mask_y in [(frame1, result1, mask_y_cam1), (frame2, result2, mask_y_cam2)]:
                 if 0 < mask_y < H:
                     cv2.line(frame, (0, mask_y), (W - 1, mask_y), (0, 165, 255), 2)
                 if result is not None and not isinstance(result, tuple):
@@ -294,8 +302,8 @@ def main():
             else:
                 title = (
                     f"{args.mode} | "
-                    f"cam1({_fmt_s_xatmask(result1, args.mask_y_cam1)}) "
-                    f"cam2({_fmt_s_xatmask(result2, args.mask_y_cam2)}) | Q: quit"
+                    f"cam1({_fmt_s_xatmask(result1, mask_y_cam1)}) "
+                    f"cam2({_fmt_s_xatmask(result2, mask_y_cam2)}) | Q: quit"
                 )
             composite = build_composite(title, frame1, frame2, None)
             cv2.imshow(WINDOW_NAME, composite)
