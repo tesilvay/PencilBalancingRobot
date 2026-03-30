@@ -206,10 +206,13 @@ class KalmanEstimator(BaseEstimator):
 
         self.Q = Q
         self.R = R
+        
+        self.P_init = np.eye(8) * 1e2 # bigger makes search more
+        self.x_hat_init = np.zeros((8, 1))
 
-        self.P = np.eye(8) * 1e2 #guess
+        self.P = self.P_init
         #self.P = solve_discrete_are(A.T, self.H.T, self.Q, self.R)
-        self.x_hat = np.zeros((8, 1))
+        self.x_hat = self.x_hat_init
 
     
 
@@ -259,8 +262,8 @@ class KalmanEstimator(BaseEstimator):
         )
 
     def reset(self):
-        self.P = np.eye(8) * 0.01
-        self.x_hat = np.zeros((8, 1))
+        self.P = self.P_init
+        self.x_hat = self.x_hat_init
 
 
 class FullStateKalmanFilter(BaseEstimator):

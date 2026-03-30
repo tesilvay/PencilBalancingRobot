@@ -70,3 +70,54 @@ def BuildLinearModel(param: PhysicalParams):
     # print(f"Observable : {observable} (rank {np.linalg.matrix_rank(Ob)}/{A.shape[0]})")
     
     return A, B
+
+
+
+def BuildLinearModel_Rod(param: PhysicalParams):
+    p = param.plant
+    g = p.g
+    l = p.com_length
+    tau = p.tau
+    zeta = p.zeta
+    
+    # State Space Representation
+    # The x and y axes have the same dynamics
+    # If we assume them to be independent (there can be coupling issues but they should be negligible)
+    # We will build A and B matrices for one axis, and then reuse it for the other axis.=
+
+
+    # Build A and B matrices (x axis)
+
+    A_x = np.array([
+        [0, 1, 0, 0],
+        [-1/tau**2, -2*zeta/tau, 0, 0],
+        [0, 0, 0, 1],
+        [3/(4*l*tau**2), 3*2*zeta/(4*l*tau), 3*g/4*l, 0]
+    ])
+
+    B_x = np.array([
+        [0],
+        [1/tau**2],
+        [0],
+        [-3/(4*l*tau**2)]
+    ])
+
+    # Build full 2d system (8 STATES, 2 INPUTS)
+
+    # Zero blocks
+    Z4 = np.zeros((4, 4))
+    Z4x1 = np.zeros((4, 1))
+
+    # Full A (8x8)
+    A = np.block([
+        [A_x, Z4],
+        [Z4,  A_x]
+    ])
+
+    # Full B (8x2)
+    B = np.block([
+        [B_x, Z4x1],
+        [Z4x1, B_x]
+    ])
+    
+    return A, B

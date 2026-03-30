@@ -22,7 +22,7 @@ from perception.estimator import (
     FullStateKalmanFilter,
 )
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
-from core.model import BuildLinearModel
+from core.model import BuildLinearModel, BuildLinearModel_Rod
 from core.plant import BalancerPlant
 from core.sim_types import make_reference_state, StopPolicy
 from fivebar.transform import FiveBarTransform
@@ -66,12 +66,14 @@ def build_controller(variant, params):
 
     elif variant.controller_type == "smooth_pole":
         dt = params.run.dt
-        s_poles = np.array([-18, -20, -22, -24] * 2)
-        # z-plane poles: map continuous-style poles, plus two for the u_{k-1} part of ξ
+        s_poles = np.array([-14, -16, -18, -20] * 2)
+        slew_poles = 0.95 # 0 same as without it, 1 u frozen
+        
         z_plant = np.exp(s_poles * dt)
-        slew_knob = 0.93
-        z_extra = np.array([slew_knob, slew_knob])
+        z_extra = np.array([slew_poles, slew_poles])
+        
         desired_poles_z = np.concatenate([z_plant, z_extra])
+        
         controller = SmoothPolePlacementController(A, B, dt, desired_poles_z, x_ref)
 
     elif variant.controller_type == "smooth_lqr":

@@ -15,7 +15,7 @@ PRESET_CAPABILITIES = {
   "vision_real": {
     "defaults": {
       "experiment": "single",
-      "actuator": "sim",
+      "actuator": "mock",
       "controller": "lqr",
       "estimator": "kalman",
     },
