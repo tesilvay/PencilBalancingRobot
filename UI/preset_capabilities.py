@@ -8,7 +8,7 @@ PRESET_CAPABILITIES = {
     },
     "allowed": {
       "experiment": ["single", "montecarlo", "benchmark", "sweep"],
-      "controller": ["lqr", "pole", "smooth_pole"],
+      "controller": ["lqr", "pole", "smooth_pole", "smooth_lqr"],
       "estimator": ["kalman", "lpf", "fde", "kalman_full"],
     },
   },
@@ -20,7 +20,7 @@ PRESET_CAPABILITIES = {
       "estimator": "kalman",
     },
     "allowed": {
-        "controller": ["lqr", "pole", "smooth_pole"],
+        "controller": ["lqr", "pole", "smooth_pole", "smooth_lqr"],
         "estimator": ["kalman", "lpf", "fde", "kalman_full"],
     },
   },
@@ -33,7 +33,7 @@ PRESET_CAPABILITIES = {
     },
     "allowed": {
         "actuator": ["servo", "mock"],
-        "controller": ["lqr", "pole", "smooth_pole", "circle"],
+        "controller": ["lqr", "pole", "smooth_pole", "smooth_lqr", "circle"],
         "estimator": ["kalman", "lpf", "fde", "kalman_full"],
     },
   },
@@ -46,7 +46,7 @@ PRESET_CAPABILITIES = {
     },
     "allowed": {
         "actuator": ["servo", "mock"],
-        "controller": ["lqr", "pole", "smooth_pole", "circle"],
+        "controller": ["lqr", "pole", "smooth_pole", "smooth_lqr", "circle"],
         "estimator": ["kalman", "lpf", "fde", "kalman_full"],
     },
   },

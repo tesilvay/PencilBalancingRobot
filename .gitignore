@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .DS_Store
 simulation_videos/
+real_videos/
 simulations/
 .cursor/
 Conradt/

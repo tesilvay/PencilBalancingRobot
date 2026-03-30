@@ -13,6 +13,7 @@ from core.controller import (
     LQRController,
     CircleController,
     SmoothPolePlacementController,
+    SmoothLQRController,
 )
 from perception.estimator import (
     FiniteDifferenceEstimator,
@@ -72,6 +73,20 @@ def build_controller(variant, params):
         z_extra = np.array([slew_knob, slew_knob])
         desired_poles_z = np.concatenate([z_plant, z_extra])
         controller = SmoothPolePlacementController(A, B, dt, desired_poles_z, x_ref)
+
+    elif variant.controller_type == "smooth_lqr":
+        dt = params.run.dt
+        Q_single_axis = np.diag([0.01, 0.01, 100, 10])
+        Z4 = np.zeros((4, 4))
+        Q_x = np.block([
+            [Q_single_axis, Z4],
+            [Z4, Q_single_axis],
+        ])
+        q_u = 1e-6
+        Q_u = np.eye(2) * q_u
+        r_delta = 1e4
+        R_delta = np.eye(2) * r_delta
+        controller = SmoothLQRController(A, B, dt, Q_x, R_delta, x_ref, Q_u)
 
     elif variant.controller_type == "circle":
         radius = params.workspace.safe_radius

@@ -88,6 +88,59 @@ class SmoothPolePlacementController(BaseController):
         self._u_prev = np.array([cmd.x_des, cmd.y_des], dtype=float)
 
 
+class SmoothLQRController(BaseController):
+    """Discrete-time Δu LQR: ξ = [x; u_{k-1}], v = Δu, gains from discrete-time Riccati (ct.dlqr)."""
+
+    def __init__(
+        self,
+        A_c: np.ndarray,
+        B_c: np.ndarray,
+        dt: float,
+        Q_x: np.ndarray,
+        R_delta: np.ndarray,
+        x_ref: SystemState | None = None,
+        Q_u: np.ndarray | None = None,
+    ):
+        n, m = A_c.shape[0], B_c.shape[1]
+        sys_c = ct.ss(A_c, B_c, np.eye(n), np.zeros((n, m)))
+        sys_d = ct.c2d(sys_c, dt)
+        A_d = np.array(sys_d.A)
+        B_d = np.array(sys_d.B)
+
+        A_aug = np.block([[A_d, B_d], [np.zeros((m, n)), np.eye(m)]])
+        B_aug = np.vstack([B_d, np.eye(m)])
+
+        if Q_x.shape != (n, n):
+            raise ValueError(f"Q_x must be ({n},{n}), got {Q_x.shape}")
+        Q_u_eff = (
+            np.eye(m) * 1e-6 if Q_u is None else np.asarray(Q_u, dtype=float)
+        )
+        if Q_u_eff.shape != (m, m):
+            raise ValueError(f"Q_u must be ({m},{m}), got {Q_u_eff.shape}")
+        Q_aug = np.block([[Q_x, np.zeros((n, m))], [np.zeros((m, n)), Q_u_eff]])
+
+        R_d = np.asarray(R_delta, dtype=float)
+        if R_d.shape != (m, m):
+            raise ValueError(f"R_delta must be ({m},{m}), got {R_d.shape}")
+
+        self.K, _, _ = ct.dlqr(A_aug, B_aug, Q_aug, R_d)
+
+        self.x_ref = np.zeros(n) if x_ref is None else x_ref.as_vector()
+        self.u_ref = (-np.linalg.pinv(B_c) @ (A_c @ self.x_ref)).ravel()
+        self.xi_ref = np.concatenate([self.x_ref, self.u_ref])
+        self._u_prev = self.u_ref.copy()
+
+    def compute(self, state: SystemState) -> TableCommand:
+        x = state.as_vector()
+        xi = np.concatenate([x, self._u_prev])
+        v = -(self.K @ (xi - self.xi_ref)).ravel()
+        u = self._u_prev + v
+        return TableCommand(float(u[0]), float(u[1]))
+
+    def set_applied_command(self, cmd: TableCommand) -> None:
+        self._u_prev = np.array([cmd.x_des, cmd.y_des], dtype=float)
+
+
 class CircleController:
     def __init__(self, x_ref: SystemState, radius: float, period_s: float):
         self.x_ref = x_ref
