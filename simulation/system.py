@@ -44,6 +44,6 @@ class System:
         else:
             state_est, measurement, pose = state_true, None, None
         
-        self._print_state_error((state_est.as_vector() - state_true.as_vector()))
+        #self._print_state_error((state_est.as_vector() - state_true.as_vector()))
 
         return state_true, state_est, acc, measurement, pose

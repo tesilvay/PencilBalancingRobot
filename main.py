@@ -109,7 +109,7 @@ def _default_run_offline() -> RunParams:
         save_video=False,
         realtimerender=False,
         total_time=5.0,
-        dt=1e-3,
+        dt=4e-3,
         stability_tolerance_deg=15,
         estimator_lpf_alpha=None,
         initial_angle_spread_deg=2,
@@ -154,7 +154,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
         run = _default_run_offline()
     elif preset == "vision_real":
         hw = _default_hardware()
-        hw.vision_mode = "real_dvs"
+        hw.vision_mode = "real_dvs" #"real_dvs" | "sim_dvs" | "sim_analytic"
         hw.dvs_use_regression = True
         run = _default_run_realtime()
     elif preset == "actuation_real":

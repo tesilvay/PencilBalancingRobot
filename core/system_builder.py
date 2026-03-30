@@ -109,7 +109,10 @@ def build_estimator(variant, params):
 
         elif variant.estimator_type == "kalman":
             Qk = np.eye(8) * 1e-6
-            Rk = np.eye(4) * variant.noise_std**2 #proportional to dynamics trust
+            
+            r_pose_pos = variant.noise_std**2
+            r_pose_ang = variant.noise_std**2
+            Rk = np.diag(np.array([r_pose_pos, r_pose_ang, r_pose_pos, r_pose_ang], dtype=float))
             estimator = KalmanEstimator(A, B, dt=params.run.dt, Q=Qk, R=Rk)
 
         elif variant.estimator_type == "kalman_full":

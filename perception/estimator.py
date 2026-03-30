@@ -243,8 +243,8 @@ class KalmanEstimator(BaseEstimator):
         self.x_hat = x_pred + K @ y
         self.P = (np.eye(8) - K @ self.H) @ P_pred
         
-        #self._print_pose(z)
-        #self._print_est_x_hat(self.x_hat)
+        self._print_pose(z)
+        self._print_est_x_hat(self.x_hat)
 
         return SystemState(
             x=self.x_hat[0, 0],
