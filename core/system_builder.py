@@ -65,7 +65,7 @@ def build_controller(variant, params):
 
     elif variant.controller_type == "smooth_pole":
         dt = params.run.dt
-        s_poles = np.array([-14, -16, -18, -20, -14, -16, -18, -20], dtype=float)
+        s_poles = np.array([-12, -14, -16, -18] * 2)
         # z-plane poles: map continuous-style poles, plus two for the u_{k-1} part of ξ
         z_plant = np.exp(s_poles * dt)
         slew_knob = 0.99

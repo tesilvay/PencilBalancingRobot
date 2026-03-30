@@ -392,4 +392,6 @@ def main():
 
 
 if __name__ == "__main__":
+    ".venv/bin/python -m streamlit run UI/app.py"
+    ".venv/bin/python -m main --preset real --controller smooth_pole --estimator kalman_full"
     main()
