@@ -33,14 +33,29 @@ class ExperimentRunner:
         self.state = None
         self._viz_paused = False
 
+    def _reset_conditions(self):
+        self.controller.reset()
+        perception = getattr(self.system, "perception", None)
+        if perception is not None and hasattr(perception, "reset"):
+            perception.reset()
+        self.scheduler.reset()
+        if self.stop_condition is not None and hasattr(
+            self.stop_condition, "reset"
+        ):
+            self.stop_condition.reset()
+        if self.actuator is not None and hasattr(self.actuator, "reset"):
+            self.actuator.reset()
+        if self.visualizer is not None and hasattr(self.visualizer, "reset"):
+            self.visualizer.reset()
+
     def initialize(self, initial_state, initial_command):
+        self._reset_conditions()
         self.state = initial_state
         self.command = initial_command
         self._viz_paused = False
 
         if self.logger:
             self.logger.reset(initial_state, initial_command)
-        
 
     def _compute_command(self, state_est):
         u_raw = self.controller.compute(state_est)

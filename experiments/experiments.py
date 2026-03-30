@@ -109,17 +109,19 @@ class MonteCarloExperiment(Experiment):
 
     def run(self, setup):
         results = []
-        
+
         self.progress.start(self.n_trials, "Monte Carlo")
-        
+
+        _, runner = self.engine.prepare(setup)
+
         for i in range(self.n_trials):
-            m = self.evaluator.evaluate(self.engine.run(setup))
+            m = self.evaluator.evaluate(self.engine.run_trial(setup, runner))
             results.append(m)
 
             self.progress.update(i + 1)
 
         self.progress.finish()
-            
+
         return summarize(results)
 
 class BenchmarkExperiment(Experiment):
@@ -143,13 +145,14 @@ class BenchmarkExperiment(Experiment):
                 default_variant=variant,
             )
 
+            _, runner = self.engine.prepare(variant_setup)
+
             results = []
             for i in range(self.n_trials):
                 m = self.evaluator.evaluate(
-                    self.engine.run(variant_setup)
+                    self.engine.run_trial(variant_setup, runner)
                 )
                 results.append(m)
-
 
                 self.progress.update(i + 1)
 
@@ -207,11 +210,13 @@ class WorkspaceSweepExperiment(Experiment):
                 label = f"Radius {r_mm:.1f} mm ({idx+1}/{len(radii_mm)})"
                 self.progress.start(self.n_trials, label)
 
+            _, runner = self.engine.prepare(variant_setup)
+
             results = []
 
             for i in range(self.n_trials):
                 m = self.evaluator.evaluate(
-                    self.engine.run(variant_setup)
+                    self.engine.run_trial(variant_setup, runner)
                 )
                 results.append(m)
 

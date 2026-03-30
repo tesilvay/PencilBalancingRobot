@@ -24,8 +24,9 @@ class FallCondition(StopCondition):
         )
 
 class StabilizedCondition(StopCondition):
-    def __init__(self, tol, settle_time):
-        self.tol = tol
+    def __init__(self, tol_ang, tol_m, settle_time):
+        self.tol_ang = tol_ang
+        self.tol_m = tol_m
         self.settle_time = settle_time
         self.time_in_tol = 0.0
         self._stabilized = False
@@ -35,12 +36,17 @@ class StabilizedCondition(StopCondition):
         self.time_in_tol = 0.0
         self._stabilized = False
         self._settling_time = None
+    
+    def _is_inside_tolerance(self, state):
+        return (
+            abs(state.alpha_x) < self.tol_ang
+            and abs(state.alpha_y) < self.tol_ang
+            and abs(state.x) < self.tol_m
+            and abs(state.y) < self.tol_m
+        )
 
     def should_stop(self, i, state, dt):
-        if (
-            abs(state.alpha_x) < self.tol
-            and abs(state.alpha_y) < self.tol
-        ):
+        if (self._is_inside_tolerance(state)):
             self.time_in_tol += dt
         else:
             self.time_in_tol = 0.0
@@ -59,8 +65,8 @@ class StabilizedCondition(StopCondition):
         return self._settling_time
 
 class MaxSteps(StabilizedCondition):
-    def __init__(self, steps, tol, settle_time):
-        super().__init__(tol, settle_time)
+    def __init__(self, steps, tol_ang, tol_m, settle_time):
+        super().__init__(tol_ang=tol_ang, tol_m=tol_m, settle_time=settle_time)
         self.steps = steps
 
     def should_stop(self, i, state, dt):

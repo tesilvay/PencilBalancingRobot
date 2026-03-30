@@ -25,3 +25,7 @@ class Scheduler:
             return True
         return False
 
+    def reset(self):
+        self.t = 0
+        self.next_actuator = 0
+        self.next_render = 0

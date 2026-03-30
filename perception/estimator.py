@@ -25,7 +25,8 @@ class BaseEstimator:
         raise NotImplementedError
 
     def reset(self):
-        raise NotImplementedError
+        """Reset internal filter history. Override in subclasses that hold state."""
+        pass
     
     def _print_state(self, state):
         print(
@@ -206,7 +207,7 @@ class KalmanEstimator(BaseEstimator):
         self.Q = Q
         self.R = R
 
-        self.P = np.eye(8) * 0.01 #guess
+        self.P = np.eye(8) * 1e2 #guess
         #self.P = solve_discrete_are(A.T, self.H.T, self.Q, self.R)
         self.x_hat = np.zeros((8, 1))
 
@@ -243,8 +244,8 @@ class KalmanEstimator(BaseEstimator):
         self.x_hat = x_pred + K @ y
         self.P = (np.eye(8) - K @ self.H) @ P_pred
         
-        self._print_pose(z)
-        self._print_est_x_hat(self.x_hat)
+        #self._print_pose(z)
+        #self._print_est_x_hat(self.x_hat)
 
         return SystemState(
             x=self.x_hat[0, 0],

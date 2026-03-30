@@ -46,6 +46,14 @@ class Perception:
 
         return state_est, measurement, pose
 
+    def reset(self):
+        self.state_est = None
+        vision = self.vision
+        if vision is not None and hasattr(vision, "reset"):
+            vision.reset()
+        if self.estimator is not None:
+            self.estimator.reset()
+
 
 def get_measurements(cams: CameraPair):
     b1 = cams.cam1.intercept

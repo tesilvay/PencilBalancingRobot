@@ -66,10 +66,10 @@ def build_controller(variant, params):
 
     elif variant.controller_type == "smooth_pole":
         dt = params.run.dt
-        s_poles = np.array([-12, -14, -16, -18] * 2)
+        s_poles = np.array([-18, -20, -22, -24] * 2)
         # z-plane poles: map continuous-style poles, plus two for the u_{k-1} part of ξ
         z_plant = np.exp(s_poles * dt)
-        slew_knob = 0.99
+        slew_knob = 0.93
         z_extra = np.array([slew_knob, slew_knob])
         desired_poles_z = np.concatenate([z_plant, z_extra])
         controller = SmoothPolePlacementController(A, B, dt, desired_poles_z, x_ref)
@@ -108,7 +108,11 @@ def build_estimator(variant, params):
             estimator = LowPassFiniteDifferenceEstimator(alpha=params.run.estimator_lpf_alpha)
 
         elif variant.estimator_type == "kalman":
-            Qk = np.eye(8) * 1e-6
+            q_pose_pos = 1e-6
+            q_pose_ang = 1e-6
+            q_vel_ang = 1e-4
+            q_vel_pos = 1e-4
+            Qk = np.diag(np.array([q_pose_pos, q_vel_pos, q_pose_ang, q_vel_ang, q_pose_pos, q_vel_pos, q_pose_ang, q_vel_ang], dtype=float))
             
             r_pose_pos = variant.noise_std**2
             r_pose_ang = variant.noise_std**2
@@ -334,13 +338,15 @@ def build_stop_condition(params, policy: str):
 
     steps = int(run.total_time / run.dt)
     
-    tol = np.deg2rad(run.stability_tolerance_deg)
-    settle_time = 0.5
+    tol_ang = np.deg2rad(run.stability_tolerance_deg)
+    tol_m = run.stability_tolerance_m
+    settle_time = run.settle_time
 
-    max_steps = MaxSteps(steps, tol=tol, settle_time=settle_time)
+    max_steps = MaxSteps(steps, tol_ang=tol_ang, tol_m=tol_m, settle_time=settle_time)
     fall = FallCondition()
     stabilize = StabilizedCondition(
-        tol=tol,
+        tol_ang=tol_ang,
+        tol_m=tol_m,
         settle_time=settle_time,
     )
 

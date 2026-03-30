@@ -14,14 +14,20 @@ from hardware.servos.servo_workspace_offset_calibrator import calibrate_servo_wo
 class SimulationEngine:
     def __init__(self, stop_policy: StopPolicy):
         self.stop_policy = stop_policy
-    
-    def run(self, setup: ExperimentSetup):
+
+    def prepare(self, setup: ExperimentSetup):
+        """
+        Build plant, perception, controller, and runner once. Call before repeated
+        :meth:`run_trial` for Monte Carlo / batch runs with the same setup.
+        """
         system = system_factory(setup)
         runner = runner_factory(setup, system, self.stop_policy)
 
         if self._should_calibrate_servo_offset(setup.params):
             if runner.actuator is None:
-                raise RuntimeError("Servo offset calibration requested but runner has no actuator.")
+                raise RuntimeError(
+                    "Servo offset calibration requested but runner has no actuator."
+                )
 
             x_offset, y_offset = calibrate_servo_workspace_offset(
                 system=system,
@@ -29,30 +35,19 @@ class SimulationEngine:
                 workspace=setup.params.workspace,
             )
             runner.actuator.set_workspace_offset(x_offset, y_offset)
+            runner._reset_conditions()
 
-            # Best-effort state reset so the first run doesn't start with stale pose history.
-            try:
-                vision = getattr(system.perception, "vision", None)
-                if vision is not None and hasattr(vision, "reset"):
-                    vision.reset()
-            except Exception:
-                pass
-            try:
-                estimator = getattr(system.perception, "estimator", None)
-                if estimator is not None and hasattr(estimator, "reset"):
-                    estimator.reset()
-            except Exception:
-                pass
-            try:
-                if hasattr(system.perception, "state_est"):
-                    system.perception.state_est = None
-            except Exception:
-                pass
+        return system, runner
 
+    def run_trial(self, setup: ExperimentSetup, runner):
+        """One simulation with fresh initial conditions and reset subsystem state."""
         initial_state, initial_command = self._initialize(setup)
-
         runner.initialize(initial_state, initial_command)
         return runner.run()
+
+    def run(self, setup: ExperimentSetup):
+        system, runner = self.prepare(setup)
+        return self.run_trial(setup, runner)
 
     def _initialize(self, setup):
         params = setup.params

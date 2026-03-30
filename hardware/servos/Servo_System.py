@@ -28,6 +28,9 @@ class MockServoController:
     def __init__(self):
         self.start = time.perf_counter()
 
+    def reset(self):
+        pass
+
     def send(self, cmd):
         pass
         #t = time.perf_counter() - self.start
@@ -90,3 +93,9 @@ class ServoSystem:
     def set_workspace_offset(self, dx: float, dy: float) -> None:
         """Update the workspace translation offset applied before IK."""
         self.adapter.set_workspace_offset(dx, dy)
+
+    def reset(self):
+        self.last_send = 0.0
+        ctrl = self.controller
+        if ctrl is not None and hasattr(ctrl, "reset"):
+            ctrl.reset()

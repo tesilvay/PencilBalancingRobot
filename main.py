@@ -111,10 +111,12 @@ def _default_run_offline() -> RunParams:
         total_time=5.0,
         dt=4e-3,
         stability_tolerance_deg=15,
+        stability_tolerance_m=10e-3,
+        settle_time=0.5,
         estimator_lpf_alpha=None,
-        initial_angle_spread_deg=2,
-        initial_position_spread_m=10e-3,
-        initial_linear_velocity_spread_mps=10e-3,
+        initial_angle_spread_deg=5,
+        initial_position_spread_m=0,
+        initial_linear_velocity_spread_mps=0,
         initial_angular_velocity_spread_degps=0,
     )
 
@@ -177,7 +179,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     variant = BenchmarkVariant(
         controller_type="smooth_pole",
         estimator_type="kalman_full",
-        noise_std=0.01,
+        noise_std=0.0001,
         delay_steps=0,
     )
 

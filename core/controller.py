@@ -6,7 +6,12 @@ import control as ct
 class BaseController:
     def compute(self, state):
         raise NotImplementedError
-    
+
+    def reset(self):
+        """Reset controller memory between trials (smooth controllers, etc.)."""
+        pass
+
+
 class PolePlacementController(BaseController):
 
     def __init__(self, A, B, desired_poles, x_ref=None):
@@ -87,6 +92,9 @@ class SmoothPolePlacementController(BaseController):
     def set_applied_command(self, cmd: TableCommand) -> None:
         self._u_prev = np.array([cmd.x_des, cmd.y_des], dtype=float)
 
+    def reset(self):
+        self._u_prev = self.u_ref.copy()
+
 
 class SmoothLQRController(BaseController):
     """Discrete-time Δu LQR: ξ = [x; u_{k-1}], v = Δu, gains from discrete-time Riccati (ct.dlqr)."""
@@ -140,6 +148,9 @@ class SmoothLQRController(BaseController):
     def set_applied_command(self, cmd: TableCommand) -> None:
         self._u_prev = np.array([cmd.x_des, cmd.y_des], dtype=float)
 
+    def reset(self):
+        self._u_prev = self.u_ref.copy()
+
 
 class CircleController:
     def __init__(self, x_ref: SystemState, radius: float, period_s: float, dt:float):
@@ -161,7 +172,14 @@ class CircleController:
 
         return TableCommand(x, y)
 
+    def reset(self):
+        self.t = 0.0
+
+
 class NullController:
     def compute(self, state):
         # no actuation
         return TableCommand(0.0, 0.0)
+
+    def reset(self):
+        pass
