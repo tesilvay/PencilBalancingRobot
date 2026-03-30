@@ -17,7 +17,7 @@ class SimulationEngine:
     
     def run(self, setup: ExperimentSetup):
         system = system_factory(setup)
-        runner = runner_factory(setup.params, system, self.stop_policy)
+        runner = runner_factory(setup, system, self.stop_policy)
 
         if self._should_calibrate_servo_offset(setup.params):
             if runner.actuator is None:
@@ -65,16 +65,21 @@ class SimulationEngine:
 
         angle = np.deg2rad(params.run.initial_angle_spread_deg)
         spread = params.run.initial_position_spread_m
+        v_spread = params.run.initial_linear_velocity_spread_mps
+        w_spread = np.deg2rad(params.run.initial_angular_velocity_spread_degps)
 
         state = SystemState(
             x=x_ref.x + np.random.uniform(-spread, spread),
-            x_dot=0.0,
+            x_dot=np.random.uniform(-v_spread, v_spread),
+
             alpha_x=np.random.uniform(-angle, angle),
-            alpha_x_dot=0.0,
+            alpha_x_dot=np.random.uniform(-w_spread, w_spread),
+
             y=x_ref.y + np.random.uniform(-spread, spread),
-            y_dot=0.0,
+            y_dot=np.random.uniform(-v_spread, v_spread),
+
             alpha_y=np.random.uniform(-angle, angle),
-            alpha_y_dot=0.0,
+            alpha_y_dot=np.random.uniform(-w_spread, w_spread),
         )
 
         cmd = TableCommand(x_ref.x, x_ref.y)

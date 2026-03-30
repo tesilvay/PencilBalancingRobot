@@ -142,13 +142,13 @@ class SmoothLQRController(BaseController):
 
 
 class CircleController:
-    def __init__(self, x_ref: SystemState, radius: float, period_s: float):
+    def __init__(self, x_ref: SystemState, radius: float, period_s: float, dt:float):
         self.x_ref = x_ref
         self.radius = radius
         self.period_s = period_s
         self.omega = 2 * np.pi / period_s
         self.t = 0.0
-        self.dt = 0.001
+        self.dt = dt
 
     def compute(self, state):
         self.t += self.dt

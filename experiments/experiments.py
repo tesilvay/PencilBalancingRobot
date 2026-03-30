@@ -81,7 +81,7 @@ class SingleExperiment(Experiment):
 
         viz = Visualizer3D(
             sim_result.state_history,
-            dt=0.001,
+            dt=params.run.dt,
             L=params.plant.com_length * 2,
             mech=mech,
             mech_history=mech_history,

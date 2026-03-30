@@ -109,11 +109,13 @@ def _default_run_offline() -> RunParams:
         save_video=False,
         realtimerender=False,
         total_time=5.0,
-        dt=0.001,
-        stability_tolerance=0.3,
+        dt=1e-3,
+        stability_tolerance_deg=15,
         estimator_lpf_alpha=None,
         initial_angle_spread_deg=2,
-        initial_position_spread_m=0.000,
+        initial_position_spread_m=10e-3,
+        initial_linear_velocity_spread_mps=10e-3,
+        initial_angular_velocity_spread_degps=0,
     )
 
 
@@ -176,7 +178,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
         controller_type="smooth_pole",
         estimator_type="kalman_full",
         noise_std=0.01,
-        delay_steps=1,
+        delay_steps=0,
     )
 
     return ExperimentSetup(

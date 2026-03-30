@@ -2,10 +2,9 @@ from core.sim_types import WorkspaceParams, clamp_table_command_to_workspace
 from numpy import rad2deg
 
 class System:
-    def __init__(self, plant, perception, controller, dt, workspace: WorkspaceParams):
+    def __init__(self, plant, perception, dt, workspace: WorkspaceParams):
         self.plant = plant
         self.perception = perception
-        self.controller = controller
         self.dt = dt
         self.workspace = workspace
     
@@ -17,6 +16,15 @@ class System:
             f"ax={rad2deg(state.alpha_x):+.2f}°, ax_dot={rad2deg(state.alpha_x_dot):+.2f}°/s | "
             f"y={state.y*1000:+.2f} mm, y_dot={state.y_dot*1000:+.2f} mm/s, "
             f"ay={rad2deg(state.alpha_y):+.2f}°, ay_dot={rad2deg(state.alpha_y_dot):+.2f}°/s"
+        )
+        
+    def _print_state_error(self, state):
+        print(
+            f"est error: "
+            f"x={state[0]*1000:+.2f} mm, x_dot={state[1]*1000:+.2f} mm/s, "
+            f"ax={rad2deg(state[2]):+.2f}°, ax_dot={rad2deg(state[3]):+.2f}°/s | "
+            f"y={state[4]*1000:+.2f} mm, y_dot={state[5]*1000:+.2f} mm/s, "
+            f"ay={rad2deg(state[6]):+.2f}°, ay_dot={rad2deg(state[7]):+.2f}°/s"
         )
         
     def _print_vel(self, state):
@@ -36,11 +44,6 @@ class System:
         else:
             state_est, measurement, pose = state_true, None, None
         
-        #self._print_state(state_est)
+        self._print_state_error((state_est.as_vector() - state_true.as_vector()))
 
-        u_raw = self.controller.compute(state_est)
-        command = clamp_table_command_to_workspace(u_raw, self.workspace)
-        if hasattr(self.controller, "set_applied_command"):
-            self.controller.set_applied_command(command)
-
-        return state_true, state_est, command, acc, measurement, pose
+        return state_true, state_est, acc, measurement, pose

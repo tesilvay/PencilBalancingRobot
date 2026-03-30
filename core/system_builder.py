@@ -27,7 +27,7 @@ from core.plant import BalancerPlant
 from core.sim_types import make_reference_state, StopPolicy
 from fivebar.transform import FiveBarTransform
 from fivebar.mechanism import FiveBarMechanism
-from hardware.servos.Servo_System import ServoSystem
+from hardware.servos.Servo_System import ServoSystem, MockServoController
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, SurfaceRegressionAlgorithm
 from simulation.stop_conditions import MaxSteps, FallCondition, StabilizedCondition, AnyStop, Infinite
 from simulation.pacing import NoPacing, RealTimePacing
@@ -91,7 +91,7 @@ def build_controller(variant, params):
     elif variant.controller_type == "circle":
         radius = params.workspace.safe_radius
         period_s = 18
-        controller = CircleController(x_ref, radius, period_s)
+        controller = CircleController(x_ref, radius, period_s, dt=params.run.dt)
     else:
         controller = NullController()
 
@@ -110,7 +110,7 @@ def build_estimator(variant, params):
         elif variant.estimator_type == "kalman":
             Qk = np.eye(8) * 1e-6
             Rk = np.eye(4) * variant.noise_std**2 #proportional to dynamics trust
-            estimator = KalmanEstimator(A, B, dt=0.001, Q=Qk, R=Rk)
+            estimator = KalmanEstimator(A, B, dt=params.run.dt, Q=Qk, R=Rk)
 
         elif variant.estimator_type == "kalman_full":
             
@@ -129,7 +129,7 @@ def build_estimator(variant, params):
             
             lpf = LowPassFiniteDifferenceEstimator(alpha=params.run.estimator_lpf_alpha)
             estimator = FullStateKalmanFilter(
-                A, B, dt=0.001, Q=Qk, R=Rk, lpf=lpf
+                A, B, dt=params.run.dt, Q=Qk, R=Rk, lpf=lpf
             )
     else:
         estimator = None
@@ -260,7 +260,7 @@ def build_mechanism(params):
 def build_actuator(params, mech):
 
     if not params.hardware.servo:
-        return None
+        return MockServoController()
 
     return ServoSystem(
         mech,
@@ -330,12 +330,15 @@ def build_stop_condition(params, policy: str):
     run = params.run
 
     steps = int(run.total_time / run.dt)
+    
+    tol = np.deg2rad(run.stability_tolerance_deg)
+    settle_time = 0.5
 
-    max_steps = MaxSteps(steps)
+    max_steps = MaxSteps(steps, tol=tol, settle_time=settle_time)
     fall = FallCondition()
     stabilize = StabilizedCondition(
-        tol=run.stability_tolerance,
-        settle_time=0.5,
+        tol=tol,
+        settle_time=settle_time,
     )
 
     if policy == StopPolicy.FIXED_TIME:
@@ -368,19 +371,22 @@ def system_factory(setup):
     
     plant = build_plant(params)
 
-    controller = build_controller(variant, params)
-
     estimator = build_estimator(variant, params)
     
     vision = build_vision(variant, params, camera_params)
 
     perception = Perception(vision, estimator)
     
-    system = System(plant, perception, controller, params.run.dt, params.workspace)
+    system = System(plant, perception, params.run.dt, params.workspace)
     
     return system
 
-def runner_factory(params, system, stop_policy):
+def runner_factory(setup, system, stop_policy):
+    
+    variant = setup.default_variant
+    params = setup.params
+    
+    controller = build_controller(variant, params)
     
     scheduler = build_scheduler(params)
     
@@ -398,9 +404,11 @@ def runner_factory(params, system, stop_policy):
     
     runner = ExperimentRunner(
         system=system,
+        controller=controller,
         scheduler=scheduler,
         stop_condition=stop_condition,
         pacing=pacing,
+        workspace=params.workspace,
         logger=logger,
         actuator=actuator,
         visualizer=visualizer,

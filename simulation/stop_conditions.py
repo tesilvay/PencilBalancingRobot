@@ -13,13 +13,6 @@ class StopCondition:
     def settling_time(self):
         return None
 
-class MaxSteps(StopCondition):
-    def __init__(self, steps):
-        self.steps = steps
-
-    def should_stop(self, i, state, dt):
-        return i >= self.steps
-
 class FallCondition(StopCondition):
     def __init__(self, max_angle=2.5):
         self.max_angle = max_angle
@@ -52,7 +45,7 @@ class StabilizedCondition(StopCondition):
         else:
             self.time_in_tol = 0.0
 
-        if self.time_in_tol >= self.settle_time:
+        if (not self._stabilized) and self.time_in_tol >= self.settle_time:
             self._stabilized = True
             self._settling_time = i * dt
             return True  # only matters in batch mode
@@ -64,7 +57,19 @@ class StabilizedCondition(StopCondition):
     
     def settling_time(self):
         return self._settling_time
-    
+
+class MaxSteps(StabilizedCondition):
+    def __init__(self, steps, tol, settle_time):
+        super().__init__(tol, settle_time)
+        self.steps = steps
+
+    def should_stop(self, i, state, dt):
+        # Run stabilization logic, but ignore its stop signal
+        super().should_stop(i, state, dt)
+
+        # Only stop based on step count
+        return i >= self.steps
+
 class AnyStop(StopCondition):
     def __init__(self, conditions):
         self.conditions = conditions

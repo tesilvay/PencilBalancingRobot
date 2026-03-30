@@ -3,23 +3,23 @@ from visualization.realtime_visualizer import VizResult
 import cv2
 
 
-def _workspace_center_command(system) -> TableCommand:
-    ws = system.workspace
-    return clamp_table_command_to_workspace(TableCommand(ws.x_ref, ws.y_ref), ws)
 
 
 class ExperimentRunner:
     def __init__(
         self,
         system,
+        controller,
         scheduler,
         stop_condition,
         pacing,
+        workspace,
         logger=None,
         actuator=None,
         visualizer=None,
     ):
         self.system = system
+        self.controller = controller
         self.scheduler = scheduler
         self.stop_condition = stop_condition
         self.pacing = pacing
@@ -27,6 +27,7 @@ class ExperimentRunner:
         self.logger = logger
         self.actuator = actuator
         self.visualizer = visualizer
+        self.workspace = workspace
 
         self.command = None
         self.state = None
@@ -41,6 +42,18 @@ class ExperimentRunner:
             self.logger.reset(initial_state, initial_command)
         
 
+    def _compute_command(self, state_est):
+        u_raw = self.controller.compute(state_est)
+        command = clamp_table_command_to_workspace(u_raw, self.workspace)
+        if hasattr(self.controller, "set_applied_command"):
+            self.controller.set_applied_command(command)
+        return command
+
+    def _workspace_center_command(self) -> TableCommand:
+        ws = self.workspace
+        return clamp_table_command_to_workspace(TableCommand(ws.x_ref, ws.y_ref), ws)
+
+
     def run(self):
         i = 0
 
@@ -50,7 +63,6 @@ class ExperimentRunner:
             (
                 state_true,
                 state_est,
-                self.command,
                 acc,
                 measurement,
                 pose,
@@ -60,9 +72,12 @@ class ExperimentRunner:
 
             # ---- 2. actuator ----
             # Paused UI means "table at center": drive real servos there, not the live controller output.
-            if self.actuator and self.scheduler.should_actuate():
+            if self.scheduler.should_actuate():
+                
+                self.command = self._compute_command(state_est)
+                
                 cmd_out = (
-                    _workspace_center_command(self.system)
+                    self._workspace_center_command()
                     if self._viz_paused
                     else self.command
                 )
@@ -81,7 +96,7 @@ class ExperimentRunner:
                         self._viz_paused = not self._viz_paused
                         # Same frame as keypress we may have already sent the controller command above.
                         if self._viz_paused and self.actuator:
-                            self.actuator.send(_workspace_center_command(self.system))
+                            self.actuator.send(self._workspace_center_command())
                     if viz_result.quit:
                         break
                 elif isinstance(viz_result, tuple):
