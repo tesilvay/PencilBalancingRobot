@@ -128,7 +128,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     """Map preset + defaults to real ExperimentSetup (core.sim_types)."""
     plant = PlantParams(
         g=9.81,
-        com_length=0.1,
+        com_length=0.15,
         tau=0.03,
         zeta=0.7,
         num_states=8,

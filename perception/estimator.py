@@ -4,20 +4,11 @@ from core.sim_types import SystemState, PoseMeasurement, TableCommand
 from scipy.linalg import solve_discrete_are
 
 
-def full_state_measurement_covariance(
-    noise_std: float | None, dt_nom: float = 0.001
-) -> np.ndarray:
-    """Diagonal 8x8 R: pose channels (x, αx, y, αy) use σ²; velocity channels use 2σ²/dt²."""
-    if noise_std is None or noise_std <= 0:
-        r_pose = 1e-8
-        r_vel = 1e-8
-    else:
-        r_pose = float(noise_std) ** 2
-        r_vel = 2.0 * r_pose / (float(dt_nom) ** 2)
-    d = np.array(
-        [r_pose, r_vel, r_pose, r_vel, r_pose, r_vel, r_pose, r_vel], dtype=float
-    )
-    return np.diag(d)
+# Variance on LPF velocity pseudo-measurements relative to pose variance (same σ² units per axis).
+# Using the naive diff formula 2σ²/dt² (independent pose noise every step) makes R_vel enormous at
+# dt=1 ms, so K_vel≈0 and the filter ignores z — prediction dominates and velocities blow up on
+# hardware (stale z + model mismatch; see docs/kalman_real_world_gap.md). LPF rates are smoother
+# than raw diff; scale off σ² so gains stay O(1) for typical P.
 
 
 # -------------------------------------------------
@@ -322,8 +313,8 @@ class FullStateKalmanFilter(BaseEstimator):
         self.x_hat = x_pred + K @ y_innov
         self.P = (np.eye(8) - K @ self.H) @ P_pred
         
-        self._print_est(z)
-        self._print_est_x_hat(self.x_hat)
+        #self._print_est(z)
+        #self._print_est_x_hat(self.x_hat)
 
         return SystemState(
             x=self.x_hat[0, 0],

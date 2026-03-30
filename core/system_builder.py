@@ -19,7 +19,6 @@ from perception.estimator import (
     LowPassFiniteDifferenceEstimator,
     KalmanEstimator,
     FullStateKalmanFilter,
-    full_state_measurement_covariance,
 )
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
 from core.model import BuildLinearModel
@@ -99,9 +98,20 @@ def build_estimator(variant, params):
             estimator = KalmanEstimator(A, B, dt=0.001, Q=Qk, R=Rk)
 
         elif variant.estimator_type == "kalman_full":
-            # 8x8 R: pose diagonals match kalman σ²; velocity diagonals from finite-diff scaling
-            Qk = np.eye(8) * 1e-6
-            Rk = full_state_measurement_covariance(variant.noise_std, dt_nom=0.001)
+            
+            q_pose_pos = 1e-8
+            q_pose_ang = 1e-8
+            q_vel_ang = 1e-4
+            q_vel_pos = 1e-4
+            Qk = np.diag(np.array([q_pose_pos, q_vel_pos, q_pose_ang, q_vel_ang, q_pose_pos, q_vel_pos, q_pose_ang, q_vel_ang], dtype=float))
+            
+            
+            r_pose_pos = 1e-7
+            r_pose_ang = 1e-4
+            r_vel_ang = 1e-6
+            r_vel_pos = 1e-4
+            Rk = np.diag(np.array([r_pose_pos, r_vel_pos, r_pose_ang, r_vel_ang, r_pose_pos, r_vel_pos, r_pose_ang, r_vel_ang], dtype=float))
+            
             lpf = LowPassFiniteDifferenceEstimator(alpha=params.run.estimator_lpf_alpha)
             estimator = FullStateKalmanFilter(
                 A, B, dt=0.001, Q=Qk, R=Rk, lpf=lpf
