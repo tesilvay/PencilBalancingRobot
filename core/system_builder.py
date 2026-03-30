@@ -14,7 +14,13 @@ from core.controller import (
     CircleController,
     SmoothPolePlacementController,
 )
-from perception.estimator import FiniteDifferenceEstimator, LowPassFiniteDifferenceEstimator, KalmanEstimator
+from perception.estimator import (
+    FiniteDifferenceEstimator,
+    LowPassFiniteDifferenceEstimator,
+    KalmanEstimator,
+    FullStateKalmanFilter,
+    full_state_measurement_covariance,
+)
 from perception.vision import SimVisionModel, RealEventCameraInterface, SimEventCameraInterface, Perception
 from core.model import BuildLinearModel
 from core.plant import BalancerPlant
@@ -91,6 +97,15 @@ def build_estimator(variant, params):
             Qk = np.eye(8) * 1e-6
             Rk = np.eye(4) * variant.noise_std**2 #proportional to dynamics trust
             estimator = KalmanEstimator(A, B, dt=0.001, Q=Qk, R=Rk)
+
+        elif variant.estimator_type == "kalman_full":
+            # 8x8 R: pose diagonals match kalman σ²; velocity diagonals from finite-diff scaling
+            Qk = np.eye(8) * 1e-6
+            Rk = full_state_measurement_covariance(variant.noise_std, dt_nom=0.001)
+            lpf = LowPassFiniteDifferenceEstimator(alpha=params.run.estimator_lpf_alpha)
+            estimator = FullStateKalmanFilter(
+                A, B, dt=0.001, Q=Qk, R=Rk, lpf=lpf
+            )
     else:
         estimator = None
     

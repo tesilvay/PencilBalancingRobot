@@ -112,8 +112,8 @@ def _default_run_offline() -> RunParams:
         dt=0.001,
         stability_tolerance=0.3,
         estimator_lpf_alpha=None,
-        initial_angle_spread_deg=0,
-        initial_position_spread_m=0.000,
+        initial_angle_spread_deg=8,
+        initial_position_spread_m=0.010,
     )
 
 
@@ -173,8 +173,8 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     apply_actuator_to_hardware(hw, resolve_effective_actuator(args))
 
     variant = BenchmarkVariant(
-        controller_type="lqr",
-        estimator_type="lpf",
+        controller_type="smooth_pole",
+        estimator_type="kalman_full",
         noise_std=0.01,
         delay_steps=1,
     )
@@ -212,7 +212,7 @@ def resolve_trials(experiment_type: str, trials_override: int | None) -> int:
 
 def build_default_variants():
     controllers = ["lqr", "pole"]
-    estimators = ["lpf", "kalman"]
+    estimators = ["lpf", "kalman", "kalman_full"]
     noises = [0, 1e-3, 1e-2, 5e-2, 1e-1, 2e-1]
     delays = [1]
 
@@ -362,7 +362,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--estimator",
         default=None,
-        choices=["kalman", "lpf", "fde"],
+        choices=["kalman", "kalman_full", "lpf", "fde"],
         help="Override default_variant estimator (fde = finite-difference)",
     )
     parser.add_argument(

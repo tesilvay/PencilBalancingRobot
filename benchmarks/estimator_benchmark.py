@@ -11,6 +11,8 @@ from perception.estimator import (
     FiniteDifferenceEstimator,
     LowPassFiniteDifferenceEstimator,
     KalmanEstimator,
+    FullStateKalmanFilter,
+    full_state_measurement_covariance,
 )
 from core.sim_types import (
     SystemState,
@@ -176,6 +178,12 @@ def run_estimator_monte_carlo(
             Q = np.eye(8) * 1e-6
             R = kalman_measurement_covariance(noise_std)
             estimator = estimator_class(A=A, B=B, dt=dt, Q=Q, R=R)
+        elif estimator_class == FullStateKalmanFilter:
+            A, B = BuildLinearModel(params)
+            Q = np.eye(8) * 1e-6
+            R = full_state_measurement_covariance(noise_std, dt_nom=dt)
+            lpf = LowPassFiniteDifferenceEstimator(alpha=0.95)
+            estimator = estimator_class(A=A, B=B, dt=dt, Q=Q, R=R, lpf=lpf)
         elif estimator_class == LowPassFiniteDifferenceEstimator:
             estimator = estimator_class(alpha=0.95)
         else:
@@ -212,6 +220,7 @@ def sweep_estimators(params: PhysicalParams, camera_params: CameraParams, dt: fl
         #FiniteDifferenceEstimator,
         LowPassFiniteDifferenceEstimator,
         KalmanEstimator,
+        FullStateKalmanFilter,
     ]
 
     results = {}
