@@ -234,6 +234,7 @@ class TrialMetrics:
     stabilized: bool
     settling_time: float | None
     max_acc: float
+    avg_state_est_err: np.ndarray | None = None
 
 
 @dataclass
@@ -242,6 +243,7 @@ class BenchmarkSummary:
     avg_settling_time: float | None
     max_acc: float
     avg_acc: float
+    avg_state_est_err: np.ndarray | None = None
 
 @dataclass
 class BenchmarkResult:
@@ -259,6 +261,7 @@ class SimulationResult:
     state_history: np.ndarray
     acc_history: np.ndarray
     mech_history: np.ndarray | None = None
+    state_est_err_history: np.ndarray | None = None
     cmd_history: np.ndarray | None = None 
     terminal: TerminalInfo | None = None
 

@@ -317,6 +317,22 @@ def build_visualizer(params, perception):
             mask_y_cam2=my2,
         )
 
+    if params.hardware.vision_mode == "sim_dvs" and frames_fn is not None:
+        my1 = params.hardware.dvs_mask_line_y_cam1
+        my2 = params.hardware.dvs_mask_line_y_cam2
+        if show_workspace:
+            return RealDvsWorkspaceVisualizer(
+                params.workspace,
+                frames_fn,
+                mask_y_cam1=my1,
+                mask_y_cam2=my2,
+            )
+        return RealDvsVisualizer(
+            frames_fn,
+            mask_y_cam1=my1,
+            mask_y_cam2=my2,
+        )
+
     if show_workspace:
         return SimDvsWorkspaceVisualizer(params.workspace)
     return SimDvsVisualizer()

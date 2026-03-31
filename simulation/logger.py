@@ -7,21 +7,25 @@ class Logger:
         self._states = None
         self._commands = None
         self._acc = None
+        self._state_est_err = None
 
     def reset(self, initial_state, initial_command):
         # store as python lists (works for both finite + infinite)
         self._states = [initial_state.as_vector()]
         self._commands = [[initial_command.x_des, initial_command.y_des]]
         self._acc = []
+        self._state_est_err = []
 
-    def record(self, state, command, acc):
+    def record(self, state, command, acc, state_est_err):
         self._states.append(state.as_vector())
         self._commands.append([command.x_des, command.y_des])
         self._acc.append(acc.as_vector())
+        self._state_est_err.append(state_est_err)
 
     def get_result(self) -> SimulationResult:
         # Convert once at the end
         state_history = np.array(self._states)
+        state_est_err_history = np.array(self._state_est_err)
         cmd_history = np.array(self._commands)
 
         if self._acc:
@@ -33,4 +37,5 @@ class Logger:
             state_history=state_history,
             acc_history=acc_history,
             cmd_history=cmd_history,
+            state_est_err_history=state_est_err_history,
         )

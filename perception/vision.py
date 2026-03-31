@@ -11,6 +11,8 @@ from core.sim_types import (
     CameraPair,
     PoseMeasurement
 )
+from perception.dvs_algorithms import mask_events_below_line
+from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
 
 
@@ -155,8 +157,6 @@ class RealEventCameraInterface(VisionModelBase):
         self.dvs_regression_model = dvs_regression_model
         self._dvs_mask_line_y_cam1 = int(dvs_mask_line_y_cam1)
         self._dvs_mask_line_y_cam2 = int(dvs_mask_line_y_cam2)
-            
-        from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
         self._reader1 = DVSReader(cam1_device, noise_filter_duration_ms=noise_filter_duration_ms)
         self._reader2 = DVSReader(cam2_device, noise_filter_duration_ms=noise_filter_duration_ms)
@@ -177,8 +177,6 @@ class RealEventCameraInterface(VisionModelBase):
 
     def _reader_loop(self, reader, algo, _cam_id: int):
         """Background loop: drain all queued batches, update algo, store latest."""
-        from perception.dvs_algorithms import mask_events_below_line
-        from perception.dvs_camera_reader import DAVIS346_HEIGHT
 
         surface = self._surface1 if _cam_id == 1 else self._surface2
         mask_y = self._dvs_mask_line_y_cam1 if _cam_id == 1 else self._dvs_mask_line_y_cam2
@@ -297,34 +295,166 @@ class RealEventCameraInterface(VisionModelBase):
 # ============================================================
 class SimEventCameraInterface(VisionModelBase):
 
-    def __init__(self, camera_params, cam1_algo, cam2_algo):
+    def __init__(
+        self, 
+        camera_params, 
+        cam1_algo, 
+        cam2_algo,
+        dvs_mask_line_y_cam1: int = 160,
+        dvs_mask_line_y_cam2: int = 190,  
+    ):
         super().__init__(camera_params)
 
         self.cam1_algo = cam1_algo
         self.cam2_algo = cam2_algo
+        self.sigma_px = 1.0
         
         self.cam = CameraModel()
+        self._surface1 = np.zeros((self.cam.height, self.cam.width), dtype=np.float32)
+        self._surface2 = np.zeros((self.cam.height, self.cam.width), dtype=np.float32)
+        self._decay_display = 0.5
+        
+        self._dvs_mask_line_y_cam1 = int(dvs_mask_line_y_cam1)
+        self._dvs_mask_line_y_cam2 = int(dvs_mask_line_y_cam2)
+        
+        # tuneable noise parameters
+        self.event_density_base = 300
+        self.visibility_threshold = 0.0001
+        self.visibility_sharpness = 5.0
 
-    def generate_events(self, b, s, n=200):
+        self.pixel_noise_pct = 0.7e-2
+        self.line_dropout_pct = 5e-2
+        self.background_noise_pct = 70e-2
 
-        # convert normalized line → pixel line (x = s*y + b)
+        self.center_bias_strength = 90e-2
+        
+    def generate_events(self, b, s, state_true, cam_id):
+
+        mask_line_y = self._get_mask_line_y(cam_id)
+
+        s_px, b_px = self._project_to_pixel(b, s)
+
+        t_vals = self._sample_pencil_points()
+
+        v_local = self._calculate_local_velocity(state_true, t_vals)
+
+        t_vals = self._apply_visibility_model(t_vals, v_local)
+
+        if len(t_vals) == 0:
+            return self._empty_events()
+
+        xs, ys = self._map_to_pixel_line(t_vals, s_px, b_px, mask_line_y)
+
+        xs, ys = self._apply_line_dropout(xs, ys)
+
+        xs, ys = self._apply_pixel_noise(xs, ys)
+
+        xs, ys = self._add_background_noise(xs, ys)
+
+        xs, ys = self._clip_to_image(xs, ys)
+
+        xs, ys = self._apply_sensor_mask(xs, ys, mask_line_y)
+
+        return self._pack_events(xs, ys)
+
+    def _get_mask_line_y(self, cam_id):
+        return self._dvs_mask_line_y_cam1 if cam_id == 1 else self._dvs_mask_line_y_cam2
+
+
+    def _project_to_pixel(self, b, s):
         obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
-        s_px, b_px = obs_px.slope, obs_px.intercept
+        return obs_px.slope, obs_px.intercept
+
+    def _sample_pencil_points(self):
+        n = self.event_density_base
+
+        if self.center_bias_strength > 0:
+            return np.random.beta(
+                1 + self.center_bias_strength * 5,
+                1 + self.center_bias_strength * 5,
+                n
+            )
+        return np.random.uniform(0, 1, n)
+
+    def _calculate_local_velocity(self, state_true, t_vals):
+
+        xdot = state_true.x_dot
+        ydot = state_true.y_dot
+        ax_dot = state_true.alpha_x_dot
+        ay_dot = state_true.alpha_y_dot
+
+        return np.sqrt(
+            (xdot + t_vals * ax_dot)**2 +
+            (ydot + t_vals * ay_dot)**2
+        )
+
+    def _apply_visibility_model(self, t_vals, v_local):
+
+        v0 = self.visibility_threshold
+        gamma = self.visibility_sharpness
+
+        p_event = (v_local / (v_local + v0)) ** gamma
+
+        keep = np.random.rand(len(t_vals)) < p_event
+        return t_vals[keep]
+
+    def _map_to_pixel_line(self, t_vals, s_px, b_px, mask_line_y):
+        ys = t_vals * mask_line_y
+        xs = s_px * ys + b_px
+        return xs, ys
+
+    def _apply_line_dropout(self, xs, ys):
+        keep = np.random.rand(len(xs)) > self.line_dropout_pct
+        return xs[keep], ys[keep]
+
+
+    def _apply_pixel_noise(self, xs, ys):
 
         cam_height = self.cam.height
         cam_width = self.cam.width
 
-        # sample points along the line
-        ys = np.random.uniform(0, cam_height, n)
-        xs = s_px * ys + b_px
+        sigma_px = self.pixel_noise_pct * max(cam_width, cam_height)
 
-        # add pixel noise
-        xs += np.random.normal(0, 1.0, n)
+        xs = xs + np.random.normal(0, sigma_px, len(xs))
+        ys = ys + np.random.normal(0, sigma_px, len(ys))
 
-        # keep only events inside the image
-        mask = (xs >= 0) & (xs < cam_width)
-        xs = xs[mask]
-        ys = ys[mask]
+        return xs, ys
+
+    def _add_background_noise(self, xs, ys):
+
+        cam_height = self.cam.height
+        cam_width = self.cam.width
+
+        n_bg = int(self.background_noise_pct * len(xs))
+
+        if n_bg == 0:
+            return xs, ys
+
+        x_bg = np.random.uniform(0, cam_width, n_bg)
+        y_bg = np.random.uniform(0, cam_height, n_bg)
+
+        xs = np.concatenate([xs, x_bg])
+        ys = np.concatenate([ys, y_bg])
+
+        return xs, ys
+
+    def _clip_to_image(self, xs, ys):
+
+        cam_height = self.cam.height
+        cam_width = self.cam.width
+
+        mask = (
+            (xs >= 0) & (xs < cam_width) &
+            (ys >= 0) & (ys < cam_height)
+        )
+
+        return xs[mask], ys[mask]
+
+    def _apply_sensor_mask(self, xs, ys, mask_line_y):
+        keep = ys < mask_line_y
+        return xs[keep], ys[keep]
+
+    def _pack_events(self, xs, ys):
 
         xs = xs.astype(np.int16)
         ys = ys.astype(np.int16)
@@ -335,6 +465,10 @@ class SimEventCameraInterface(VisionModelBase):
 
         return events
 
+
+    def _empty_events(self):
+        return np.zeros(0, dtype=[("x", np.int16), ("y", np.int16)])
+
     def get_observation(self, state_true):
 
         # compute true line
@@ -342,8 +476,14 @@ class SimEventCameraInterface(VisionModelBase):
 
         b1, s1, b2, s2 = get_measurements(cams)
 
-        events1 = self.generate_events(b1, s1)
-        events2 = self.generate_events(b2, s2)
+        events1 = self.generate_events(b1, s1, state_true, cam_id=1)
+        events2 = self.generate_events(b2, s2, state_true, cam_id=2)
+        self._surface1 *= self._decay_display
+        self._surface2 *= self._decay_display
+        if len(events1) > 0:
+            np.add.at(self._surface1, (events1["y"], events1["x"]), 1.0)
+        if len(events2) > 0:
+            np.add.at(self._surface2, (events2["y"], events2["x"]), 1.0)
 
         result1 = self.cam1_algo.update(events1)
         result2 = self.cam2_algo.update(events2)
@@ -359,10 +499,20 @@ class SimEventCameraInterface(VisionModelBase):
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
             CameraObservation(slope=obs2.slope, intercept=obs2.intercept)
         )
+
+    def get_surfaces(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Return copy of current simulated event surfaces for visualization."""
+        return self._surface1.copy(), self._surface2.copy()
+
+    def get_event_accumulator_frames(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Alias for :meth:`get_surfaces` for visualizer compatibility."""
+        return self.get_surfaces()
         
     def reset(self):
         self.cam1_algo.reset()
         self.cam2_algo.reset()
+        self._surface1.fill(0.0)
+        self._surface2.fill(0.0)
 
 
 # ============================================================
@@ -400,8 +550,7 @@ class SimVisionModel(VisionModelBase):
     def _add_noise(self, cams: CameraPair):
         
         b1, s1, b2, s2 = get_measurements(cams)
-        b1old=b1
-        
+         
         if self.noise_std is not None:
             s1 += np.random.normal(0, self.noise_std)
             b1 += np.random.normal(0, self.noise_std)

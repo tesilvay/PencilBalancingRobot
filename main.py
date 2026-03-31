@@ -90,7 +90,7 @@ def apply_actuator_to_hardware(hw: HardwareParams, actuator: str) -> None:
 
 def _default_hardware() -> HardwareParams:
     return HardwareParams(
-        servo=False,
+        servo=True,
         servo_port=None,
         vision_mode="sim_analytic",
         dvs_use_regression=False,
@@ -109,7 +109,7 @@ def _default_run_offline() -> RunParams:
         save_video=False,
         realtimerender=False,
         total_time=5.0,
-        dt=4e-3,
+        dt=1e-3,
         stability_tolerance_deg=15,
         stability_tolerance_m=10e-3,
         settle_time=0.5,
@@ -153,10 +153,11 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     preset = args.preset
     if preset == "sim":
         hw = _default_hardware()
+        hw.vision_mode = "sim_dvs"
         run = _default_run_offline()
     elif preset == "vision_real":
         hw = _default_hardware()
-        hw.vision_mode = "real_dvs" #"real_dvs" | "sim_dvs" | "sim_analytic"
+        hw.vision_mode = "sim_dvs" #"real_dvs" | "sim_dvs" | "sim_analytic"
         hw.dvs_use_regression = True
         run = _default_run_realtime()
     elif preset == "actuation_real":
@@ -346,7 +347,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--actuator",
-        default=None,
+        default="mock",
         choices=["sim", "servo", "mock"],
         help="Actuation: sim | servo (/dev/ttyUSB0) | mock (servo path, no port). "
         "Default depends on --preset.",

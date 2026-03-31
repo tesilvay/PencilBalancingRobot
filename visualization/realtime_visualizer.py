@@ -360,7 +360,7 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
         x0 = max(-10_000, min(10_000, x0))
         x1 = max(-10_000, min(10_000, x1))
         try:
-            cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 2)
+            cv2.line(frame, (x0, y0), (x1, y1), (0, 255, 0), 1)
         except cv2.error:
             return
         if mask_y is not None and 0 < mask_y < self.height:

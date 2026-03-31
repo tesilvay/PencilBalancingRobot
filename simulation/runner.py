@@ -1,6 +1,7 @@
-from core.sim_types import SimulationResult, TableCommand, TerminalInfo, clamp_table_command_to_workspace
+from core.sim_types import SimulationResult, TableCommand, TerminalInfo, clamp_table_command_to_workspace, SystemState
 from visualization.realtime_visualizer import VizResult
 import cv2
+from numpy import array
 
 
 
@@ -32,6 +33,16 @@ class ExperimentRunner:
         self.command = None
         self.state = None
         self._viz_paused = False
+        self.SCALE = array([
+            0.05,   # x (50 mm)
+            0.5,    # x_dot (m/s)
+            0.1,    # ax (rad)
+            1.0,    # ax_dot (rad/s)
+            0.05,   # y
+            0.5,    # y_dot
+            0.1,    # ay
+            1.0     # ay_dot
+        ])
 
     def _reset_conditions(self):
         self.controller.reset()
@@ -68,6 +79,15 @@ class ExperimentRunner:
         ws = self.workspace
         return clamp_table_command_to_workspace(TableCommand(ws.x_ref, ws.y_ref), ws)
 
+    def _calculate_state_est_error(self, est, true):
+        
+        est = est.as_vector()
+        true = true.as_vector()
+        
+        err = est - true
+        norm_err = 100.0 * err / self.SCALE
+        
+        return norm_err
 
     def run(self):
         i = 0
@@ -122,10 +142,13 @@ class ExperimentRunner:
 
             # ---- 4. logging ----
             if self.logger:
+                state_est_err = self._calculate_state_est_error(est=state_est, true=state_true)
+                
                 self.logger.record(
                     state=self.state,
                     command=self.command,
                     acc=acc,
+                    state_est_err=state_est_err
                 )
 
             # ---- 5. time update ----
@@ -145,5 +168,6 @@ class ExperimentRunner:
             state_history=result.state_history,
             acc_history=result.acc_history,
             cmd_history=result.cmd_history,
+            state_est_err_history=result.state_est_err_history,
             terminal=terminal
         )

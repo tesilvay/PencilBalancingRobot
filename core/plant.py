@@ -86,6 +86,10 @@ class BalancerPlant:
 
         alpha_y_dot += alpha_y_ddot * dt
         alpha_y += alpha_y_dot * dt
+        
+        # ---- clamp angle at horizontal ----
+        alpha_x = float(np.clip(alpha_x, -np.pi / 2, np.pi / 2))
+        alpha_y = float(np.clip(alpha_y, -np.pi / 2, np.pi / 2))
 
         return (
             SystemState(
