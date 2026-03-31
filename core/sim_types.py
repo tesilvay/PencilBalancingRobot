@@ -195,6 +195,10 @@ class RunParams:
     initial_position_spread_m: float = 0.050  # ±50 mm
     initial_linear_velocity_spread_mps: float = 0
     initial_angular_velocity_spread_degps: float = 0
+    estimator_diagnostics_enabled: bool = False
+    estimator_diagnostics_terminal_hz: float = 2.0
+    estimator_diagnostics_terminal: bool = True
+    estimator_diagnostics_history: int = 0
 
 
 @dataclass

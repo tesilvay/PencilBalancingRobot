@@ -3,7 +3,8 @@ from visualization.realtime_visualizer import VizResult
 import cv2
 from numpy import array
 
-
+from perception.estimator_diagnostics import EstimatorDiagnosticSnapshot
+from simulation.diagnostics import DiagnosticsManager
 
 
 class ExperimentRunner:
@@ -18,6 +19,7 @@ class ExperimentRunner:
         logger=None,
         actuator=None,
         visualizer=None,
+        diagnostics_manager: DiagnosticsManager | None = None,
     ):
         self.system = system
         self.controller = controller
@@ -29,6 +31,7 @@ class ExperimentRunner:
         self.actuator = actuator
         self.visualizer = visualizer
         self.workspace = workspace
+        self._diagnostics_manager = diagnostics_manager
 
         self.command = None
         self.state = None
@@ -101,9 +104,13 @@ class ExperimentRunner:
                 acc,
                 measurement,
                 pose,
-            ) = self.system.step(self.state, self.command)
+            ) = self.system.step(
+                self.state, self.command, step_idx=i, t_s=self.scheduler.t
+            )
 
             self.state = state_true
+
+            self._emit_estimator_diagnostics()
 
             # ---- 2. actuator ----
             # Paused UI means "table at center": drive real servos there, not the live controller output.
@@ -156,14 +163,14 @@ class ExperimentRunner:
             self.pacing.pace()
 
             i += 1
-    
+
         terminal = TerminalInfo(
             stabilized=self.stop_condition.is_stabilized(),
             settling_time=self.stop_condition.settling_time()
         )
         result = self.logger.get_result()
         cv2.destroyAllWindows()
-        
+
         return SimulationResult(
             state_history=result.state_history,
             acc_history=result.acc_history,
@@ -171,3 +178,20 @@ class ExperimentRunner:
             state_est_err_history=result.state_est_err_history,
             terminal=terminal
         )
+
+    def _emit_estimator_diagnostics(self) -> None:
+        dm = self._diagnostics_manager
+        if dm is None:
+            return
+        perception = getattr(self.system, "perception", None)
+        if perception is None:
+            return
+        estimator = getattr(perception, "estimator", None)
+        if estimator is None:
+            return
+        dm.emit(estimator.get_last_diagnostics())
+
+    def get_estimator_diagnostics_history(self) -> list[EstimatorDiagnosticSnapshot]:
+        if self._diagnostics_manager is None:
+            return []
+        return self._diagnostics_manager.get_history()

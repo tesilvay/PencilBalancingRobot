@@ -1,7 +1,12 @@
 import numpy as np
 import control as ct
 from core.sim_types import SystemState, PoseMeasurement, TableCommand
-from scipy.linalg import solve_discrete_are
+
+from perception.estimator_diagnostics import (
+    EstimatorDiagnosticSnapshot,
+    build_kalman_snapshot,
+)
+from perception.kalman_core import run_linear_kalman_step
 
 
 # Variance on LPF velocity pseudo-measurements relative to pose variance (same σ² units per axis).
@@ -16,6 +21,28 @@ from scipy.linalg import solve_discrete_are
 # -------------------------------------------------
 
 class BaseEstimator:
+    def __init__(self):
+        self._last_diagnostic_snapshot: EstimatorDiagnosticSnapshot | None = None
+        self._diag_step_idx = 0
+        self._diag_t_s = 0.0
+        self._diag_measurement_fresh = True
+        self._diag_z_changed = True
+
+    def set_diagnostics_context(
+        self,
+        step_idx: int,
+        t_s: float,
+        measurement_fresh: bool,
+        z_changed: bool,
+    ) -> None:
+        self._diag_step_idx = step_idx
+        self._diag_t_s = t_s
+        self._diag_measurement_fresh = measurement_fresh
+        self._diag_z_changed = z_changed
+
+    def get_last_diagnostics(self) -> EstimatorDiagnosticSnapshot | None:
+        return self._last_diagnostic_snapshot
+
     def update(
         self,
         pose: PoseMeasurement,
@@ -25,8 +52,7 @@ class BaseEstimator:
         raise NotImplementedError
 
     def reset(self):
-        """Reset internal filter history. Override in subclasses that hold state."""
-        pass
+        self._last_diagnostic_snapshot = None
     
     def _print_state(self, state):
         print(
@@ -97,6 +123,7 @@ class BaseEstimator:
 class FiniteDifferenceEstimator(BaseEstimator):
 
     def __init__(self):
+        super().__init__()
         self.prev_pose = None
 
     def update(
@@ -130,12 +157,14 @@ class FiniteDifferenceEstimator(BaseEstimator):
         )
     
     def reset(self):
+        super().reset()
         self.prev_pose = None
 
 
 class LowPassFiniteDifferenceEstimator(BaseEstimator):
 
     def __init__(self, alpha=0.93):
+        super().__init__()
         self.prev_pose = None
         self.prev_vel = np.zeros(4)
         self.alpha = 0.95 if alpha is None else alpha
@@ -174,6 +203,7 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
         )
 
     def reset(self):
+        super().reset()
         self.prev_pose = None
         self.prev_vel = np.zeros(4)
 
@@ -188,7 +218,7 @@ class KalmanEstimator(BaseEstimator):
         Q: np.ndarray,
         R: np.ndarray,
     ):
-
+        super().__init__()
         # Discretize continuous system with control input u = [x_des, y_des]
         sys_c = ct.ss(A, B, np.eye(8), np.zeros((8, 2)))
         sys_d = ct.c2d(sys_c, dt)
@@ -207,14 +237,12 @@ class KalmanEstimator(BaseEstimator):
         self.Q = Q
         self.R = R
         
-        self.P_init = np.eye(8) * 1e2 # bigger makes search more
+        self.P_init = np.eye(8) * 2e-2 # bigger makes search more
         self.x_hat_init = np.zeros((8, 1))
 
         self.P = self.P_init
         #self.P = solve_discrete_are(A.T, self.H.T, self.Q, self.R)
         self.x_hat = self.x_hat_init
-
-    
 
     def update(
         self,
@@ -226,29 +254,34 @@ class KalmanEstimator(BaseEstimator):
         z = np.array(
             [pose.X, pose.alpha_x, pose.Y, pose.alpha_y], dtype=float
         ).reshape(-1, 1)
-        
-        
 
         if command_u is None:
             u = np.zeros((2, 1))
         else:
             u = np.array([[command_u.x_des], [command_u.y_des]])
 
-        # ----- Prediction -----
-        x_pred = self.A @ self.x_hat + self.B @ u
-        P_pred = self.A @ self.P @ self.A.T + self.Q
-
-        # ----- Update -----
-        S = self.H @ P_pred @ self.H.T + self.R
-        K = P_pred @ self.H.T @ np.linalg.inv(S)
-
-        y = z - self.H @ x_pred
-
-        self.x_hat = x_pred + K @ y
-        self.P = (np.eye(8) - K @ self.H) @ P_pred
-        
-        #self._print_pose(z)
-        #self._print_est_x_hat(self.x_hat)
+        step = run_linear_kalman_step(
+            self.A,
+            self.B,
+            self.H,
+            self.Q,
+            self.R,
+            self.x_hat,
+            self.P,
+            z,
+            u,
+        )
+        self.x_hat = step.x_hat
+        self.P = step.P
+        self._last_diagnostic_snapshot = build_kalman_snapshot(
+            estimator_name=type(self).__name__,
+            step_idx=self._diag_step_idx,
+            t_s=self._diag_t_s,
+            dt_s=dt,
+            measurement_fresh=self._diag_measurement_fresh,
+            z_changed=self._diag_z_changed,
+            step=step,
+        )
 
         return SystemState(
             x=self.x_hat[0, 0],
@@ -262,6 +295,7 @@ class KalmanEstimator(BaseEstimator):
         )
 
     def reset(self):
+        super().reset()
         self.P = self.P_init
         self.x_hat = self.x_hat_init
 
@@ -280,6 +314,7 @@ class FullStateKalmanFilter(BaseEstimator):
         R: np.ndarray,
         lpf: LowPassFiniteDifferenceEstimator,
     ):
+        super().__init__()
         sys_c = ct.ss(A, B, np.eye(8), np.zeros((8, 2)))
         sys_d = ct.c2d(sys_c, dt)
 
@@ -307,18 +342,28 @@ class FullStateKalmanFilter(BaseEstimator):
         else:
             u = np.array([[command_u.x_des], [command_u.y_des]])
 
-        x_pred = self.A @ self.x_hat + self.B @ u
-        P_pred = self.A @ self.P @ self.A.T + self.Q
-
-        S = self.H @ P_pred @ self.H.T + self.R
-        K = P_pred @ self.H.T @ np.linalg.inv(S)
-        y_innov = z - self.H @ x_pred
-
-        self.x_hat = x_pred + K @ y_innov
-        self.P = (np.eye(8) - K @ self.H) @ P_pred
-        
-        #self._print_est(z)
-        #self._print_est_x_hat(self.x_hat)
+        step = run_linear_kalman_step(
+            self.A,
+            self.B,
+            self.H,
+            self.Q,
+            self.R,
+            self.x_hat,
+            self.P,
+            z,
+            u,
+        )
+        self.x_hat = step.x_hat
+        self.P = step.P
+        self._last_diagnostic_snapshot = build_kalman_snapshot(
+            estimator_name=type(self).__name__,
+            step_idx=self._diag_step_idx,
+            t_s=self._diag_t_s,
+            dt_s=dt,
+            measurement_fresh=self._diag_measurement_fresh,
+            z_changed=self._diag_z_changed,
+            step=step,
+        )
 
         return SystemState(
             x=self.x_hat[0, 0],
@@ -332,6 +377,7 @@ class FullStateKalmanFilter(BaseEstimator):
         )
 
     def reset(self):
+        super().reset()
         self._lpf.reset()
         self.P = np.eye(8) * 0.01
         self.x_hat = np.zeros((8, 1))

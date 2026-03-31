@@ -21,6 +21,7 @@ class Perception:
         self.vision = vision
         self.estimator = estimator
         self.state_est = None
+        self._last_pose_tuple: tuple[float, float, float, float] | None = None
 
     def _state_to_pose(self, state: SystemState) -> PoseMeasurement:
         return PoseMeasurement(
@@ -29,27 +30,49 @@ class Perception:
             alpha_x=state.alpha_x,
             alpha_y=state.alpha_y,
         )
-        
-    def update(self, state_true, command_u, dt):
+
+    @staticmethod
+    def _pose_tuple(pose: PoseMeasurement) -> tuple[float, float, float, float]:
+        return (pose.X, pose.Y, pose.alpha_x, pose.alpha_y)
+
+    def _compute_z_changed(
+        self, pose: PoseMeasurement, measurement_fresh: bool
+    ) -> bool:
+        if not measurement_fresh:
+            return False
+        cur = self._pose_tuple(pose)
+        prev = self._last_pose_tuple
+        if prev is None:
+            return True
+        return not np.allclose(cur, prev, rtol=0.0, atol=1e-9)
+
+    def update(self, state_true, command_u, dt, step_idx=0, t_s=0.0):
         measurement = self.vision.get_observation(state_true)
 
         if measurement is None:
-            # Real DVS pipelines can be temporarily unavailable while trackers warm up.
-            # Keep estimator stable by reusing the latest estimated pose when possible.
             if self.state_est is not None:
                 pose = self._state_to_pose(self.state_est)
             else:
                 pose = self._state_to_pose(state_true)
+            measurement_fresh = False
         else:
             pose = self.vision.reconstruct(measurement)
+            measurement_fresh = True
 
+        z_changed = self._compute_z_changed(pose, measurement_fresh)
+        if self.estimator is not None:
+            self.estimator.set_diagnostics_context(
+                step_idx, t_s, measurement_fresh, z_changed
+            )
         state_est = self.estimator.update(pose, dt, command_u)
         self.state_est = state_est
+        self._last_pose_tuple = self._pose_tuple(pose)
 
         return state_est, measurement, pose
 
     def reset(self):
         self.state_est = None
+        self._last_pose_tuple = None
         vision = self.vision
         if vision is not None and hasattr(vision, "reset"):
             vision.reset()
@@ -223,6 +246,7 @@ class RealEventCameraInterface(VisionModelBase):
             obs2_px = self._latest2
 
         if obs1_px is None or obs2_px is None:
+            print("No observation vision.py line 226")
             return None
 
         obs1 = self.cam.pixel_to_camnorm(obs1_px)

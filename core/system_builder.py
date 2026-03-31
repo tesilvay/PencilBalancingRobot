@@ -35,6 +35,7 @@ from simulation.logger import Logger
 from simulation.system import System
 from simulation.scheduler import Scheduler
 from simulation.runner import ExperimentRunner
+from simulation.diagnostics import DiagnosticsManager
 
 
 def build_plant(params):
@@ -112,12 +113,12 @@ def build_estimator(variant, params):
         elif variant.estimator_type == "kalman":
             q_pose_pos = 1e-6
             q_pose_ang = 1e-6
-            q_vel_ang = 1e-4
-            q_vel_pos = 1e-4
+            q_vel_ang = 1e-2
+            q_vel_pos = 1e-3
             Qk = np.diag(np.array([q_pose_pos, q_vel_pos, q_pose_ang, q_vel_ang, q_pose_pos, q_vel_pos, q_pose_ang, q_vel_ang], dtype=float))
             
-            r_pose_pos = variant.noise_std**2
-            r_pose_ang = variant.noise_std**2
+            r_pose_pos = 1e-2
+            r_pose_ang = 7e-2
             Rk = np.diag(np.array([r_pose_pos, r_pose_ang, r_pose_pos, r_pose_ang], dtype=float))
             estimator = KalmanEstimator(A, B, dt=params.run.dt, Q=Qk, R=Rk)
 
@@ -428,7 +429,9 @@ def runner_factory(setup, system, stop_policy):
     actuator = build_actuator(params, mech)
     
     visualizer = build_visualizer(params, system.perception)
-    
+
+    diagnostics_manager = DiagnosticsManager.from_run_params(params.run)
+
     runner = ExperimentRunner(
         system=system,
         controller=controller,
@@ -439,6 +442,7 @@ def runner_factory(setup, system, stop_policy):
         logger=logger,
         actuator=actuator,
         visualizer=visualizer,
+        diagnostics_manager=diagnostics_manager,
     )
     
     return runner

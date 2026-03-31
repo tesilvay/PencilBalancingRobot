@@ -48,12 +48,14 @@ class System:
             f"ay_dot={rad2deg(state.alpha_y_dot):+.2f}°/s"
         )
 
-    def step(self, state, command):
+    def step(self, state, command, step_idx=0, t_s=0.0):
 
         state_true, acc = self.plant.step(state, command, self.dt)
 
         if self.perception:
-            state_est, measurement, pose = self.perception.update(state_true, command, self.dt)
+            state_est, measurement, pose = self.perception.update(
+                state_true, command, self.dt, step_idx=step_idx, t_s=t_s
+            )
         else:
             state_est, measurement, pose = state_true, None, None
         

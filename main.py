@@ -118,6 +118,7 @@ def _default_run_offline() -> RunParams:
         initial_position_spread_m=0,
         initial_linear_velocity_spread_mps=0,
         initial_angular_velocity_spread_degps=0,
+        estimator_diagnostics_enabled=True,
     )
 
 
@@ -180,7 +181,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     variant = BenchmarkVariant(
         controller_type="smooth_pole",
         estimator_type="kalman_full",
-        noise_std=0.0001,
+        noise_std=0.01,
         delay_steps=0,
     )
 
