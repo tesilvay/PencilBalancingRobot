@@ -4,7 +4,7 @@ This project models, simulates, and evaluates a 2-DOF table balancing an inverte
 
 The current architecture is organized around three core concepts:
 
-- **Systems**: closed-loop runtime units (`plant + perception + controller`)
+- **Systems**: plant/perception runtime units (`plant + perception`)
 - **Builders**: composition functions that wire concrete implementations from config
 - **Engines**: execution wrappers that initialize systems and run them through a common runner
 
@@ -16,25 +16,30 @@ At each simulation tick (`dt`), the loop is:
 
 1. **Plant step** updates the true state from previous command.
 2. **Perception** gets camera observation, reconstructs pose, and estimates full state.
-3. **Controller** computes the next table command from estimated state.
-4. **Runner services** actuator/render/logging/timing.
+3. **Runner services** apply scheduled control/actuation, rendering, diagnostics, logging, and timing.
 
 In code:
 
-- `simulation/system.py`: `System.step(...)` performs plant → perception → control.
-- `simulation/runner.py`: `ExperimentRunner.run()` handles stop logic, scheduling, pacing, optional actuator/rendering, and logging.
+- `simulation/system.py`: `System.step(...)` performs plant → perception and returns `(state_true, state_est, acc, measurement, pose)`.
+- `simulation/runner.py`: `ExperimentRunner.run()` handles stop logic, scheduled control and actuator sends, optional rendering, estimator diagnostics emission, logging, and pacing.
 
 ---
 
 ## Entry point and modes
 
-The top-level entry point is `main.py`. It builds one `ExperimentSetup` from **`--preset`** (sim / vision_real / actuation_real / real), selects the high-level workflow with **`--experiment`** (single / montecarlo / benchmark / sweep), applies optional overrides (`--controller`, `--estimator`, `--actuator`, `--trials`, `--radius`), then runs.
+The top-level entry point is `main.py`. It builds one `ExperimentSetup` from **`--preset`** (sim / vision_real / actuation_real / real), selects the high-level workflow with **`--experiment`** (single / montecarlo / benchmark / sweep), applies optional overrides (`--controller`, `--estimator`, `--actuator`, `--trials`, and optional JSON dot-path overrides via `--overrides-json`), then runs.
 
 - **`--experiment single`**: one run; sim preset uses `SingleExperiment` (finite sim + 3D playback); realtime presets use `RealExperiment` (infinite stop, no post-run 3D replay).
 - **`--experiment montecarlo`**: repeated randomized initial conditions (sim preset only).
 - **`--experiment benchmark`**: grid of controller/estimator/noise variants (sim preset only); optional `--controller` / `--estimator` narrow the sweep.
 - **`--experiment sweep`**: workspace radius sweep + plot (sim preset only).
 - **`--graph`**: post-processing/plotting of saved benchmark artifacts (standalone flag).
+
+Current CLI notes from implementation:
+
+- parser default for `--actuator` is `"mock"`; this means preset-based actuator defaults are effectively bypassed unless `--actuator` handling is changed.
+- `--radius` is parsed but not currently applied in `apply_cli_overrides(...)`.
+- `vision_real` currently sets `vision_mode="sim_dvs"` in `build_experiment_setup(...)`.
 
 Preset-to-engine defaults (typical):
 
@@ -106,11 +111,10 @@ The composition layer lives in `core/system_builder.py`.
 `system_factory(setup)` builds:
 
 - plant (`build_plant`)
-- controller (`build_controller`)
 - estimator (`build_estimator`)
 - vision backend (`build_vision`)
 - perception wrapper (`Perception(vision, estimator)`)
-- runtime system (`System(plant, perception, controller, dt)`)
+- runtime system (`System(plant, perception, dt, workspace)`)
 
 ### Vision build path
 
@@ -129,12 +133,14 @@ Optional learned pose regression is loaded for real DVS when enabled (`dvs_use_r
 
 ### Runner build path
 
-`runner_factory(params, system, stop_policy)` builds and injects:
+`runner_factory(setup, system, stop_policy)` builds and injects:
 
+- controller (`build_controller`)
 - `Scheduler` (simulation tick + actuator/render rates)
 - stop condition graph (`MaxSteps`, `FallCondition`, `StabilizedCondition`, `AnyStop`, `Infinite`)
 - pacing (`NoPacing` or `RealTimePacing`)
 - `Logger`
+- optional diagnostics manager (`DiagnosticsManager.from_run_params(...)`)
 - optional five-bar mechanism + optional `ServoSystem` actuator
 - optional realtime visualizer (`SimDvsVisualizer`, `SimDvsWorkspaceVisualizer`, `RealDvsVisualizer`, or `RealDvsWorkspaceVisualizer`, selected in `build_visualizer`)
 
@@ -146,15 +152,18 @@ Result is one `ExperimentRunner`.
 
 `simulation/engine.py` provides execution wrappers:
 
-- `SimulationEngine.run(setup)`
+- `SimulationEngine.prepare(setup)` (build once, optionally calibrate real-servo workspace offset)
+- `SimulationEngine.run_trial(setup, runner)` (fresh init + run, reusable runner for batch trials)
+- `SimulationEngine.run(setup)` (prepare + one trial)
 - `RealTimeEngine` (currently same implementation, distinct type for mode semantics)
 
 Engine responsibilities:
 
 1. Build system and runner from setup.
-2. Initialize randomized initial state around workspace reference (position + angle spreads from `RunParams`).
-3. Initialize command to workspace center.
-4. Delegate full loop to `ExperimentRunner.run()`.
+2. Optionally calibrate servo workspace offset when using a real servo port.
+3. Initialize randomized initial state around workspace reference (position + angle spreads from `RunParams`).
+4. Initialize command to workspace center.
+5. Delegate full loop to `ExperimentRunner.run()`.
 
 `ExperimentRunner.run()` owns the main while-loop and produces `SimulationResult` + terminal status.
 

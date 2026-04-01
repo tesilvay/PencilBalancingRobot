@@ -118,7 +118,7 @@ def _default_run_offline() -> RunParams:
         initial_position_spread_m=0,
         initial_linear_velocity_spread_mps=0,
         initial_angular_velocity_spread_degps=0,
-        estimator_diagnostics_enabled=True,
+        estimator_diagnostics_enabled=False,
     )
 
 
