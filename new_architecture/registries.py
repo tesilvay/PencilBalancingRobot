@@ -13,7 +13,7 @@ CONTROLLER_REGISTRY = {
 }
 
 ESTIMATOR_REGISTRY = {
-    "fde": Spec(FiniteDifferenceEstimator, FDEParams, FDE_PRESETS),
+    "fde": Spec(FiniteDifferenceEstimator, NullParams, NULL_PRESETS),
     "lpf": Spec(LowPassFiniteDifferenceEstimator, LPFParams, LPF_PRESETS),
     "kalman": Spec(KalmanEstimator, KalmanParams, KALMAN_PRESETS),
     "full_kalman": Spec(FullStateKalmanFilter, FullKalmanParams, FULL_KALMAN_PRESETS),
@@ -25,7 +25,7 @@ LINE_ALGO_REGISTRY = {
 }
 
 REG_MODEL_REGISTRY = {
-    "none": Spec(NullRegression, NullRegressionParams, NULL_REG_PRESETS),
+    "none": Spec(NullRegression, NullParams, NULL_PRESETS),
     "simple": Spec(SimpleDVSRegressionModel, SimpleRegressionParams, SIMPLE_REG_PRESETS),
 }
 
@@ -50,7 +50,7 @@ VISION_REGISTRY = {
 
 ACTUATOR_REGISTRY = {
     "servo": Spec(ServoController, ServoParams, SERVO_PRESETS, sim_only=False),
-    "mock": Spec(MockServoController, MockServoParams, MOCK_SERVO_PRESETS, sim_only=True),
+    "mock": Spec(MockServoController, NullParams, NULL_PRESETS, sim_only=True),
 }
 
 SUPERVISOR_REGISTRY = {
@@ -75,7 +75,7 @@ SYSTEM_REGISTRY = {
 }
 
 LOGGER_REGISTRY = {
-    "default": Spec(Logger, LoggerParams, LOGGER_PRESETS),
+    "default": Spec(Logger, NullParams, NULL_PRESETS),
 }
 
 STOP_CONDITION_REGISTRY = {
@@ -83,7 +83,7 @@ STOP_CONDITION_REGISTRY = {
     "stabilized": Spec(StabilizedCondition, StabilizedParams, STABILIZED_CONDITION_PRESETS),
     "max_steps": Spec(MaxStepsCondition, MaxStepsConditionParams, MAX_STEPS_CONDITION_PRESETS),
     "any": Spec(AnyStopCondition, AnyStopConditionParams, ANY_STOP_CONDITION_PRESETS),
-    "infinite": Spec(InfiniteCondition, InfiniteConditionParams, INFINITE_CONDITION_PRESETS),
+    "infinite": Spec(InfiniteCondition, NullParams, NULL_PRESETS),
 }
 
 VISUALIZER_REGISTRY = {
