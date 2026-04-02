@@ -289,7 +289,6 @@ def _event_frames_fn_from_perception(perception):
         fn = getattr(vision, "get_surfaces", None)
     return fn
 
-
 def build_visualizer(params, perception):
     if not params.run.realtimerender:
         return None

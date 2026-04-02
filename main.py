@@ -106,7 +106,7 @@ def _default_hardware() -> HardwareParams:
 
 def _default_run_offline() -> RunParams:
     return RunParams(
-        save_video=False,
+        save_video=True,
         realtimerender=False,
         total_time=5.0,
         dt=1e-3,
@@ -154,7 +154,7 @@ def build_experiment_setup(args: argparse.Namespace) -> ExperimentSetup:
     preset = args.preset
     if preset == "sim":
         hw = _default_hardware()
-        hw.vision_mode = "sim_dvs"
+        hw.vision_mode = "sim_analytic"
         run = _default_run_offline()
     elif preset == "vision_real":
         hw = _default_hardware()
