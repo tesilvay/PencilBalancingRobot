@@ -1,26 +1,22 @@
 from dataclasses import dataclass
-import time
-
+from .base import Actuator
 
 @dataclass
 class MockServoParams:
-    pass
+    mechanism: Mechanism   # still needs mech — mock computes angles, just doesn't send
 
+MOCK_SERVO_PRESETS = {
+    "default": {
+        "mechanism": "five_bar:default",
+    }
+}
 
-MOCK_SERVO_PRESETS = {"default": {}}
+class MockServoActuator(Actuator):
+    def __init__(self, params: MockServoParams):
+        self.mechanism = params.mechanism
 
+    def apply(self, command) -> None:
+        pass   # computes nothing, sends nothing — swap in real servo and it just works
 
-class MockServoController:
-
-    def __init__(self):
-        self.start = time.perf_counter()
-
-    def reset(self):
+    def reset(self) -> None:
         pass
-
-    def send(self, cmd):
-        pass
-
-    def send_angles(self, theta1, theta2):
-        cmd = f"CMD,{theta1:.2f},{theta2:.2f}"
-        self.send(cmd)

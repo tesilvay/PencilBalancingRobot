@@ -1,10 +1,9 @@
 from dataclasses import dataclass
 
-from core.sim_types import SystemState, TableCommand
+from src.shared import PlantParams, TimingParams, SystemState, TableCommand
 import numpy as np
 import control as ct
 
-from src.shared import PlantParams, TimingParams
 from .base import BaseController
 
 

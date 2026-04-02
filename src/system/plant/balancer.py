@@ -1,21 +1,18 @@
-from core.sim_types import (
-    PhysicalParams,
+from src.shared import (
     SystemState,
     TableAccel,
     TableCommand,
-    WorkspaceParams,
-    clamp_table_command_to_workspace,
 )
 import numpy as np
 
-from src.shared import PlantParams, PLANT_PRESETS
+from src.shared import PlantParams
 
 
 class BalancerPlant:
 
-    def __init__(self, param: PhysicalParams):
-        p = param.plant
-        w = param.workspace
+    def __init__(self, param: PlantParams):
+        p = param
+        
         self.g = p.g
         self.l = p.com_length
         self.tau = p.tau
@@ -23,9 +20,9 @@ class BalancerPlant:
 
         self.max_acc = p.max_acc
 
-        self.x_ref = w.x_ref
-        self.y_ref = w.y_ref
-        self.safe_radius = w.safe_radius
+        self.x_ref = p.x_ref
+        self.y_ref = p.y_ref
+        self.safe_radius = p.safe_radius
 
     # ------------------------------------------------------------------
     # Public API
@@ -110,10 +107,30 @@ class BalancerPlant:
     # ------------------------------------------------------------------
 
     def clamp_command(self, command_u):
-        return clamp_table_command_to_workspace(
-            command_u,
-            WorkspaceParams(self.x_ref, self.y_ref, self.safe_radius),
-        )
+        x_des = command_u.x_des
+        y_des = command_u.y_des
+        
+        x_ref = self.x_ref
+        y_ref = self.y_ref
+        
+        safe_radius = self.safe_radius
+        
+        if safe_radius is None:
+            return TableCommand(x_des, y_des)
+        
+        # distance from origin
+        dx = x_des - x_ref
+        dy = y_des - y_ref
+        dist = float(np.sqrt(dx * dx + dy * dy))
+        
+        if dist > safe_radius and dist > 0:
+            scale = safe_radius / dist
+            dx *= scale
+            dy *= scale
+            x_des = x_ref + dx
+            y_des = y_ref + dy
+            
+        return TableCommand(x_des, y_des)
 
     def _clamp_acceleration(self, x_ddot, y_ddot):
         """

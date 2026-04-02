@@ -1,4 +1,4 @@
-from core.sim_types import SystemState, TableCommand
+from src.shared import SystemState, TableCommand
 import numpy as np
 import control as ct
 

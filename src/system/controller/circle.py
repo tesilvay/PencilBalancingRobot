@@ -1,9 +1,7 @@
 from dataclasses import dataclass
-
-from core.sim_types import SystemState, TableCommand
 import numpy as np
 
-from src.shared import PlantParams, TimingParams
+from src.shared import PlantParams, TimingParams, SystemState, TableCommand
 
 
 @dataclass

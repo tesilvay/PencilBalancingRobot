@@ -1,38 +1,44 @@
 from dataclasses import dataclass
-import serial
-import time
-
+import serial, time
+from .base import Actuator
 
 @dataclass
 class ServoParams:
-    port:      str
-    frequency: int
-
+    mechanism:  Mechanism
+    port:       str   = "/dev/ttyUSB1"
+    baud:       int   = 115200
+    frequency:  float = 250.0
 
 SERVO_PRESETS = {
     "default": {
+        "mechanism": "five_bar:default",
         "port":      "/dev/ttyUSB1",
-        "frequency": 250,
+        "baud":      115200,
+        "frequency": 250.0,
     }
 }
 
+class ServoActuator(Actuator):
+    def __init__(self, params: ServoParams):
+        self.mechanism  = params.mechanism
+        self.period     = 1.0 / params.frequency
+        self.last_send  = 0.0
 
-class ServoController:
-    """
-    Low-level serial interface to Arduino.
-    """
-
-    def __init__(self, port="/dev/ttyUSB1", baud=115200):
-        self.ser = serial.Serial(port, baud, timeout=1)
+        self._serial = serial.Serial(params.port, params.baud, timeout=1)
         time.sleep(2)
+        self._send_raw("MODE,EXP")
 
-        self.send("MODE,EXP")
+    def apply(self, command) -> None:
+        now = time.time()
+        if now - self.last_send < self.period:
+            return
+        theta1, theta2 = self.mechanism.command_to_angles(command)
+        self._send_raw(f"CMD,{theta1:.2f},{theta2:.2f}")
+        self.last_send = now
 
-    def send(self, cmd):
-        msg = cmd.strip() + "\r\n"
-        self.ser.write(msg.encode("utf-8"))
-        self.ser.flush()
+    def reset(self) -> None:
+        self.last_send = 0.0
 
-    def send_angles(self, a, b):
-        cmd_str = f"CMD,{a:.2f},{b:.2f}"
-        self.send(cmd_str)
+    def _send_raw(self, cmd: str) -> None:
+        self._serial.write((cmd.strip() + "\r\n").encode("utf-8"))
+        self._serial.flush()

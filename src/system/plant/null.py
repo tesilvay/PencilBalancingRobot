@@ -1,4 +1,4 @@
-from core.sim_types import SystemState, TableAccel, TableCommand
+from src.shared import SystemState, TableAccel, TableCommand
 
 
 class NullPlant:

@@ -1,8 +1,8 @@
-class Actuator:
-    """Base class for actuators."""
+from abc import ABC, abstractmethod
 
-    def send(self, command):
-        raise NotImplementedError
-
-    def reset(self):
-        pass
+class Actuator(ABC):
+    @abstractmethod
+    def apply(self, command) -> None: ...
+    
+    @abstractmethod
+    def reset(self) -> None: ...

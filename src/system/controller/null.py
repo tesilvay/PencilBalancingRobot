@@ -1,4 +1,4 @@
-from core.sim_types import TableCommand
+from src.shared import TableCommand
 
 
 class NullController:

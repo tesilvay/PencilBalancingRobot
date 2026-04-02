@@ -1,9 +1,12 @@
-from .base  import Actuator
-from .servo import ServoController,     ServoParams,     SERVO_PRESETS
-from .mock  import MockServoController, MockServoParams, MOCK_SERVO_PRESETS
+from .base      import Actuator
+from .mechanism import Mechanism, MechanismParams, MECHANISM_PRESETS, MECHANISM_REGISTRY
+from .servo     import ServoActuator,     ServoParams,     SERVO_PRESETS
+from .mock      import MockServoActuator, MockServoParams, MOCK_SERVO_PRESETS
 from src.shared import Spec
 
 ACTUATOR_REGISTRY = {
-    "servo": Spec(ServoController,     ServoParams,     SERVO_PRESETS,      sim_only=False),
-    "mock":  Spec(MockServoController, MockServoParams, MOCK_SERVO_PRESETS, sim_only=True),
+    "servo": Spec(ServoActuator,     ServoParams,     SERVO_PRESETS,
+                  registries={"mechanism": MECHANISM_REGISTRY}, sim_only=False),
+    "mock":  Spec(MockServoActuator, MockServoParams, MOCK_SERVO_PRESETS,
+                  registries={"mechanism": MECHANISM_REGISTRY}, sim_only=True),
 }

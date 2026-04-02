@@ -4,6 +4,7 @@ from .estimator   import ESTIMATOR_REGISTRY
 from .sensor      import SENSOR_REGISTRY
 from .actuator    import ACTUATOR_REGISTRY
 from .supervisor  import SUPERVISOR_REGISTRY
+from .plant       import PLANT_REGISTRY
 from src.shared   import Spec
 
 from new_architecture.params import SystemParams
@@ -15,6 +16,7 @@ SYSTEM_REGISTRY = {
         Params     = SystemParams,
         Presets    = SYSTEM_PRESETS,
         registries = {
+            "plant":       PLANT_REGISTRY,
             "controllers": CONTROLLER_REGISTRY,
             "estimators":  ESTIMATOR_REGISTRY,
             "sensor":      SENSOR_REGISTRY,

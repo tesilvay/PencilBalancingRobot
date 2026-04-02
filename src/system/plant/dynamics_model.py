@@ -1,9 +1,9 @@
 import numpy as np
-from core.sim_types import PhysicalParams
+from src.shared import PlantParams
 import control as ct
 
-def BuildLinearModel(param: PhysicalParams):
-    p = param.plant
+def BuildLinearModel(param: PlantParams):
+    p = param
     g = p.g
     l = p.com_length
     tau = p.tau
@@ -71,10 +71,8 @@ def BuildLinearModel(param: PhysicalParams):
     
     return A, B
 
-
-
-def BuildLinearModel_Rod(param: PhysicalParams):
-    p = param.plant
+def BuildLinearModel_Rod(param: PlantParams):
+    p = param
     g = p.g
     l = p.com_length
     tau = p.tau

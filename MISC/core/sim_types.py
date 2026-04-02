@@ -122,16 +122,23 @@ class WorkspaceParams:
 
 def clamp_table_command_to_workspace(u_raw: TableCommand, workspace: WorkspaceParams) -> TableCommand:
     """Radial projection of desired position onto the disk centered at (x_ref, y_ref) with safe_radius."""
+    
     x_des = u_raw.x_des
     y_des = u_raw.y_des
+    
     x_ref = workspace.x_ref
     y_ref = workspace.y_ref
+    
     safe_radius = workspace.safe_radius
+    
     if safe_radius is None:
         return TableCommand(x_des, y_des)
+    
+    # distance from origin
     dx = x_des - x_ref
     dy = y_des - y_ref
     dist = float(np.sqrt(dx * dx + dy * dy))
+    
     if dist > safe_radius and dist > 0:
         scale = safe_radius / dist
         dx *= scale
