@@ -1,22 +1,24 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from src.shared import PoseMeasurement, TableCommand, WorkspaceParams
+from src.shared import PoseMeasurement, TableCommand, WorkspaceParams, default_workspace
 from src.system.sensor.interface.base import get_measurements
 from visualization.composite_layout import build_composite
 
 from .base import WorkspacePanelRenderer, EventFramesFn, VizResult, _window_closed
-from .real_dvs import RealDvsVisualizer
+from .real_dvs import RealDvsVisualizer, RealDvsVisualizerParams
 
 
 @dataclass
 class RealDvsWorkspaceVisualizerParams:
-    width:       int
-    height:      int
-    mask_y_cam1: int
-    mask_y_cam2: int
+    width:           int
+    height:          int
+    mask_y_cam1:     int
+    mask_y_cam2:     int
+    workspace:       WorkspaceParams = field(default_factory=default_workspace)
+    event_frames_fn: EventFramesFn | None = None
 
 
 REAL_DVS_WORKSPACE_VISUALIZER_PRESETS = {
@@ -32,17 +34,15 @@ REAL_DVS_WORKSPACE_VISUALIZER_PRESETS = {
 class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
     """Real DVS + workspace: pause UI, space toggles pause (returned in VizResult)."""
 
-    def __init__(
-        self,
-        workspace: WorkspaceParams,
-        event_frames_fn: EventFramesFn | None,
-        width: int = 346,
-        height: int = 260,
-        mask_y_cam1: int = 160,
-        mask_y_cam2: int = 190,
-    ):
-        super().__init__(event_frames_fn, width=width, height=height, mask_y_cam1=mask_y_cam1, mask_y_cam2=mask_y_cam2)
-        self._ws = WorkspacePanelRenderer(workspace)
+    def __init__(self, params: RealDvsWorkspaceVisualizerParams):
+        super().__init__(RealDvsVisualizerParams(
+            width=params.width,
+            height=params.height,
+            mask_y_cam1=params.mask_y_cam1,
+            mask_y_cam2=params.mask_y_cam2,
+            event_frames_fn=params.event_frames_fn,
+        ))
+        self._ws = WorkspacePanelRenderer(params.workspace)
 
     def render(
         self,

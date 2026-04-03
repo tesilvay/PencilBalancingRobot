@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 from datetime import datetime
 from contextlib import nullcontext
@@ -5,19 +7,28 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 import numpy as np
 
+
 class Visualizer3D:
 
-    def __init__(self, history, dt, L=0.2, fps=60, mech=None, mech_history=None, params=None, cmd_history=None):
-        self.history = history
-        self.dt = dt
-        self.L = L
-        self.fps = fps
-        self.frame_period = 1.0 / fps
-        self.total_sim_time = history.shape[0] * dt
+    def __init__(self, params):
+        from src.experiment.visualizer.visualizer_3d import Visualizer3DParams
+        if not isinstance(params, Visualizer3DParams):
+            raise TypeError(f"Expected Visualizer3DParams, got {type(params).__name__}")
 
-        self.mech = mech
-        self.mech_history = mech_history
-        self.cmd_history = cmd_history  # (N, 2) table command at sim frequency, or None
+        self.history = params.history
+        self.dt = params.dt
+        self.L = params.L
+        self.fps = params.fps
+        self.frame_period = 1.0 / params.fps
+
+        if params.history is not None and params.dt is not None:
+            self.total_sim_time = params.history.shape[0] * params.dt
+        else:
+            self.total_sim_time = 0.0
+
+        self.mech = params.mech
+        self.mech_history = params.mech_history
+        self.cmd_history = params.cmd_history
 
         w = params.workspace
         self.x_ref = w.x_ref

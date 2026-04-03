@@ -625,10 +625,14 @@ class PencilVisualizerRealtime:
         show_workspace: bool = False,
         workspace: WorkspaceParams | None = None,
     ):
+        from .sim_dvs import SimDvsVisualizerParams as _SimP
+        from .sim_dvs_workspace import SimDvsWorkspaceVisualizerParams as _SimWSP
         if show_workspace and workspace is not None:
-            self._impl: SimDvsVisualizer = SimDvsWorkspaceVisualizer(workspace, width=width, height=height)
+            self._impl: SimDvsVisualizer = SimDvsWorkspaceVisualizer(
+                _SimWSP(width=width, height=height, workspace=workspace)
+            )
         else:
-            self._impl = SimDvsVisualizer(width=width, height=height)
+            self._impl = SimDvsVisualizer(_SimP(width=width, height=height))
 
     def render(self, *args, **kwargs) -> VizResult:
         return self._impl.render(*args, **kwargs)
@@ -647,22 +651,23 @@ class DVSWorkspaceVisualizer:
         mask_y_cam2: int = 190,
         event_frames_fn: EventFramesFn | None = None,
     ):
+        from .real_dvs import RealDvsVisualizerParams as _RealP
+        from .real_dvs_workspace import RealDvsWorkspaceVisualizerParams as _RealWSP
         if show_workspace:
             self._impl: RealDvsVisualizer = RealDvsWorkspaceVisualizer(
-                workspace,
-                event_frames_fn,
-                width=width,
-                height=height,
-                mask_y_cam1=mask_y_cam1,
-                mask_y_cam2=mask_y_cam2,
+                _RealWSP(
+                    width=width, height=height,
+                    mask_y_cam1=mask_y_cam1, mask_y_cam2=mask_y_cam2,
+                    workspace=workspace, event_frames_fn=event_frames_fn,
+                )
             )
         else:
             self._impl = RealDvsVisualizer(
-                event_frames_fn,
-                width=width,
-                height=height,
-                mask_y_cam1=mask_y_cam1,
-                mask_y_cam2=mask_y_cam2,
+                _RealP(
+                    width=width, height=height,
+                    mask_y_cam1=mask_y_cam1, mask_y_cam2=mask_y_cam2,
+                    event_frames_fn=event_frames_fn,
+                )
             )
 
     def render(self, *args, **kwargs) -> VizResult:

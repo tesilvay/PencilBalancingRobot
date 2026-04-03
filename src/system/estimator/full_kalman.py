@@ -24,7 +24,7 @@ except ImportError:
 
 
 @dataclass
-class FullKalmanParams:
+class FullStateKalmanFilterParams:
     q_pose_pos: float
     q_pose_ang: float
     q_vel_pos:  float
@@ -37,6 +37,8 @@ class FullKalmanParams:
     plant:      PlantParams  = field(default_factory=default_plant)
     timing:     TimingParams = field(default_factory=default_timing)
 
+
+FullKalmanParams = FullStateKalmanFilterParams
 
 FULL_KALMAN_PRESETS = {
     "default": {
@@ -56,7 +58,7 @@ FULL_KALMAN_PRESETS = {
 class FullStateKalmanFilter(BaseEstimator):
     """LPF finite-difference full state as measurement z ∈ R^8, fused with linear Kalman (H = I)."""
 
-    def __init__(self, params: FullKalmanParams):
+    def __init__(self, params: FullStateKalmanFilterParams):
         super().__init__()
         from src.system.plant.dynamics_model import BuildLinearModel
         A_c, B_c = BuildLinearModel(params.plant)

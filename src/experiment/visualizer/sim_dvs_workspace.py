@@ -1,19 +1,20 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from src.shared import PoseMeasurement, TableCommand, WorkspaceParams
+from src.shared import PoseMeasurement, TableCommand, WorkspaceParams, default_workspace
 from visualization.composite_layout import build_composite
 
 from .base import WorkspacePanelRenderer, VizResult, _window_closed
-from .sim_dvs import SimDvsVisualizer
+from .sim_dvs import SimDvsVisualizer, SimDvsVisualizerParams
 
 
 @dataclass
 class SimDvsWorkspaceVisualizerParams:
-    width:  int
-    height: int
+    width:     int
+    height:    int
+    workspace: WorkspaceParams = field(default_factory=default_workspace)
 
 
 SIM_DVS_WORKSPACE_VISUALIZER_PRESETS = {
@@ -27,14 +28,9 @@ SIM_DVS_WORKSPACE_VISUALIZER_PRESETS = {
 class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
     """Simulated cameras + workspace panel (command dot, grid, pose tilt arrows)."""
 
-    def __init__(
-        self,
-        workspace: WorkspaceParams,
-        width: int = 346,
-        height: int = 260,
-    ):
-        super().__init__(width=width, height=height)
-        self._ws = WorkspacePanelRenderer(workspace)
+    def __init__(self, params: SimDvsWorkspaceVisualizerParams):
+        super().__init__(SimDvsVisualizerParams(width=params.width, height=params.height))
+        self._ws = WorkspacePanelRenderer(params.workspace)
 
     def render(
         self,

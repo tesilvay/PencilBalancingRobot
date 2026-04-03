@@ -13,6 +13,7 @@ from .fde        import FDEParams,        FDE_PRESETS,        FiniteDifferenceEs
 from .full_kalman import (
     FULL_KALMAN_PRESETS,
     FullKalmanParams,
+    FullStateKalmanFilterParams,
     FullStateKalmanFilter,
 )
 from .kalman     import KALMAN_PRESETS,    KalmanEstimator,   KalmanParams
@@ -23,7 +24,7 @@ ESTIMATOR_REGISTRY = {
     "fde":         Spec(FiniteDifferenceEstimator,        FDEParams,        FDE_PRESETS),
     "lpf":         Spec(LowPassFiniteDifferenceEstimator, LPFParams,        LPF_PRESETS),
     "kalman":      Spec(KalmanEstimator,                  KalmanParams,     KALMAN_PRESETS),
-    "full_kalman": Spec(FullStateKalmanFilter,            FullKalmanParams, FULL_KALMAN_PRESETS),
+    "full_kalman": Spec(FullStateKalmanFilter,            FullStateKalmanFilterParams, FULL_KALMAN_PRESETS),
 }
 
 __all__ = [
@@ -38,6 +39,7 @@ __all__ = [
     "KalmanParams",
     "KALMAN_PRESETS",
     "FullStateKalmanFilter",
+    "FullStateKalmanFilterParams",
     "FullKalmanParams",
     "FULL_KALMAN_PRESETS",
     "KalmanStepResult",

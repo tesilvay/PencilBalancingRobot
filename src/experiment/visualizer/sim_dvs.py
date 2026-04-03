@@ -28,10 +28,10 @@ SIM_DVS_VISUALIZER_PRESETS = {
 class SimDvsVisualizer(RealtimeVisualizerBase):
     """Simulated gray camera pair + line overlay (no workspace)."""
 
-    def __init__(self, width: int = 346, height: int = 260):
-        self.width = width
-        self.height = height
-        self.cam = CameraModel(width, height)
+    def __init__(self, params: SimDvsVisualizerParams):
+        self.width = params.width
+        self.height = params.height
+        self.cam = CameraModel(params.width, params.height)
         self._window_ready = False
 
     def draw_line(self, img: np.ndarray, b: float, s: float) -> None:

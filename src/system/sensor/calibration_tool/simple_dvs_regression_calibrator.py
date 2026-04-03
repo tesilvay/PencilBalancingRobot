@@ -15,7 +15,7 @@ from perception.dvs_camera_reader import DAVIS346_HEIGHT, DAVIS346_WIDTH, DVSRea
 from perception.simple_dvs_regression_model import default_affine_calibration_path, save_affine_v1_calibration
 
 
-from visualization.realtime_visualizer import OneDvsVisualizer
+from visualization.realtime_visualizer import OneDvsVisualizer, OneDvsVisualizerParams
 
 
 
@@ -594,13 +594,12 @@ def main():
     reader1 = DVSReader(device1, noise_filter_duration_ms=args.noise_filter_duration)
     reader2 = DVSReader(device2, noise_filter_duration_ms=args.noise_filter_duration)
 
-    viz = OneDvsVisualizer(
+    viz = OneDvsVisualizer(OneDvsVisualizerParams(
         cam_index=0,
         width=DAVIS346_WIDTH,
         height=DAVIS346_HEIGHT,
-        event_frames_fn=None,
         surface_gain=args.surface_intensity_gain,
-    )
+    ))
 
     cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
 

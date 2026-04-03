@@ -30,18 +30,6 @@ from src.shared import CameraObservation, CameraPair, PoseMeasurement
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
 
-SIMPLE_REG_PRESETS = {
-    "default": {
-        "calibration_path": "hardware/calibration_files/dvs_affine_calibration.json",
-        "cam_params":       "default:default",
-    }
-}
-
-@dataclass
-class SimpleRegressionParams:
-    calibration_path: str
-    cam_params:       CameraParams
-    
 
 
 @dataclass(frozen=True)

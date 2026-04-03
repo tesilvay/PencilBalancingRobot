@@ -2,6 +2,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from src.shared import NullParams
+
 
 @dataclass
 class TerminalInfo:
@@ -20,7 +22,7 @@ class SimulationResult:
 
 
 class Logger:
-    def __init__(self, params=None):
+    def __init__(self, params: NullParams):
         self._states = None
         self._commands = None
         self._acc = None

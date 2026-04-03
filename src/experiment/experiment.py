@@ -1,5 +1,8 @@
+from new_architecture.params import ExperimentParams
+
+
 class Experiment:
-    def __init__(self, params):
+    def __init__(self, params: ExperimentParams):
         p = params
 
         self.system         = p.system

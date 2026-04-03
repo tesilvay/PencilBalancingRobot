@@ -14,10 +14,11 @@ from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_clos
 
 @dataclass
 class RealDvsVisualizerParams:
-    width:       int
-    height:      int
-    mask_y_cam1: int
-    mask_y_cam2: int
+    width:          int
+    height:         int
+    mask_y_cam1:    int
+    mask_y_cam2:    int
+    event_frames_fn: EventFramesFn | None = None
 
 
 REAL_DVS_VISUALIZER_PRESETS = {
@@ -33,20 +34,13 @@ REAL_DVS_VISUALIZER_PRESETS = {
 class RealDvsVisualizer(RealtimeVisualizerBase):
     """Real DVS event-accumulator panels + line and mask overlays."""
 
-    def __init__(
-        self,
-        event_frames_fn: EventFramesFn | None,
-        width: int = 346,
-        height: int = 260,
-        mask_y_cam1: int = 160,
-        mask_y_cam2: int = 190,
-    ):
-        self._event_frames_fn = event_frames_fn
-        self.width = width
-        self.height = height
-        self.cam = CameraModel(width, height)
-        self.mask_y_cam1 = int(mask_y_cam1)
-        self.mask_y_cam2 = int(mask_y_cam2)
+    def __init__(self, params: RealDvsVisualizerParams):
+        self._event_frames_fn = params.event_frames_fn
+        self.width = params.width
+        self.height = params.height
+        self.cam = CameraModel(params.width, params.height)
+        self.mask_y_cam1 = int(params.mask_y_cam1)
+        self.mask_y_cam2 = int(params.mask_y_cam2)
         self._window_ready = False
 
     def _bgr_from_surfaces(self) -> tuple[np.ndarray, np.ndarray]:

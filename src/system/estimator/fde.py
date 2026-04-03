@@ -16,7 +16,7 @@ FDE_PRESETS = {"default": {}}
 
 class FiniteDifferenceEstimator(BaseEstimator):
 
-    def __init__(self):
+    def __init__(self, params: FDEParams):
         super().__init__()
         self.prev_pose = None
 

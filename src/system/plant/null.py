@@ -1,8 +1,8 @@
-from src.shared import SystemState, TableAccel, TableCommand
+from src.shared import NullParams, SystemState, TableAccel, TableCommand
 
 
 class NullPlant:
-    def __init__(self):
+    def __init__(self, params: NullParams):
         pass
 
     def step(self, state_x: SystemState, command_u: TableCommand, dt):

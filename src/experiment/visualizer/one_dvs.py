@@ -14,10 +14,11 @@ from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_clos
 
 @dataclass
 class OneDvsVisualizerParams:
-    cam_index:    int
-    width:        int
-    height:       int
-    surface_gain: float
+    cam_index:       int
+    width:           int
+    height:          int
+    surface_gain:    float
+    event_frames_fn: EventFramesFn | None = None
 
 
 ONE_DVS_VISUALIZER_PRESETS = {
@@ -33,23 +34,15 @@ ONE_DVS_VISUALIZER_PRESETS = {
 class OneDvsVisualizer(RealtimeVisualizerBase):
     """Single camera panel + line (calibration-oriented)."""
 
-    def __init__(
-        self,
-        *,
-        cam_index: int = 0,
-        width: int = 346,
-        height: int = 260,
-        event_frames_fn: EventFramesFn | None = None,
-        surface_gain: float = 50.0,
-    ):
-        if cam_index not in (0, 1):
+    def __init__(self, params: OneDvsVisualizerParams):
+        if params.cam_index not in (0, 1):
             raise ValueError("cam_index must be 0 or 1")
-        self.cam_index = cam_index
-        self.width = width
-        self.height = height
-        self.cam = CameraModel(width, height)
-        self._event_frames_fn = event_frames_fn
-        self._surface_gain = float(surface_gain)
+        self.cam_index = params.cam_index
+        self.width = params.width
+        self.height = params.height
+        self.cam = CameraModel(params.width, params.height)
+        self._event_frames_fn = params.event_frames_fn
+        self._surface_gain = float(params.surface_gain)
         self._window_ready = False
 
     def _draw_line_gray(self, img: np.ndarray, b: float, s: float) -> None:

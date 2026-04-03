@@ -6,7 +6,7 @@ from .base import Progress
 
 
 @dataclass
-class ProgressParams:
+class ConsoleProgressParams:
     width: int
 
 
@@ -17,8 +17,10 @@ PROGRESS_PRESETS = {
 }
 
 
+ProgressParams = ConsoleProgressParams
+
 class ConsoleProgress(Progress):
-    def __init__(self, params : ProgressParams):
+    def __init__(self, params: ConsoleProgressParams):
         self.width = params.width
 
     def start(self, total, label=""):
