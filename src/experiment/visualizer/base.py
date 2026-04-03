@@ -6,7 +6,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from src.shared import PoseMeasurement, TableCommand, WorkspaceParams
-from visualization.composite_layout import , get_default_window_size
+
+try:
+    from visualization.composite_layout import get_default_window_size
+except ImportError:
+    def get_default_window_size(**kwargs):
+        return 1200, 600
 
 EventFramesFn = Callable[[], tuple[np.ndarray, np.ndarray] | None]
 

@@ -1,25 +1,23 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 
-from src.shared import TimingParams
+from src.shared import TimingParams, default_timing
 from .base import Pacing
 
 
 @dataclass
 class RealTimePacingParams:
-    timing: TimingParams
+    timing: TimingParams = field(default_factory=default_timing)
 
 
 REALTIME_PACING_PRESETS = {
-    "default": {
-        "timing": "default:default",
-    }
+    "default": {}
 }
 
 
 class RealTimePacing(Pacing):
-    def __init__(self, dt):
-        self.dt = dt
+    def __init__(self, params: RealTimePacingParams):
+        self.dt = params.timing.dt
         self.next_time = time.perf_counter()
 
     def pace(self):

@@ -1,29 +1,28 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-from src.shared import TimingParams
+from src.shared import TimingParams, default_timing
 from .stabilized import StabilizedCondition, StabilizedParams
+
+
+def _default_stabilized() -> StabilizedParams:
+    return StabilizedParams(tol_ang_deg=10.0, tol_m=20e-3, settle_time=1.0, time_in_tol=0.0)
 
 
 @dataclass
 class MaxStepsConditionParams:
-    timing:      TimingParams
-    stabilized_params: StabilizedParams
-
+    timing:            TimingParams     = field(default_factory=default_timing)
+    stabilized_params: StabilizedParams = field(default_factory=_default_stabilized)
 
 
 MAX_STEPS_CONDITION_PRESETS = {
-    "default": {
-        "timing":      "default:default",
-        "stabilized_params": "default:lazy",
-    }
+    "default": {}
 }
 
 
 class MaxStepsCondition(StabilizedCondition):
     def __init__(self, params: MaxStepsConditionParams):
-        p = params
-        super().__init__(p.stabilized_params)
-        self.steps = int(p.timing.total_time / p.timing.dt)
+        super().__init__(params.stabilized_params)
+        self.steps = int(params.timing.total_time / params.timing.dt)
 
     def should_stop(self, i, state, dt):
         super().should_stop(i, state, dt)

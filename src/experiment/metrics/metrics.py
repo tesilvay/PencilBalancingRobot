@@ -1,5 +1,26 @@
-from src.shared import SimulationResult, TrialMetrics, SystemState, BenchmarkSummary
+from dataclasses import dataclass
+
 import numpy as np
+
+from src.experiment.logger import SimulationResult
+from src.shared import SystemState
+
+
+@dataclass
+class TrialMetrics:
+    stabilized: bool
+    settling_time: float | None
+    max_acc: float
+    avg_state_est_err: np.ndarray | None = None
+
+
+@dataclass
+class BenchmarkSummary:
+    stability_rate: float
+    avg_settling_time: float | None
+    max_acc: float
+    avg_acc: float
+    avg_state_est_err: np.ndarray | None = None
 
 
 

@@ -1,7 +1,10 @@
 import numpy as np
 from src.shared import SystemState, PoseMeasurement, TableCommand
 
-from perception.estimator_diagnostics import EstimatorDiagnosticSnapshot
+try:
+    from perception.estimator_diagnostics import EstimatorDiagnosticSnapshot
+except ImportError:
+    EstimatorDiagnosticSnapshot = object
 
 
 class BaseEstimator:

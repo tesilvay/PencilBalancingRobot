@@ -1,10 +1,11 @@
+from __future__ import annotations
 from dataclasses import dataclass
 import serial, time
 from .base import Actuator
 
 @dataclass
 class ServoParams:
-    mechanism:  Mechanism
+    mechanism:  object   # Mechanism — imported at runtime to avoid circular deps
     port:       str   = "/dev/ttyUSB1"
     baud:       int   = 115200
     frequency:  float = 250.0

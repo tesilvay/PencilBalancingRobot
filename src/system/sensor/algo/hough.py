@@ -1,22 +1,40 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 
 import numpy as np
 
-from src.shared import CameraObservation, CameraParams
+from src.shared import CameraObservation, CameraParams, CAMERA_PRESETS_REGISTRY
 from .base import DVSLineAlgorithm
 
 try:
     import numba as _numba  # type: ignore
-
     njit = _numba.njit
-except ModuleNotFoundError:  # pragma: no cover
+except ModuleNotFoundError:
     def njit(*_args, **_kwargs):  # type: ignore
         def _decorator(fn):
             return fn
-
         return _decorator
 
+
+# ── Internal Hough state ──────────────────────────────────────────────────────
+
+@dataclass
+class HoughTrackerParams:
+    mixing_factor:    float = 0.02
+    inlier_stddev_px: float = 4.0
+    min_determinant:  float = 1e-6
+
+
+@dataclass
+class HoughQuadraticState:
+    quadratic_m2: float = 0.0
+    cross_mb:     float = 0.0
+    quadratic_b2: float = 0.0
+    linear_m:     float = 0.0
+    linear_b:     float = 0.0
+
+
+# ── Registry Params ───────────────────────────────────────────────────────────
 
 @dataclass
 class HoughLineParams:
@@ -25,11 +43,12 @@ class HoughLineParams:
     inlier_stddev_px: float
     min_determinant:  float
     max_events:       int | None = None
-    quadratic_m2:     float
-    cross_mb:         float
-    quadratic_b2:     float
-    linear_m:         float
-    linear_b:         float
+    quadratic_m2:     float = 0.0
+    cross_mb:         float = 0.0
+    quadratic_b2:     float = 0.0
+    linear_m:         float = 0.0
+    linear_b:         float = 0.0
+
 
 HOUGH_PRESETS = {
     "default": {
@@ -65,44 +84,39 @@ def _hough_update_events_jit(
         weight = math.exp(-residual * residual * inv_2sigma2)
 
         dec = 1.0 - mixing_factor * weight
-        q_m2 *= dec
+        q_m2     *= dec
         cross_mb *= dec
-        q_b2 *= dec
-        lin_m *= dec
-        lin_b *= dec
+        q_b2     *= dec
+        lin_m    *= dec
+        lin_b    *= dec
 
         yi = ys_centered[i]
         xi = xs_centered[i]
-        q_m2 += weight * (yi * yi)
+        q_m2     += weight * (yi * yi)
         cross_mb += weight * (2.0 * yi)
-        q_b2 += weight
-        lin_m += weight * (-2.0 * xi * yi)
-        lin_b += weight * (-2.0 * xi)
+        q_b2     += weight
+        lin_m    += weight * (-2.0 * xi * yi)
+        lin_b    += weight * (-2.0 * xi)
 
     return q_m2, cross_mb, q_b2, lin_m, lin_b
 
 
 class PaperHoughLineAlgorithm(DVSLineAlgorithm):
-    """
-    Readable Python port of the original Java recursive Hough tracker.
+    """Recursive Hough line tracker. Accepts ``HoughLineParams`` from the registry."""
 
-    The original implementation maintained a quadratic objective over line
-    parameters and updated it per event using:
-    - a Gaussian inlier weight based on distance to the current line estimate
-    - an adaptive forgetting factor tied to that inlier weight
+    def __init__(self, params: HoughLineParams):
+        cam = params.cam_params
+        self.width  = int(cam.DAVIS346_WIDTH)
+        self.height = int(cam.DAVIS346_HEIGHT)
+        self.cx = self.width  / 2
+        self.cy = self.height / 2
 
-    This implementation preserves that behavior while separating the update
-    into small, named steps.
-    """
-
-    def __init__(self, width=346, height=260, params: HoughTrackerParams | None = None,
-                 max_events: int | None = None):
-        self.width = width
-        self.height = height
-        self.cx = width / 2
-        self.cy = height / 2
-        self.params = HoughTrackerParams() if params is None else params
-        self.max_events = max_events
+        self.params = HoughTrackerParams(
+            mixing_factor    = params.mixing_factor,
+            inlier_stddev_px = params.inlier_stddev_px,
+            min_determinant  = params.min_determinant,
+        )
+        self.max_events = params.max_events
 
         sigma = self.params.inlier_stddev_px
         self._inv_2sigma2 = 1.0 / (2.0 * sigma * sigma)
@@ -116,7 +130,6 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
             4.0 * self.state.quadratic_m2 * self.state.quadratic_b2
             - self.state.cross_mb * self.state.cross_mb
         )
-
         if abs(determinant) < self.params.min_determinant:
             return None
 
@@ -131,48 +144,28 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
 
         return CameraObservation(slope=slope, intercept=centered_intercept)
 
-    def _event_residual(self, x_centered: float, y_centered: float, estimate: CameraObservation) -> float:
-        predicted_x = estimate.intercept + y_centered * estimate.slope
-        return x_centered - predicted_x
-
-    def _gaussian_inlier_weight(self, residual: float) -> float:
-        sigma = self.params.inlier_stddev_px
-        return float(np.exp(-(residual * residual) / (2.0 * sigma * sigma)))
-
-    def _adaptive_decay(self, weight: float) -> float:
-        return 1.0 - self.params.mixing_factor * weight
-
-    def _apply_forgetting(self, decay_factor: float) -> None:
-        self.state.quadratic_m2 *= decay_factor
-        self.state.cross_mb *= decay_factor
-        self.state.quadratic_b2 *= decay_factor
-        self.state.linear_m *= decay_factor
-        self.state.linear_b *= decay_factor
-
-    def _accumulate_weighted_event(self, x_centered: float, y_centered: float, weight: float) -> None:
+    def _accumulate_weighted_event(self, x_centered, y_centered, weight):
         self.state.quadratic_m2 += weight * (y_centered * y_centered)
-        self.state.cross_mb += weight * (2.0 * y_centered)
+        self.state.cross_mb     += weight * (2.0 * y_centered)
         self.state.quadratic_b2 += weight
-        self.state.linear_m += weight * (-2.0 * x_centered * y_centered)
-        self.state.linear_b += weight * (-2.0 * x_centered)
+        self.state.linear_m     += weight * (-2.0 * x_centered * y_centered)
+        self.state.linear_b     += weight * (-2.0 * x_centered)
 
-    def _seed_vertical_line(self) -> None:
+    def _seed_vertical_line(self):
         self.state = HoughQuadraticState()
-
         bootstrap_x = 0.0
         for y_centered in (-self.cy, self.height - 1 - self.cy):
             self._accumulate_weighted_event(bootstrap_x, y_centered, weight=1.0)
-
         self.current_centered_line = self._solve_centered_line()
 
     def _current_pixel_observation(self) -> CameraObservation | tuple[None, None]:
         centered_line = self._solve_centered_line()
         self.current_centered_line = centered_line
-
         if centered_line is None:
             return None, None
-
-        pixel_intercept = centered_line.intercept + self.cx - centered_line.slope * self.cy
+        pixel_intercept = (
+            centered_line.intercept + self.cx - centered_line.slope * self.cy
+        )
         return CameraObservation(slope=centered_line.slope, intercept=pixel_intercept)
 
     def update(self, events_np):
@@ -194,7 +187,6 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
             self.params.mixing_factor, self._inv_2sigma2,
             self.params.min_determinant,
         )
-
         return self._current_pixel_observation()
 
     def reset(self):

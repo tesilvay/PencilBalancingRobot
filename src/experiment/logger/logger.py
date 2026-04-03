@@ -1,9 +1,26 @@
+from dataclasses import dataclass
+
 import numpy as np
-from src.shared import SimulationResult
+
+
+@dataclass
+class TerminalInfo:
+    stabilized: bool
+    settling_time: float | None
+
+
+@dataclass
+class SimulationResult:
+    state_history: np.ndarray
+    acc_history: np.ndarray
+    mech_history: np.ndarray | None = None
+    state_est_err_history: np.ndarray | None = None
+    cmd_history: np.ndarray | None = None
+    terminal: TerminalInfo | None = None
 
 
 class Logger:
-    def __init__(self):
+    def __init__(self, params=None):
         self._states = None
         self._commands = None
         self._acc = None

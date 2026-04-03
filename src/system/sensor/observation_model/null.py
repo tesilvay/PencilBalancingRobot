@@ -4,7 +4,7 @@ from .base import RegressionModel
 
 
 class NullRegression(RegressionModel):
-    def __init__(self):
+    def __init__(self, params=None):
         pass
 
     def estimate(self, cams: CameraPair) -> PoseMeasurement:

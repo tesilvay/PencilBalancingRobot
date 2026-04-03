@@ -36,14 +36,19 @@ SYSTEM_PRESETS = {
 
 class System:
     def __init__(self, params: SystemParams):
+        self.plant       = params.plant
         self.controllers = params.controllers   # dict[str, Controller]
         self.estimators  = params.estimators    # dict[str, Estimator]
         self.sensor      = params.sensor
         self.actuator    = params.actuator
         self.supervisor  = params.supervisor
 
-        self.active_controller = self.controllers["follower"]
-        self.active_estimator  = self.estimators["lpf"]
+        self.active_controller = self.controllers.get(
+            "follower", next(iter(self.controllers.values()))
+        )
+        self.active_estimator = self.estimators.get(
+            "lpf", next(iter(self.estimators.values()))
+        )
         self.state = None
         self.u     = None
 

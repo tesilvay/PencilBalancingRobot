@@ -35,12 +35,12 @@ SIM_ANALYTIC_PRESETS = {
 
 class SimVisionModel(VisionModelBase):
 
-    def __init__(self, camera_params, noise_std=None, delay_steps=0):
-        super().__init__(camera_params)
+    def __init__(self, params: SimAnalyticParams):
+        super().__init__(params.cam_params)
 
-        self.noise_std = noise_std
-        self.delay_steps = delay_steps
-        self.buffer = deque(maxlen=delay_steps + 1)
+        self.noise_std   = params.noise_std
+        self.delay_steps = params.delay_steps
+        self.buffer = deque(maxlen=params.delay_steps + 1)
 
     # -------------------------------------------------
     # Project true 3D state into both camera views

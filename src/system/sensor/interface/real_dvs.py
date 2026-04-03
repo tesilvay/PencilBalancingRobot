@@ -10,59 +10,62 @@ from src.shared import (
 )
 
 from .base import VisionModelBase
+from src.system.sensor.observation_model.camera_model import CameraModel
+from src.system.sensor.reader.dvs_camera_reader import (
+    DVSReader,
+    DAVIS346_WIDTH,
+    DAVIS346_HEIGHT,
+)
+from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
 
 
 @dataclass
 class RealDVSParams:
-    cam_params:  CameraParams
-    algo:        object
-    model:       object
+    cam_params:               CameraParams
+    algo:                     object
+    obs_model:                object
+    cam1_device:              str | None = None
+    cam2_device:              str | None = None
     noise_filter_duration_ms: float | None = None
-    cam1_device:              str | None
-    cam2_device:              str | None
 
 
 REAL_DVS_PRESETS = {
     "hough": {
-        "cam_params":  "default:default",
-        "algo":        "hough:default",
-        "obs_model":   "simple_dvs:default",
+        "cam_params":               "default:default",
+        "algo":                     "hough:default",
+        "obs_model":                "simple:default",
         "noise_filter_duration_ms": None,
         "cam1_device":              None,
         "cam2_device":              None,
     },
-    "sam":{
-        "base": "default",
-        "algo": "sam:default",
+    "sam": {
+        "base":                     "hough",
+        "algo":                     "sam:default",
         "noise_filter_duration_ms": 5,
-    }
+    },
 }
 
 
 class RealEventCameraInterface(VisionModelBase):
 
-    def __init__(
-        self,
-        camera_params,
-        cam1_algo,
-        cam2_algo,
-        cam1_device: str,
-        cam2_device: str,
-        dvs_regression_model,
-        dvs_mask_line_y_cam1: int = 160,
-        dvs_mask_line_y_cam2: int = 190,
-        noise_filter_duration_ms: float | None = None,
-    ):
-        super().__init__(camera_params)
-        
-        self.cam1_algo = cam1_algo
-        self.cam2_algo = cam2_algo
-        
+    def __init__(self, params: RealDVSParams):
+        import copy
+        cam = params.cam_params
+        super().__init__(cam)
+
+        self.cam1_algo = copy.deepcopy(params.algo)
+        self.cam2_algo = copy.deepcopy(params.algo)
+
         self.cam = CameraModel()
 
-        self.dvs_regression_model = dvs_regression_model
-        self._dvs_mask_line_y_cam1 = int(dvs_mask_line_y_cam1)
-        self._dvs_mask_line_y_cam2 = int(dvs_mask_line_y_cam2)
+        self.dvs_regression_model = params.obs_model
+        dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
+        dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
+        noise_filter_duration_ms = params.noise_filter_duration_ms
+        cam1_device = params.cam1_device
+        cam2_device = params.cam2_device
+        self._dvs_mask_line_y_cam1 = dvs_mask_line_y_cam1
+        self._dvs_mask_line_y_cam2 = dvs_mask_line_y_cam2
 
         self._reader1 = DVSReader(cam1_device, noise_filter_duration_ms=noise_filter_duration_ms)
         self._reader2 = DVSReader(cam2_device, noise_filter_duration_ms=noise_filter_duration_ms)

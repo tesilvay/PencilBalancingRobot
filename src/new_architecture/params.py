@@ -4,16 +4,6 @@ import numpy as np
 
 
 
-# ── Actuators ─────────────────────────────────────────────────
-
-@dataclass
-class ServoParams:
-    port:      str
-    frequency: int
-
-
-
-
 
 
 

@@ -1,6 +1,5 @@
-from .logger import Logger
-from src.shared import Spec
-from src.shared import NullParams, NULL_PRESETS
+from .logger import Logger, TerminalInfo, SimulationResult
+from src.shared import Spec, NullParams, NULL_PRESETS
 
 
 LOGGER_REGISTRY = {

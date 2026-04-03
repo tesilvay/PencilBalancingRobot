@@ -8,38 +8,41 @@ from src.shared import (
 )
 
 from .base import VisionModelBase, get_measurements
+from src.system.sensor.observation_model.camera_model import CameraModel
 
 
 @dataclass
 class SimDVSParams:
-    cam_params:  CameraParams
-    algo:        object
-    model:       object
+    cam_params: CameraParams
+    algo:       object
+    obs_model:  object
 
 
 SIM_DVS_PRESETS = {
     "hough": {
-        "cam_params":  "default:default",
-        "algo":        "hough:default",
-        "obs_model":   "simple_dvs:default"
-    }
+        "cam_params": "default:default",
+        "algo":       "hough:default",
+        "obs_model":  "none:default",
+    },
+    "sam": {
+        "cam_params": "default:default",
+        "algo":       "sam:default",
+        "obs_model":  "none:default",
+    },
 }
 
 
 class SimEventCameraInterface(VisionModelBase):
 
-    def __init__(
-        self, 
-        camera_params, 
-        cam1_algo, 
-        cam2_algo,
-        dvs_mask_line_y_cam1: int = 160,
-        dvs_mask_line_y_cam2: int = 190,  
-    ):
-        super().__init__(camera_params)
+    def __init__(self, params: SimDVSParams):
+        import copy
+        cam = params.cam_params
+        super().__init__(cam)
 
-        self.cam1_algo = cam1_algo
-        self.cam2_algo = cam2_algo
+        self.cam1_algo = copy.deepcopy(params.algo)
+        self.cam2_algo = copy.deepcopy(params.algo)
+        dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
+        dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
         self.sigma_px = 1.0
         
         self.cam = CameraModel()

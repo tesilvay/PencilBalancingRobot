@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import numpy as np
+from src.shared import Spec
 from src.system.actuator.mech.transform import FiveBarTransform
 from src.system.actuator.mech.mechanism import FiveBarMechanism
 

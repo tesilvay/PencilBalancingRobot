@@ -27,8 +27,8 @@ from typing import Any, Dict, Sequence
 import numpy as np
 
 from src.shared import CameraObservation, CameraPair, PoseMeasurement
-from perception.camera_model import CameraModel
-from perception.dvs_algorithms import line_x_at_pixel_y
+from src.system.sensor.observation_model.camera_model import CameraModel
+from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
 
 SIMPLE_REG_PRESETS = {
     "default": {

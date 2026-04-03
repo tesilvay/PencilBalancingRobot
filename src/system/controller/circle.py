@@ -1,35 +1,50 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
 import numpy as np
 
-from src.shared import PlantParams, TimingParams, SystemState, TableCommand
+from src.shared import (
+    PlantParams,
+    TimingParams,
+    WorkspaceParams,
+    SystemState,
+    TableCommand,
+    default_plant,
+    default_timing,
+    default_workspace,
+    make_reference_state,
+)
 
 
 @dataclass
 class CircleParams:
-    plant:          PlantParams
-    timing:         TimingParams
-    period_s:       float
+    period_s:  float
+    radius:    float           = 0.03
+    plant:     PlantParams     = field(default_factory=default_plant)
+    timing:    TimingParams    = field(default_factory=default_timing)
+    workspace: WorkspaceParams = field(default_factory=default_workspace)
 
 
 CIRCLE_PRESETS = {
     "default": {
-        "plant":         "default:default",
-        "timing":        "default:default",
-        "period_s":       18,
+        "period_s": 18,
+        "radius":   0.03,
     }
 }
 
 
 class CircleController:
-    def __init__(self, x_ref: SystemState, radius: float, period_s: float, dt:float):
-        self.x_ref = x_ref
-        self.radius = radius
-        self.period_s = period_s
-        self.omega = 2 * np.pi / period_s
-        self.t = 0.0
-        self.dt = dt
 
-    def compute(self, state):
+    def __init__(self, params: CircleParams):
+        x_ref = make_reference_state(params.workspace)
+
+        self.x_ref    = x_ref
+        self.radius   = params.radius
+        self.period_s = params.period_s
+        self.omega    = 2 * np.pi / params.period_s
+        self.dt       = params.timing.dt
+        self.t        = 0.0
+
+    def compute(self, state: SystemState) -> TableCommand:
         self.t += self.dt
 
         cx = self.x_ref.x

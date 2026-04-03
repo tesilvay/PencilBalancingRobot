@@ -1,10 +1,27 @@
 import math
+from dataclasses import dataclass, field
 
 import numpy as np
 
-from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
+from src.system.sensor.reader.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
 
-from src.shared import CameraObservation, HoughQuadraticState, HoughTrackerParams
+from src.shared import CameraObservation
+
+
+@dataclass
+class HoughTrackerParams:
+    mixing_factor:    float = 0.02
+    inlier_stddev_px: float = 4.0
+    min_determinant:  float = 1e-6
+
+
+@dataclass
+class HoughQuadraticState:
+    quadratic_m2: float = 0.0
+    cross_mb:     float = 0.0
+    quadratic_b2: float = 0.0
+    linear_m:     float = 0.0
+    linear_b:     float = 0.0
 
 
 try:

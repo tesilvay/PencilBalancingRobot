@@ -1,9 +1,10 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from .base import Actuator
 
 @dataclass
 class MockServoParams:
-    mechanism: Mechanism   # still needs mech — mock computes angles, just doesn't send
+    mechanism: object   # Mechanism — still needs mech for angle computation
 
 MOCK_SERVO_PRESETS = {
     "default": {

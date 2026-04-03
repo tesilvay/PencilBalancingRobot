@@ -4,9 +4,9 @@ from dataclasses import dataclass
 import cv2
 import numpy as np
 from src.shared import CameraObservation, PoseMeasurement, TableCommand
-from perception.camera_model import CameraModel
-from perception.dvs_algorithms import line_x_at_pixel_y
-from perception.vision import get_measurements
+from src.system.sensor.observation_model.camera_model import CameraModel
+from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
+from src.system.sensor.interface.base import get_measurements
 from visualization.composite_layout import build_one_dvs_composite
 
 from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_closed
