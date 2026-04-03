@@ -115,10 +115,10 @@ class KalmanEstimator(BaseEstimator):
             )
 
         return SystemState(
-            x=self.x_hat[0, 0],       x_dot=self.x_hat[1, 0],
-            alpha_x=self.x_hat[2, 0], alpha_x_dot=self.x_hat[3, 0],
-            y=self.x_hat[4, 0],       y_dot=self.x_hat[5, 0],
-            alpha_y=self.x_hat[6, 0], alpha_y_dot=self.x_hat[7, 0],
+            px=self.x_hat[0, 0], vx=self.x_hat[1, 0],
+            ax=self.x_hat[2, 0], wx=self.x_hat[3, 0],
+            py=self.x_hat[4, 0], vy=self.x_hat[5, 0],
+            ay=self.x_hat[6, 0], wy=self.x_hat[7, 0],
         )
 
     def reset(self):

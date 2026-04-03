@@ -52,10 +52,10 @@ class VisionModelBase:
         
     def project(self, state_true: SystemState) -> CameraPair:
 
-        X = state_true.x
-        Y = state_true.y
-        alpha_x = state_true.alpha_x
-        alpha_y = state_true.alpha_y
+        X = state_true.px
+        Y = state_true.py
+        alpha_x = state_true.ax
+        alpha_y = state_true.ay
 
         denom1 = Y + self.yr
         if abs(denom1) < 1e-8:

@@ -19,8 +19,8 @@ class FallCondition(StopCondition):
 
     def should_stop(self, i, state, dt):
         return (
-            abs(state.alpha_x) > self.max_angle
-            or abs(state.alpha_y) > self.max_angle
+            abs(state.ax) > self.max_angle
+            or abs(state.ay) > self.max_angle
         )
 
 class StabilizedCondition(StopCondition):
@@ -39,10 +39,10 @@ class StabilizedCondition(StopCondition):
     
     def _is_inside_tolerance(self, state):
         return (
-            abs(state.alpha_x) < self.tol_ang
-            and abs(state.alpha_y) < self.tol_ang
-            and abs(state.x) < self.tol_m
-            and abs(state.y) < self.tol_m
+            abs(state.ax) < self.tol_ang
+            and abs(state.ay) < self.tol_ang
+            and abs(state.px) < self.tol_m
+            and abs(state.py) < self.tol_m
         )
 
     def should_stop(self, i, state, dt):

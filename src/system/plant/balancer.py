@@ -8,15 +8,18 @@ from src.shared import (
     SystemState,
     TableAccel,
     TableCommand,
+    TimingParams,
     default_plant,
     default_workspace,
+    default_timing,
 )
 
 
 @dataclass
 class BalancerParams:
-    plant:     PlantParams     = field(default_factory=default_plant)
-    workspace: WorkspaceParams = field(default_factory=default_workspace)
+    plant:      PlantParams     = field(default_factory=default_plant)
+    workspace:  WorkspaceParams = field(default_factory=default_workspace)
+    timing:     TimingParams    = field(default_factory=default_timing)
 
 
 BALANCER_PRESETS = {
@@ -39,22 +42,24 @@ class BalancerPlant:
         self.x_ref       = w.x_ref
         self.y_ref       = w.y_ref
         self.safe_radius = w.safe_radius
+        
+        self.dt = params.timing.dt
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def step(self, state_x: SystemState, command_u: TableCommand, dt):
+    def step(self, state_x: SystemState, command_u: TableCommand):
 
-        x         = state_x.x
-        x_dot     = state_x.x_dot
-        alpha_x   = state_x.alpha_x
-        alpha_x_dot = state_x.alpha_x_dot
+        x         = state_x.px
+        x_dot     = state_x.vx
+        alpha_x   = state_x.ax
+        alpha_x_dot = state_x.wx
 
-        y         = state_x.y
-        y_dot     = state_x.y_dot
-        alpha_y   = state_x.alpha_y
-        alpha_y_dot = state_x.alpha_y_dot
+        y         = state_x.py
+        y_dot     = state_x.vy
+        alpha_y   = state_x.ay
+        alpha_y_dot = state_x.wy
 
         command_u_limited = self.clamp_command(command_u)
         x_des, y_des = command_u_limited.x_des, command_u_limited.y_des
@@ -67,29 +72,29 @@ class BalancerPlant:
         alpha_x_ddot = (self.g / self.l) * alpha_x - (1 / self.l) * x_ddot
         alpha_y_ddot = (self.g / self.l) * alpha_y - (1 / self.l) * y_ddot
 
-        x_dot += x_ddot * dt
-        x     += x_dot  * dt
+        x_dot += x_ddot * self.dt
+        x     += x_dot  * self.dt
 
-        y_dot += y_ddot * dt
-        y     += y_dot  * dt
+        y_dot += y_ddot * self.dt
+        y     += y_dot  * self.dt
 
         x, x_dot, y, y_dot = self._apply_workspace_limits(x, x_dot, y, y_dot)
 
-        alpha_x_dot += alpha_x_ddot * dt
-        alpha_x     += alpha_x_dot  * dt
+        alpha_x_dot += alpha_x_ddot * self.dt
+        alpha_x     += alpha_x_dot  * self.dt
 
-        alpha_y_dot += alpha_y_ddot * dt
-        alpha_y     += alpha_y_dot  * dt
+        alpha_y_dot += alpha_y_ddot * self.dt
+        alpha_y     += alpha_y_dot  * self.dt
 
         alpha_x = float(np.clip(alpha_x, -np.pi / 2, np.pi / 2))
         alpha_y = float(np.clip(alpha_y, -np.pi / 2, np.pi / 2))
 
         return (
             SystemState(
-                x=x, x_dot=x_dot,
-                alpha_x=alpha_x, alpha_x_dot=alpha_x_dot,
-                y=y, y_dot=y_dot,
-                alpha_y=alpha_y, alpha_y_dot=alpha_y_dot,
+                px=x, vx=x_dot,
+                ax=alpha_x, wx=alpha_x_dot,
+                py=y, vy=y_dot,
+                ay=alpha_y, wy=alpha_y_dot,
             ),
             TableAccel(x_ddot=x_ddot, y_ddot=y_ddot),
         )

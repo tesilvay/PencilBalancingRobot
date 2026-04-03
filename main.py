@@ -13,7 +13,7 @@ import sys
 
 from src.shared import build_from_registry, resolve_preset
 from src.experiment import EXPERIMENT_REGISTRY, EXPERIMENT_PRESETS
-from src.metrics import Metrics
+from src.experiment.metrics import Metrics
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +149,7 @@ def main() -> int:
           (f" with overrides: {overrides}" if overrides else ""))
 
     experiment = build_experiment(spec_string, overrides)
-    results    = experiment.run()
+    results    = experiment.run_experiment()
 
     metrics = Metrics()
     summary = metrics.evaluate(results)

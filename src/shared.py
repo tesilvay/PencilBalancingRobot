@@ -82,19 +82,19 @@ class Spec:
 
 @dataclass
 class SystemState:
-    x: float
-    x_dot: float
-    alpha_x: float
-    alpha_x_dot: float
-    y: float
-    y_dot: float
-    alpha_y: float
-    alpha_y_dot: float
+    px: float
+    vx: float
+    ax: float
+    wx: float
+    py: float
+    vy: float
+    ay: float
+    wy: float
 
     def as_vector(self) -> np.ndarray:
         return np.array([
-            self.x, self.x_dot, self.alpha_x, self.alpha_x_dot,
-            self.y, self.y_dot, self.alpha_y, self.alpha_y_dot,
+            self.px, self.vx, self.ax, self.wx,
+            self.py, self.vy, self.ay, self.wy,
         ])
 
 
@@ -169,8 +169,8 @@ class CameraPair:
 def make_reference_state(workspace: WorkspaceParams) -> SystemState:
     """Build reference state from workspace params."""
     return SystemState(
-        x=workspace.x_ref, x_dot=0.0, alpha_x=0.0, alpha_x_dot=0.0,
-        y=workspace.y_ref, y_dot=0.0, alpha_y=0.0, alpha_y_dot=0.0,
+        px=workspace.x_ref, vx=0.0, ax=0.0, wx=0.0,
+        py=workspace.y_ref, vy=0.0, ay=0.0, wy=0.0,
     )
 
 

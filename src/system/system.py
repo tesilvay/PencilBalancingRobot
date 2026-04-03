@@ -53,14 +53,18 @@ class System:
         self.u     = None
 
     def step(self, dt):
+        
+        x, acc = self.plant.step(self.state, self.u)
+        
         # 1. estimate and control with current actives
-        x_est, innovation = self.active_estimator.estimate(self.sensor.read()) # estimator calculates innovation too
-        u                 = self.active_controller.compute(x_est)
+        
+        x_hat, innovation = self.active_estimator.estimate(self.sensor.get_y()) # estimator calculates innovation too
+        u                 = self.active_controller.compute(x_hat)
         
         self.actuator.apply(u)
 
         # 2. supervisor decides what should be active next step
-        ctrl_key, est_key = self.supervisor.update(x_est, innovation, dt)
+        ctrl_key, est_key = self.supervisor.update(x_hat, innovation, dt)
 
         # 3. system owns the swap — including warm-start on estimator switch
         new_estimator = self.estimators[est_key]
@@ -69,5 +73,5 @@ class System:
 
         self.active_controller = self.controllers[ctrl_key]
         self.active_estimator  = new_estimator
-        self.state = x_est
+        self.state = x_hat
         self.u     = u

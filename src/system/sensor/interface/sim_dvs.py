@@ -114,10 +114,10 @@ class SimEventCameraInterface(VisionModelBase):
 
     def _calculate_local_velocity(self, state_true, t_vals):
 
-        xdot = state_true.x_dot
-        ydot = state_true.y_dot
-        ax_dot = state_true.alpha_x_dot
-        ay_dot = state_true.alpha_y_dot
+        xdot = state_true.vx
+        ydot = state_true.vy
+        ax_dot = state_true.wx
+        ay_dot = state_true.wy
 
         return np.sqrt(
             (xdot + t_vals * ax_dot)**2 +

@@ -43,18 +43,18 @@ class BaseEstimator:
 
     def _print_state(self, state):
         print(
-            f"x={state.x*1000:+.2f} mm, x_dot={state.x_dot*1000:+.2f} mm/s, "
-            f"ax={np.rad2deg(state.alpha_x):+.2f}°, ax_dot={np.rad2deg(state.alpha_x_dot):+.2f}°/s | "
-            f"y={state.y*1000:+.2f} mm, y_dot={state.y_dot*1000:+.2f} mm/s, "
-            f"ay={np.rad2deg(state.alpha_y):+.2f}°, ay_dot={np.rad2deg(state.alpha_y_dot):+.2f}°/s"
+            f"x={state.px*1000:+.2f} mm, x_dot={state.vx*1000:+.2f} mm/s, "
+            f"ax={np.rad2deg(state.ax):+.2f}°, ax_dot={np.rad2deg(state.wx):+.2f}°/s | "
+            f"y={state.py*1000:+.2f} mm, y_dot={state.vy*1000:+.2f} mm/s, "
+            f"ay={np.rad2deg(state.ay):+.2f}°, ay_dot={np.rad2deg(state.wy):+.2f}°/s"
         )
 
     def _print_vel(self, state):
         print(
-            f"x_dot={state.x_dot*1000:+.2f} mm/s, "
-            f"ax_dot={np.rad2deg(state.alpha_x_dot):+.2f}°/s | "
-            f"y_dot={state.y_dot*1000:+.2f} mm/s, "
-            f"ay_dot={np.rad2deg(state.alpha_y_dot):+.2f}°/s"
+            f"x_dot={state.vx*1000:+.2f} mm/s, "
+            f"ax_dot={np.rad2deg(state.wx):+.2f}°/s | "
+            f"y_dot={state.vy*1000:+.2f} mm/s, "
+            f"ay_dot={np.rad2deg(state.wy):+.2f}°/s"
         )
 
     def _print_pose(self, pose):

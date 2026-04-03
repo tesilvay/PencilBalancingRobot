@@ -28,14 +28,14 @@ class BenchmarkSummary:
 class Metrics:
     def _turn_to_system_state(self, vector):
         return SystemState(
-            x=vector[0],
-            x_dot=vector[1],
-            alpha_x=vector[2],
-            alpha_x_dot=vector[3],
-            y=vector[4],
-            y_dot=vector[5],
-            alpha_y=vector[6],
-            alpha_y_dot=vector[7],
+            px=vector[0],
+            vx=vector[1],
+            ax=vector[2],
+            wx=vector[3],
+            py=vector[4],
+            vy=vector[5],
+            ay=vector[6],
+            wy=vector[7],
         )
     def evaluate(self, result: SimulationResult) -> TrialMetrics:
         return TrialMetrics(
@@ -66,14 +66,14 @@ class Metrics:
 
     def turn_to_system_state(vector):
             return SystemState(
-                x=vector[0],
-                x_dot=vector[1],
-                alpha_x=vector[2],
-                alpha_x_dot=vector[3],
-                y=vector[4],
-                y_dot=vector[5],
-                alpha_y=vector[6],
-                alpha_y_dot=vector[7],
+                px=vector[0],
+                vx=vector[1],
+                ax=vector[2],
+                wx=vector[3],
+                py=vector[4],
+                vy=vector[5],
+                ay=vector[6],
+                wy=vector[7],
             )
             
     def print_summary(summary):

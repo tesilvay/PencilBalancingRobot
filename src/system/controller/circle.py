@@ -47,8 +47,8 @@ class CircleController:
     def compute(self, state: SystemState) -> TableCommand:
         self.t += self.dt
 
-        cx = self.x_ref.x
-        cy = self.x_ref.y
+        cx = self.x_ref.px
+        cy = self.x_ref.py
 
         x = cx + self.radius * np.cos(self.omega * self.t)
         y = cy + self.radius * np.sin(self.omega * self.t)

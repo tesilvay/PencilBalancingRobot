@@ -40,14 +40,14 @@ class FiniteDifferenceEstimator(BaseEstimator):
         self.prev_pose = pose
 
         return SystemState(
-            x=pose.X,
-            x_dot=vel[0],
-            alpha_x=pose.alpha_x,
-            alpha_x_dot=vel[1],
-            y=pose.Y,
-            y_dot=vel[2],
-            alpha_y=pose.alpha_y,
-            alpha_y_dot=vel[3]
+            px=pose.X,
+            vx=vel[0],
+            ax=pose.alpha_x,
+            wx=vel[1],
+            py=pose.Y,
+            vy=vel[2],
+            ay=pose.alpha_y,
+            wy=vel[3]
         )
 
     def reset(self):

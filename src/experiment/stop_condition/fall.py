@@ -23,6 +23,6 @@ class FallCondition(StopCondition):
 
     def should_stop(self, i, state, dt):
         return (
-            abs(state.alpha_x) > self.max_angle
-            or abs(state.alpha_y) > self.max_angle
+            abs(state.ax) > self.max_angle
+            or abs(state.ay) > self.max_angle
         )
