@@ -2,10 +2,11 @@ from dataclasses import dataclass
 from collections import deque
 
 import numpy as np
-from core.sim_types import (
+from src.shared import (
     SystemState,
     CameraObservation,
     CameraPair,
+    CameraParams,
 )
 
 from .base import VisionModelBase, get_measurements
@@ -15,12 +16,14 @@ from .base import VisionModelBase, get_measurements
 class SimAnalyticParams:
     noise_std:   float | None
     delay_steps: int
+    cam_params:  CameraParams
 
 
 SIM_ANALYTIC_PRESETS = {
     "default": {
         "noise_std":   None,
         "delay_steps": 0,
+        "cam_params":  "default:default",
     },
     "noisy": {
         "base": "default",

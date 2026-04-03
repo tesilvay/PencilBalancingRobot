@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from core.sim_types import CameraObservation, PoseMeasurement, TableCommand
+from src.shared import CameraObservation, PoseMeasurement, TableCommand
 from perception.camera_model import CameraModel
 from perception.dvs_algorithms import line_x_at_pixel_y
 from perception.vision import get_measurements

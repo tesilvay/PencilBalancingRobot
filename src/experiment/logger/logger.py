@@ -1,5 +1,5 @@
 import numpy as np
-from core.sim_types import SimulationResult
+from src.shared import SimulationResult
 
 
 class Logger:

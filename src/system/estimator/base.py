@@ -1,5 +1,5 @@
 import numpy as np
-from core.sim_types import SystemState, PoseMeasurement, TableCommand
+from src.shared import SystemState, PoseMeasurement, TableCommand
 
 from perception.estimator_diagnostics import EstimatorDiagnosticSnapshot
 

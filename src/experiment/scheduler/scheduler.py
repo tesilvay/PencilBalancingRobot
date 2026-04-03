@@ -1,3 +1,21 @@
+from dataclasses import dataclass
+
+from src.shared import TimingParams
+
+SCHEDULER_PRESETS = {
+    "default": {
+        "timing":             "default:default",
+        "actuator_frequency": 250,
+        "render_frequency":   30,
+    }
+}
+
+@dataclass
+class SchedulerParams:
+    timing:             TimingParams
+    actuator_frequency: int
+    render_frequency:   int
+
 class Scheduler:
     def __init__(self, dt, actuator_dt, render_dt=None):
         self.dt = dt

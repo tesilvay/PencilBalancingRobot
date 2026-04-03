@@ -8,7 +8,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from core.sim_types import WorkspaceParams, CameraObservation, CameraPair
+from src.shared import WorkspaceParams, CameraObservation, CameraPair
 from perception.camera_model import CameraModel
 from perception.dvs_algorithms import mask_events_below_line
 from perception.dvs_camera_reader import DAVIS346_HEIGHT, DAVIS346_WIDTH, DVSReader, discover_devices

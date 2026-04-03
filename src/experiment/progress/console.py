@@ -18,8 +18,8 @@ PROGRESS_PRESETS = {
 
 
 class ConsoleProgress(Progress):
-    def __init__(self, width=30):
-        self.width = width
+    def __init__(self, params : ProgressParams):
+        self.width = params.width
 
     def start(self, total, label=""):
         self.total = total

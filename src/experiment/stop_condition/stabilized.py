@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from numpy import deg2rad
 
 from .base import StopCondition
 
@@ -8,23 +9,33 @@ class StabilizedParams:
     tol_ang_deg: float
     tol_m:       float
     settle_time: float
+    time_in_tol: float
 
 
 STABILIZED_CONDITION_PRESETS = {
     "default": {
-        "tol_ang_deg": 10.0,
+        "tol_ang_deg": 5.0,
         "tol_m":       10e-3,
-        "settle_time": 0.5,
+        "settle_time": 1.0,
+        "time_in_tol": 0.0,
+    },
+    "lazy": {
+        "base": "default",
+        "tol_ang_deg": 10.0,
+        "tol_m":       20e-3,
     }
 }
 
 
 class StabilizedCondition(StopCondition):
-    def __init__(self, tol_ang, tol_m, settle_time):
-        self.tol_ang = tol_ang
-        self.tol_m = tol_m
-        self.settle_time = settle_time
-        self.time_in_tol = 0.0
+    def __init__(self, params: StabilizedParams):
+        p = params
+        
+        self.tol_ang = deg2rad(p.tol_ang_deg)
+        self.tol_m = p.tol_m
+        self.settle_time = p.settle_time
+        self.time_in_tol = p.time_in_tol
+        
         self._stabilized = False
         self._settling_time = None
 

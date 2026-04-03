@@ -1,4 +1,4 @@
-from core.sim_types import SimulationResult, TableCommand, TerminalInfo, clamp_table_command_to_workspace, SystemState
+from src.shared import SimulationResult, TableCommand, TerminalInfo, clamp_table_command_to_workspace, SystemState
 from visualization.realtime_visualizer import VizResult
 import cv2
 from numpy import array

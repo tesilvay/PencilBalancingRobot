@@ -1,25 +1,27 @@
 from dataclasses import dataclass
 
 import numpy as np
-from core.sim_types import (
+from src.shared import (
     CameraObservation,
     CameraPair,
+    CameraParams,
 )
-from perception.camera_model import CameraModel
 
 from .base import VisionModelBase, get_measurements
 
 
 @dataclass
 class SimDVSParams:
-    dvs_mask_line_y_cam1: int
-    dvs_mask_line_y_cam2: int
+    cam_params:  CameraParams
+    algo:        object
+    model:       object
 
 
 SIM_DVS_PRESETS = {
-    "default": {
-        "dvs_mask_line_y_cam1": 160,
-        "dvs_mask_line_y_cam2": 190,
+    "hough": {
+        "cam_params":  "default:default",
+        "algo":        "hough:default",
+        "obs_model":   "simple_dvs:default"
     }
 }
 

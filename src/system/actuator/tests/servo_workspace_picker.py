@@ -12,7 +12,7 @@ Run: python -m hardware.servos.servo_workspace_picker [--port /dev/ttyUSB1]
 import argparse
 import numpy as np
 import cv2
-from core.sim_types import (
+from src.shared import (
     PlantParams,
     WorkspaceParams,
     MechanismParams,

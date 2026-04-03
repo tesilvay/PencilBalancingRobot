@@ -1,5 +1,5 @@
 import numpy as np
-from core.sim_types import (
+from src.shared import (
     SystemState,
     CameraParams,
     CameraObservation,

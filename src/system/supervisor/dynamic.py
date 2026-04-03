@@ -71,8 +71,8 @@ class DynamicSupervisor(Supervisor):
         return {
             "ACQUISITION":         ("follower", "lpf"),
             "STABILIZATION_READY": ("follower", "lpf"),
-            "STABILIZING":         ("smooth",   "kalman"),
-            "BALANCED":            ("full",     "kalman"),
+            "STABILIZING":         ("smooth_pole",   "kalman"),
+            "BALANCED":            ("smooth_pole",    "kalman"),
         }[self.state]
 
     def _is_stable(self, x_est):   return norm(x_est[:2]) < self.params.stable_threshold

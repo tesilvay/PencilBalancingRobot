@@ -5,11 +5,8 @@ import numpy as np
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from core.sim_types import CameraObservation, PoseMeasurement, TableCommand, WorkspaceParams
-from perception.camera_model import CameraModel
-from perception.dvs_algorithms import line_x_at_pixel_y
-from perception.vision import get_measurements
-from visualization.composite_layout import build_composite, build_one_dvs_composite, get_default_window_size
+from src.shared import PoseMeasurement, TableCommand, WorkspaceParams
+from visualization.composite_layout import , get_default_window_size
 
 EventFramesFn = Callable[[], tuple[np.ndarray, np.ndarray] | None]
 

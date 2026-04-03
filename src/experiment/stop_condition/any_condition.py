@@ -7,11 +7,9 @@ from .base import StopCondition
 class AnyStopConditionParams:
     conditions: dict
 
-
 ANY_STOP_CONDITION_PRESETS = {
-    "default": {
+    "max_steps": {
         "conditions": {
-            "fall":      "fall:default",
             "max_steps": "max_steps:default",
         }
     },
@@ -22,6 +20,11 @@ ANY_STOP_CONDITION_PRESETS = {
             "max_steps":  "max_steps:default",
         }
     },
+    "infinite": {
+        "conditions": {
+            "infinite":       "infinite:default",
+        }
+    }
 }
 
 

@@ -17,8 +17,9 @@ FALL_CONDITION_PRESETS = {
 
 
 class FallCondition(StopCondition):
-    def __init__(self, max_angle=deg2rad(45)):
-        self.max_angle = max_angle
+    def __init__(self, params: FallConditionParams):
+        p = params
+        self.max_angle = deg2rad(p.max_angle_deg)
 
     def should_stop(self, i, state, dt):
         return (

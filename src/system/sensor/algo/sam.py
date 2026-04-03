@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 import numpy as np
-from core.sim_types import CameraObservation
+from src.shared import CameraObservation, CameraParams
 from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
 
 from .base import DVSLineAlgorithm
@@ -9,11 +9,13 @@ from .base import DVSLineAlgorithm
 
 @dataclass
 class SamLineParams:
+    cam_params:       CameraParams
     min_points: int
 
 
 SAM_PRESETS = {
     "default": {
+        "cam_params": "default:default",
         "min_points": 50,
     }
 }

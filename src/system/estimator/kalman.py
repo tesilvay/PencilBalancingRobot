@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import control as ct
-from core.sim_types import SystemState, PoseMeasurement, TableCommand
+from src.shared import SystemState, PoseMeasurement, TableCommand
 
 from perception.estimator_diagnostics import (
     build_kalman_snapshot,

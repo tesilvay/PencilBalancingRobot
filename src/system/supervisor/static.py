@@ -11,7 +11,7 @@ class StaticSupervisorParams:
 
 STATIC_SUPERVISOR_PRESETS = {
     "default": {
-        "controller_key": "smooth",
+        "controller_key": "smooth_pole",
         "estimator_key":  "kalman",
     }
 }

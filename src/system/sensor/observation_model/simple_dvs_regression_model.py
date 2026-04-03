@@ -26,9 +26,22 @@ from typing import Any, Dict, Sequence
 
 import numpy as np
 
-from core.sim_types import CameraObservation, CameraPair, PoseMeasurement
+from src.shared import CameraObservation, CameraPair, PoseMeasurement
 from perception.camera_model import CameraModel
 from perception.dvs_algorithms import line_x_at_pixel_y
+
+SIMPLE_REG_PRESETS = {
+    "default": {
+        "calibration_path": "hardware/calibration_files/dvs_affine_calibration.json",
+        "cam_params":       "default:default",
+    }
+}
+
+@dataclass
+class SimpleRegressionParams:
+    calibration_path: str
+    cam_params:       CameraParams
+    
 
 
 @dataclass(frozen=True)

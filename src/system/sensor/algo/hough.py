@@ -3,9 +3,7 @@ import math
 
 import numpy as np
 
-from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
-from core.sim_types import CameraObservation, HoughQuadraticState, HoughTrackerParams
-
+from src.shared import CameraObservation, CameraParams
 from .base import DVSLineAlgorithm
 
 try:
@@ -22,17 +20,28 @@ except ModuleNotFoundError:  # pragma: no cover
 
 @dataclass
 class HoughLineParams:
+    cam_params:       CameraParams
     mixing_factor:    float
     inlier_stddev_px: float
     min_determinant:  float
     max_events:       int | None = None
-
+    quadratic_m2:     float
+    cross_mb:         float
+    quadratic_b2:     float
+    linear_m:         float
+    linear_b:         float
 
 HOUGH_PRESETS = {
     "default": {
+        "cam_params":       "default:default",
         "mixing_factor":    0.02,
         "inlier_stddev_px": 4.0,
         "min_determinant":  1e-6,
+        "quadratic_m2":     0.0,
+        "cross_mb":         0.0,
+        "quadratic_b2":     0.0,
+        "linear_m":         0.0,
+        "linear_b":         0.0,
     }
 }
 

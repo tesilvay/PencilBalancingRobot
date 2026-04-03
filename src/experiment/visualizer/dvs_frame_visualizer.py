@@ -5,7 +5,7 @@ import numpy as np
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from core.sim_types import CameraObservation, PoseMeasurement, TableCommand, WorkspaceParams
+from src.shared import CameraObservation, PoseMeasurement, TableCommand, WorkspaceParams
 from perception.camera_model import CameraModel
 from perception.dvs_algorithms import line_x_at_pixel_y
 from perception.vision import get_measurements

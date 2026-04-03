@@ -1,7 +1,7 @@
 
 
 
-from core.sim_types import CameraObservation
+from src.shared import CameraObservation
 
 
 class CameraModel:

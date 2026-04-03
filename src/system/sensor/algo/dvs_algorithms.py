@@ -4,7 +4,7 @@ import numpy as np
 
 from perception.dvs_camera_reader import DAVIS346_WIDTH, DAVIS346_HEIGHT
 
-from core.sim_types import CameraObservation, HoughQuadraticState, HoughTrackerParams
+from src.shared import CameraObservation, HoughQuadraticState, HoughTrackerParams
 
 
 try:

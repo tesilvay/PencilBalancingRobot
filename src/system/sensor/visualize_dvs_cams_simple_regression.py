@@ -17,7 +17,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from core.sim_types import CameraPair, HoughTrackerParams
+from src.shared import CameraPair, HoughTrackerParams
 from visualization.composite_layout import build_composite, get_default_window_size
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y

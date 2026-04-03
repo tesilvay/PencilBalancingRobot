@@ -7,7 +7,7 @@ from experiments.utils import summarize
 
 from simulation.metrics import Metrics
 from visualization.progress import ConsoleProgress
-from core.sim_types import (
+from src.shared import (
     BenchmarkResult,
     ExperimentSetup,
 )

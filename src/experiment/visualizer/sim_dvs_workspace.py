@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from core.sim_types import PoseMeasurement, TableCommand, WorkspaceParams
+from src.shared import PoseMeasurement, TableCommand, WorkspaceParams
 from visualization.composite_layout import build_composite
 
 from .base import WorkspacePanelRenderer, VizResult, _window_closed

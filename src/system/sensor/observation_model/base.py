@@ -1,4 +1,4 @@
-from core.sim_types import CameraPair, PoseMeasurement
+from src.shared import CameraPair, PoseMeasurement
 
 
 class RegressionModel:

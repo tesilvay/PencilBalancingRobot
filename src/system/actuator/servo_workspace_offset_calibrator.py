@@ -16,7 +16,7 @@ import curses
 import time
 from typing import Tuple
 
-from core.sim_types import TableCommand, WorkspaceParams, PoseMeasurement
+from src.shared import TableCommand, WorkspaceParams, PoseMeasurement
 
 
 def _clamp_to_workspace(x_des: float, y_des: float, workspace: WorkspaceParams) -> tuple[float, float]:

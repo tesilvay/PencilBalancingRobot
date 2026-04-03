@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import numpy as np
 
 # PLANT
@@ -21,6 +21,14 @@ PLANT_PRESETS = {
         "x_ref": 0.0, "y_ref": 0.0, "safe_radius": 68e-3,
     }
 }
+
+# WORKSPACE
+@dataclass
+class WorkspaceParams:
+    """Reference position and workspace boundary."""
+    x_ref: float
+    y_ref: float
+    safe_radius: float | None = None
 
 # TIMING
 @dataclass
@@ -96,6 +104,167 @@ class PoseMeasurement:
     Y: float
     alpha_x: float
     alpha_y: float
+
+
+# VISION TYPES
+@dataclass
+class CameraParams:
+    xr: float  # camera 2 x-offset
+    yr: float  # camera 1 y-offset
+    y_mask_line_1:   float
+    y_mask_line_2:   float
+    DAVIS346_WIDTH:  float
+    DAVIS346_HEIGHT: float
+
+CAMERA_PRESETS = {
+    "default": {
+        "xr": 170, 
+        "yr": 360, 
+        "y_mask_line_1":160, 
+        "y_mask_line_2":190,
+        "DAVIS346_WIDTH":  346,
+        "DAVIS346_HEIGHT": 260,
+    },
+}
+
+@dataclass
+class CameraObservation:
+    slope: float
+    intercept: float
+
+@dataclass
+class CameraPair:
+    cam1: CameraObservation
+    cam2: CameraObservation
+
+
+def make_reference_state(workspace: WorkspaceParams) -> SystemState:
+    """Build reference state from workspace params."""
+    return SystemState(
+        x=workspace.x_ref, x_dot=0.0, alpha_x=0.0, alpha_x_dot=0.0,
+        y=workspace.y_ref, y_dot=0.0, alpha_y=0.0, alpha_y_dot=0.0
+    )
+
+
+# HARDWARE / MECHANISM
+@dataclass
+class MechanismParams:
+    """Five-bar geometry (mm)."""
+    O: tuple[float, float]
+    B: tuple[float, float]
+    la: float
+    lb: float
+
+@dataclass
+class HardwareParams:
+    """Real hardware flags and ports."""
+    servo: bool = False
+    servo_port: str | None = None
+    dvs_cam: bool = False
+    vision_mode: str = "sim_analytic"
+    dvs_cam_x_port: str | None = None
+    dvs_cam_y_port: str | None = None
+    dvs_mask_line_y_cam1: int = 160
+    dvs_mask_line_y_cam2: int = 190
+    servo_frequency: int = 250
+    dvs_algo: str = "hough"
+    sam_filter_ms: float | None = 30
+    dvs_hough: HoughTrackerParams = field(default_factory=HoughTrackerParams)
+    dvs_use_regression: bool = False
+
+@dataclass
+class RunParams:
+    """Simulation/display options."""
+    save_video: bool = False
+    realtimerender: bool = False
+    total_time: float = 5.0
+    dt: float = 0.001
+    stability_tolerance_deg: float = 10
+    stability_tolerance_m: float = 10e-3
+    settle_time: float = 0.5
+    estimator_lpf_alpha: float | None = None
+    initial_angle_spread_deg: float = 11.46
+    initial_position_spread_m: float = 0.050
+    initial_linear_velocity_spread_mps: float = 0
+    initial_angular_velocity_spread_degps: float = 0
+    estimator_diagnostics_enabled: bool = False
+    estimator_diagnostics_terminal_hz: float = 2.0
+    estimator_diagnostics_terminal: bool = True
+    estimator_diagnostics_history: int = 0
+
+@dataclass
+class PhysicalParams:
+    """Composition of all physical/experiment parameters."""
+    plant: PlantParams
+    workspace: WorkspaceParams
+    mechanism: MechanismParams | None = None
+    hardware: HardwareParams | None = None
+    run: RunParams | None = None
+
+    def __post_init__(self):
+        if self.hardware is None:
+            self.hardware = HardwareParams()
+        if self.run is None:
+            self.run = RunParams()
+
+
+# BENCHMARK / EXPERIMENT
+@dataclass
+class BenchmarkVariant:
+    """One point in the benchmark sweep: controller, estimator, noise, delay."""
+    controller_type: str
+    estimator_type: str
+    noise_std: float
+    delay_steps: int
+
+@dataclass
+class ExperimentSetup:
+    """Bundled experiment configuration: params, cameras, and default algorithm variant."""
+    params: PhysicalParams
+    camera_params: CameraParams
+    default_variant: BenchmarkVariant
+
+@dataclass
+class TrialMetrics:
+    stabilized: bool
+    settling_time: float | None
+    max_acc: float
+    avg_state_est_err: np.ndarray | None = None
+
+@dataclass
+class BenchmarkSummary:
+    stability_rate: float
+    avg_settling_time: float | None
+    max_acc: float
+    avg_acc: float
+    avg_state_est_err: np.ndarray | None = None
+
+@dataclass
+class BenchmarkResult:
+    params: PhysicalParams
+    variant: BenchmarkVariant
+    summary: BenchmarkSummary
+
+@dataclass
+class TerminalInfo:
+    stabilized: bool
+    settling_time: float | None
+
+@dataclass
+class SimulationResult:
+    state_history: np.ndarray
+    acc_history: np.ndarray
+    mech_history: np.ndarray | None = None
+    state_est_err_history: np.ndarray | None = None
+    cmd_history: np.ndarray | None = None
+    terminal: TerminalInfo | None = None
+
+@dataclass
+class StopPolicy:
+    FIXED_TIME = "fixed_time"
+    EARLY_STOP = "early_stop"
+    INFINITE = "infinite"
+
 
 # BUILDER FUNCS
 def resolve_preset(presets, name):

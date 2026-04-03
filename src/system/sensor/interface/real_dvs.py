@@ -3,34 +3,38 @@ import threading
 import time
 
 import numpy as np
-from core.sim_types import (
+from src.shared import (
     CameraObservation,
     CameraPair,
-    PoseMeasurement,
+    CameraParams,
 )
-from perception.camera_model import CameraModel
-from perception.dvs_algorithms import mask_events_below_line
-from perception.dvs_camera_reader import DVSReader, DAVIS346_WIDTH, DAVIS346_HEIGHT
 
 from .base import VisionModelBase
 
 
 @dataclass
 class RealDVSParams:
-    cam1_device:             str | None
-    cam2_device:             str | None
-    dvs_mask_line_y_cam1:    int
-    dvs_mask_line_y_cam2:    int
+    cam_params:  CameraParams
+    algo:        object
+    model:       object
     noise_filter_duration_ms: float | None = None
+    cam1_device:              str | None
+    cam2_device:              str | None
 
 
 REAL_DVS_PRESETS = {
-    "default": {
+    "hough": {
+        "cam_params":  "default:default",
+        "algo":        "hough:default",
+        "obs_model":   "simple_dvs:default",
+        "noise_filter_duration_ms": None,
         "cam1_device":              None,
         "cam2_device":              None,
-        "dvs_mask_line_y_cam1":     160,
-        "dvs_mask_line_y_cam2":     190,
-        "noise_filter_duration_ms": None,
+    },
+    "sam":{
+        "base": "default",
+        "algo": "sam:default",
+        "noise_filter_duration_ms": 5,
     }
 }
 
