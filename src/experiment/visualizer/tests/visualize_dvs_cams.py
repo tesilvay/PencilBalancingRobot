@@ -18,9 +18,9 @@ Usage:
     # Or specify serials explicitly:
     python -m benchmarks.visualize_dvs_cams --cam1 SERIAL1 --cam2 SERIAL2
 
-    # Title shows regression pose from SimpleDVSRegressionModel (pixel lines; mask y from model when --estimate-pose):
-    python -m hardware.visualize_dvs_cams --estimate-pose
-    python -m hardware.visualize_dvs_cams --estimate-pose --model path/to/calibration.json
+    # Title shows regression y_meas from SimpleDVSRegressionModel (pixel lines; mask y from model when --estimate-y_meas):
+    python -m hardware.visualize_dvs_cams --estimate-y_meas
+    python -m hardware.visualize_dvs_cams --estimate-y_meas --model path/to/calibration.json
 
     sudo .venv/bin/python -m hardware.visualize_dvs_cams
 """
@@ -126,15 +126,15 @@ def main():
              "Omit to process all events (Numba JIT handles typical rates).",
     )
     parser.add_argument(
-        "--estimate-pose",
+        "--estimate-y_meas",
         action="store_true",
-        help="Show SimpleDVSRegressionModel pose (X,Y,alpha_x,alpha_y) in the title instead of per-cam s/x_at_mask.",
+        help="Show SimpleDVSRegressionModel y_meas (px,py,ax,ay) in the title instead of per-cam s/x_at_mask.",
     )
     parser.add_argument(
         "--model",
         type=str,
         default=str(default_affine_calibration_path()),
-        help="With --estimate-pose: path to simple_dvs_regression_v1 affine JSON or b1/b2/s1/s2 dataset JSON (default matches calibrator / main).",
+        help="With --estimate-y_meas: path to simple_dvs_regression_v1 affine JSON or b1/b2/s1/s2 dataset JSON (default matches calibrator / main).",
     )
     args = parser.parse_args()
 
@@ -181,14 +181,14 @@ def main():
 
     W, H = DAVIS346_WIDTH, DAVIS346_HEIGHT
     cam_model: CameraModel | None = None
-    pose_model: SimpleDVSRegressionModel | None = None
-    if args.estimate_pose:
+    y_meas_model: SimpleDVSRegressionModel | None = None
+    if args.estimate_y_meas:
         cam_model = CameraModel(width=W, height=H)
-        pose_model = SimpleDVSRegressionModel.load(Path(args.model))
-        mask_y_cam1 = int(pose_model.mask_y_cam1)
-        mask_y_cam2 = int(pose_model.mask_y_cam2)
+        y_meas_model = SimpleDVSRegressionModel.load(Path(args.model))
+        mask_y_cam1 = int(y_meas_model.mask_y_cam1)
+        mask_y_cam2 = int(y_meas_model.mask_y_cam2)
         print(
-            f"Pose estimation: loaded {args.model} "
+            f"y_meas estimation: loaded {args.model} "
             f"(mask y from model: cam1={mask_y_cam1}, cam2={mask_y_cam2})"
         )
     decay_display = args.decay_display
@@ -281,8 +281,8 @@ def main():
                 return f"s={s:+.4f}, x_at_mask={x_at_mask:+.1f}"
 
             if (
-                args.estimate_pose
-                and pose_model is not None
+                args.estimate_y_meas
+                and y_meas_model is not None
                 and cam_model is not None
                 and result1 is not None
                 and not isinstance(result1, tuple)
@@ -293,11 +293,11 @@ def main():
                     cam1=result1,
                     cam2=result2,
                 )
-                pose = pose_model.estimate(cams)
+                y_meas = y_meas_model.estimate(cams)
                 title = (
                     f"{args.mode} | "
-                    f"X={pose.X*1000:+.1f} mm Y={pose.Y*1000:+.1f} mm "
-                    f"ax={np.rad2deg(pose.alpha_x):+.1f} ay={np.rad2deg(pose.alpha_y):+.1f} | Q: quit"
+                    f"px={y_meas.px*1000:+.1f} mm py={y_meas.py*1000:+.1f} mm "
+                    f"ax={np.rad2deg(y_meas.ax):+.1f} ay={np.rad2deg(y_meas.ay):+.1f} | Q: quit"
                 )
             else:
                 title = (

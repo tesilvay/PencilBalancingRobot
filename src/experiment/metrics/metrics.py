@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from src.experiment.logger import SimulationResult
-from src.shared import SystemState
+from src.shared import State
 
 
 @dataclass
@@ -27,7 +27,7 @@ class BenchmarkSummary:
 
 class Metrics:
     def _turn_to_system_state(self, vector):
-        return SystemState(
+        return State(
             px=vector[0],
             vx=vector[1],
             ax=vector[2],
@@ -65,7 +65,7 @@ class Metrics:
         )
 
     def turn_to_system_state(vector):
-            return SystemState(
+            return State(
                 px=vector[0],
                 vx=vector[1],
                 ax=vector[2],

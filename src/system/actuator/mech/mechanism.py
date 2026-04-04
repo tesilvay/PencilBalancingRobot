@@ -89,7 +89,7 @@ class FiveBarMechanism:
         prod = np.linalg.norm(v_left_crank) * np.linalg.norm(v_right_crank)
         return cross < 0 and np.abs(cross) >= self._min_sin * prod
 
-    def _elbows_opposed(self, O_l, B_l, A_l, C_l, P_l):
+    def _elbows_opy_measd(self, O_l, B_l, A_l, C_l, P_l):
         """Left and right elbows bend in opposite directions; stay min_angle_deg away from straight."""
         la, lb = self.la, self.lb
         cross_left = np.cross(A_l - O_l, P_l - A_l)
@@ -113,7 +113,7 @@ class FiveBarMechanism:
     def valid_config(self, O_l, B_l, A_l, C_l, P_l):
         return (
             self._cranks_uncrossed(O_l, B_l, A_l, C_l)
-            and self._elbows_opposed(O_l, B_l, A_l, C_l, P_l)
+            and self._elbows_opy_measd(O_l, B_l, A_l, C_l, P_l)
             and self._coupler_above_elbows(A_l, C_l, P_l)
             and self._point_in_front(P_l)
         )

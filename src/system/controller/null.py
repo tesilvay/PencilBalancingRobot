@@ -1,4 +1,4 @@
-from src.shared import NullParams, TableCommand
+from src.shared import NullParams, ControlInput
 
 
 class NullController:
@@ -6,7 +6,7 @@ class NullController:
         pass
 
     def compute(self, state):
-        return TableCommand(0.0, 0.0)
+        return ControlInput(0.0, 0.0)
 
     def reset(self):
         pass

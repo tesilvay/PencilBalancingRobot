@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from src.shared import PoseMeasurement, TableCommand, WorkspaceParams, default_workspace
+from src.shared import Measurement, ControlInput, WorkspaceParams, default_workspace
 from visualization.composite_layout import build_composite
 
 from .base import WorkspacePanelRenderer, VizResult, _window_closed
@@ -26,7 +26,7 @@ SIM_DVS_WORKSPACE_VISUALIZER_PRESETS = {
 
 
 class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
-    """Simulated cameras + workspace panel (command dot, grid, pose tilt arrows)."""
+    """Simulated cameras + workspace panel (command dot, grid, y_meas tilt arrows)."""
 
     def __init__(self, params: SimDvsWorkspaceVisualizerParams):
         super().__init__(SimDvsVisualizerParams(width=params.width, height=params.height))
@@ -35,12 +35,12 @@ class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces, paused
         if measurement is None:
@@ -52,9 +52,9 @@ class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
 
         self._ensure_window(has_workspace=True)
         frame1, frame2 = self._cam_pair_bgr(measurement)
-        workspace_canvas = self._ws.build(command, paused=False, pose=pose)
+        workspace_canvas = self._ws.build(command, paused=False, y_meas=y_meas)
         title_str = title if title is not None else "Experiment | Q: quit"
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):

@@ -7,8 +7,8 @@ from src.shared import (
     PlantParams,
     TimingParams,
     WorkspaceParams,
-    SystemState,
-    TableCommand,
+    State,
+    ControlInput,
     default_plant,
     default_timing,
     default_workspace,
@@ -69,15 +69,15 @@ class SmoothPolePlacementController(BaseController):
         self.xi_ref = np.concatenate([self.x_ref, self.u_ref])
         self._u_prev = self.u_ref.copy()
 
-    def compute(self, state: SystemState) -> TableCommand:
+    def compute(self, state: State) -> ControlInput:
         x   = state.as_vector()
         xi  = np.concatenate([x, self._u_prev])
         v   = -(self.K @ (xi - self.xi_ref)).ravel()
         u   = self._u_prev + v
-        return TableCommand(float(u[0]), float(u[1]))
+        return ControlInput(float(u[0]), float(u[1]))
 
-    def set_applied_command(self, cmd: TableCommand) -> None:
-        self._u_prev = np.array([cmd.x_des, cmd.y_des], dtype=float)
+    def set_applied_command(self, cmd: ControlInput) -> None:
+        self._u_prev = np.array([cmd.px_cmd, cmd.py_cmd], dtype=float)
 
     def reset(self):
         self._u_prev = self.u_ref.copy()

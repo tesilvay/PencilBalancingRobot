@@ -53,8 +53,8 @@ class MechanismAdapter:
 
     def command_to_angles(self, command):
 
-        x = command.x_des + self.workspace_offset[0]
-        y = command.y_des + self.workspace_offset[1]
+        x = command.px_cmd + self.workspace_offset[0]
+        y = command.py_cmd + self.workspace_offset[1]
 
         target_mm = np.array([x, y]) * 1000.0
         

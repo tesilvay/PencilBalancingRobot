@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
+from typing import Sequence
 import numpy as np
+from numpy import rad2deg, deg2rad
 
 
 # ── Plant ─────────────────────────────────────────────────────────────────────
@@ -81,7 +83,7 @@ class Spec:
 # ── Loop / actuation types ────────────────────────────────────────────────────
 
 @dataclass
-class SystemState:
+class State:
     px: float
     vx: float
     ax: float
@@ -90,18 +92,48 @@ class SystemState:
     vy: float
     ay: float
     wy: float
+    
+    @classmethod
+    def from_iterable(cls, data: Sequence[float]) -> "State":
+        if len(data) != 8:
+            raise ValueError(f"Expected 8 values, got {len(data)}")
+
+        return cls(*map(float, data))
 
     def as_vector(self) -> np.ndarray:
         return np.array([
             self.px, self.vx, self.ax, self.wx,
             self.py, self.vy, self.ay, self.wy,
         ])
+    
+    def state_str(self):
+        return (
+            f"px={self.px*1000:+.2f} mm, vx={self.vx*1000:+.2f} mm/s, "
+            f"ax={np.rad2deg(self.ax):+.2f}°, wx={np.rad2deg(self.wx):+.2f}°/s | "
+            f"py={self.py*1000:+.2f} mm, vy={self.vy*1000:+.2f} mm/s, "
+            f"ay={np.rad2deg(self.ay):+.2f}°, wy={np.rad2deg(self.wy):+.2f}°/s"
+        )
+    
+    def print_state(self):
+        print(f"x:   {self.state_str()}")
+
+    def print_est(self):
+        print(f"x_hat:   {self.state_str()}")
+    
+    def print_vel(self):
+        print(
+            f"x_vel:   "
+            f"vx={self.vx*1000:+.2f} mm/s, "
+            f"wx={np.rad2deg(self.wx):+.2f}°/s | "
+            f"vy={self.vy*1000:+.2f} mm/s, "
+            f"wy={np.rad2deg(self.wy):+.2f}°/s"
+        )
 
 
 @dataclass
-class TableCommand:
-    x_des: float
-    y_des: float
+class ControlInput:
+    px_cmd: float
+    py_cmd: float
 
 
 @dataclass
@@ -114,11 +146,20 @@ class TableAccel:
 
 
 @dataclass
-class PoseMeasurement:
-    X: float
-    Y: float
-    alpha_x: float
-    alpha_y: float
+class Measurement:
+    px: float
+    py: float
+    ax: float
+    ay: float
+    
+    def print_y_meas(self):
+        print(
+            f"y:   "
+            f"px={self.px*1000:+.2f} mm, "
+            f"ax={np.rad2deg(self.ax):+.2f}° | "
+            f"py={self.py*1000:+.2f} mm, "
+            f"ay={np.rad2deg(self.ay):+.2f}°"
+        )
 
 
 # ── Camera / vision types ─────────────────────────────────────────────────────
@@ -163,37 +204,45 @@ class CameraPair:
     cam1: CameraObservation
     cam2: CameraObservation
 
+    def unpack(self) -> tuple[float, float, float, float]:
+        return (
+            self.cam1.intercept, 
+            self.cam1.slope, 
+            self.cam2.intercept, 
+            self.cam2.slope)
+    
+
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 
-def make_reference_state(workspace: WorkspaceParams) -> SystemState:
+def make_reference_state(workspace: WorkspaceParams) -> State:
     """Build reference state from workspace params."""
-    return SystemState(
+    return State(
         px=workspace.x_ref, vx=0.0, ax=0.0, wx=0.0,
         py=workspace.y_ref, vy=0.0, ay=0.0, wy=0.0,
     )
 
 
-def clamp_table_command_to_workspace(
-    cmd: TableCommand, workspace: WorkspaceParams
-) -> TableCommand:
-    """Clamp a table command to the circular workspace boundary."""
-    x_des, y_des = cmd.x_des, cmd.y_des
+def clamp_control_input_to_workspace(
+    cmd: ControlInput, workspace: WorkspaceParams
+) -> ControlInput:
+    """Clamp a control input to the circular workspace boundary."""
+    px_cmd, py_cmd = cmd.px_cmd, cmd.py_cmd
     safe_radius = workspace.safe_radius
 
     if safe_radius is None:
-        return TableCommand(x_des, y_des)
+        return ControlInput(px_cmd, py_cmd)
 
-    dx = x_des - workspace.x_ref
-    dy = y_des - workspace.y_ref
+    dx = px_cmd - workspace.x_ref
+    dy = py_cmd - workspace.y_ref
     dist = float(np.sqrt(dx * dx + dy * dy))
 
     if dist > safe_radius and dist > 0:
         scale = safe_radius / dist
-        x_des = workspace.x_ref + dx * scale
-        y_des = workspace.y_ref + dy * scale
+        px_cmd = workspace.x_ref + dx * scale
+        py_cmd = workspace.y_ref + dy * scale
 
-    return TableCommand(x_des, y_des)
+    return ControlInput(px_cmd, py_cmd)
 
 
 # ── Registry builders ─────────────────────────────────────────────────────────

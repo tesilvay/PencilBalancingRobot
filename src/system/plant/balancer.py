@@ -5,13 +5,11 @@ import numpy as np
 from src.shared import (
     PlantParams,
     WorkspaceParams,
-    SystemState,
+    State,
     TableAccel,
-    TableCommand,
-    TimingParams,
+    ControlInput,
     default_plant,
     default_workspace,
-    default_timing,
 )
 
 
@@ -19,7 +17,6 @@ from src.shared import (
 class BalancerParams:
     plant:      PlantParams     = field(default_factory=default_plant)
     workspace:  WorkspaceParams = field(default_factory=default_workspace)
-    timing:     TimingParams    = field(default_factory=default_timing)
 
 
 BALANCER_PRESETS = {
@@ -42,14 +39,12 @@ class BalancerPlant:
         self.x_ref       = w.x_ref
         self.y_ref       = w.y_ref
         self.safe_radius = w.safe_radius
-        
-        self.dt = params.timing.dt
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def step(self, state_x: SystemState, command_u: TableCommand):
+    def step(self, state_x: State, command_u: ControlInput, dt: float):
 
         x         = state_x.px
         x_dot     = state_x.vx
@@ -62,35 +57,35 @@ class BalancerPlant:
         alpha_y_dot = state_x.wy
 
         command_u_limited = self.clamp_command(command_u)
-        x_des, y_des = command_u_limited.x_des, command_u_limited.y_des
+        px_cmd, py_cmd = command_u_limited.px_cmd, command_u_limited.py_cmd
 
-        x_ddot = (1 / self.tau**2) * (x_des - x) - (2 * self.zeta / self.tau) * x_dot
-        y_ddot = (1 / self.tau**2) * (y_des - y) - (2 * self.zeta / self.tau) * y_dot
+        x_ddot = (1 / self.tau**2) * (px_cmd - x) - (2 * self.zeta / self.tau) * x_dot
+        y_ddot = (1 / self.tau**2) * (py_cmd - y) - (2 * self.zeta / self.tau) * y_dot
 
         x_ddot, y_ddot = self._clamp_acceleration(x_ddot, y_ddot)
 
         alpha_x_ddot = (self.g / self.l) * alpha_x - (1 / self.l) * x_ddot
         alpha_y_ddot = (self.g / self.l) * alpha_y - (1 / self.l) * y_ddot
 
-        x_dot += x_ddot * self.dt
-        x     += x_dot  * self.dt
+        x_dot += x_ddot * dt
+        x     += x_dot  * dt
 
-        y_dot += y_ddot * self.dt
-        y     += y_dot  * self.dt
+        y_dot += y_ddot * dt
+        y     += y_dot  * dt
 
         x, x_dot, y, y_dot = self._apply_workspace_limits(x, x_dot, y, y_dot)
 
-        alpha_x_dot += alpha_x_ddot * self.dt
-        alpha_x     += alpha_x_dot  * self.dt
+        alpha_x_dot += alpha_x_ddot * dt
+        alpha_x     += alpha_x_dot  * dt
 
-        alpha_y_dot += alpha_y_ddot * self.dt
-        alpha_y     += alpha_y_dot  * self.dt
+        alpha_y_dot += alpha_y_ddot * dt
+        alpha_y     += alpha_y_dot  * dt
 
         alpha_x = float(np.clip(alpha_x, -np.pi / 2, np.pi / 2))
         alpha_y = float(np.clip(alpha_y, -np.pi / 2, np.pi / 2))
 
         return (
-            SystemState(
+            State(
                 px=x, vx=x_dot,
                 ax=alpha_x, wx=alpha_x_dot,
                 py=y, vy=y_dot,
@@ -104,22 +99,22 @@ class BalancerPlant:
     # ------------------------------------------------------------------
 
     def clamp_command(self, command_u):
-        x_des, y_des = command_u.x_des, command_u.y_des
+        px_cmd, py_cmd = command_u.px_cmd, command_u.py_cmd
         safe_radius  = self.safe_radius
 
         if safe_radius is None:
-            return TableCommand(x_des, y_des)
+            return ControlInput(px_cmd, py_cmd)
 
-        dx   = x_des - self.x_ref
-        dy   = y_des - self.y_ref
+        dx   = px_cmd - self.x_ref
+        dy   = py_cmd - self.y_ref
         dist = float(np.sqrt(dx * dx + dy * dy))
 
         if dist > safe_radius and dist > 0:
             scale = safe_radius / dist
-            x_des = self.x_ref + dx * scale
-            y_des = self.y_ref + dy * scale
+            px_cmd = self.x_ref + dx * scale
+            py_cmd = self.y_ref + dy * scale
 
-        return TableCommand(x_des, y_des)
+        return ControlInput(px_cmd, py_cmd)
 
     def _clamp_acceleration(self, x_ddot, y_ddot):
         if self.max_acc is None:

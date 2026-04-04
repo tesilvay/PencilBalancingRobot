@@ -7,14 +7,13 @@ from src.shared import (
     CameraObservation,
     CameraPair,
     CameraParams,
+    Measurement
 )
 
 from .base import VisionModelBase
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.reader.dvs_camera_reader import (
     DVSReader,
-    DAVIS346_WIDTH,
-    DAVIS346_HEIGHT,
 )
 from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
 
@@ -50,37 +49,47 @@ class RealEventCameraInterface(VisionModelBase):
 
     def __init__(self, params: RealDVSParams):
         import copy
-        cam = params.cam_params
-        super().__init__(cam)
+        p = params
+        
+        #cam = params.cam_params
+        
+        self.cam_height_px = p.cam_params.DAVIS346_HEIGHT
+        self.cam_width_px = p.cam_params.DAVIS346_WIDTH
 
-        self.cam1_algo = copy.deepcopy(params.algo)
-        self.cam2_algo = copy.deepcopy(params.algo)
+        self.cam1_algo = copy.deepcopy(p.algo)
+        self.cam2_algo = copy.deepcopy(p.algo)
 
         self.cam = CameraModel()
 
-        self.dvs_regression_model = params.obs_model
-        dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
-        dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
-        noise_filter_duration_ms = params.noise_filter_duration_ms
-        cam1_device = params.cam1_device
-        cam2_device = params.cam2_device
-        self._dvs_mask_line_y_cam1 = dvs_mask_line_y_cam1
-        self._dvs_mask_line_y_cam2 = dvs_mask_line_y_cam2
+        self.dvs_regression_model = p.obs_model
+  
+        noise_filter_duration_ms = p.noise_filter_duration_ms
+        
+        cam1_device = p.cam1_device
+        cam2_device = p.cam2_device
+        
+        self._dvs_mask_line_y_cam1 = int(p.cam_params.y_mask_line_1)
+        self._dvs_mask_line_y_cam2 = int(p.cam_params.y_mask_line_2)
 
         self._reader1 = DVSReader(cam1_device, noise_filter_duration_ms=noise_filter_duration_ms)
         self._reader2 = DVSReader(cam2_device, noise_filter_duration_ms=noise_filter_duration_ms)
 
         self._latest1: CameraObservation | None = None
         self._latest2: CameraObservation | None = None
-        self._surface1 = np.zeros((DAVIS346_HEIGHT, DAVIS346_WIDTH), dtype=np.float32)
-        self._surface2 = np.zeros((DAVIS346_HEIGHT, DAVIS346_WIDTH), dtype=np.float32)
+        
+        self._surface1 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
+        self._surface2 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
+        
         self._decay_display = 0.5
         self._lock = threading.Lock()
         self._stop = threading.Event()
+        
         self._thread1 = threading.Thread(target=self._reader_loop, args=(self._reader1, self.cam1_algo, 1))
         self._thread2 = threading.Thread(target=self._reader_loop, args=(self._reader2, self.cam2_algo, 2))
+        
         self._thread1.daemon = True
         self._thread2.daemon = True
+        
         self._thread1.start()
         self._thread2.start()
 
@@ -99,7 +108,7 @@ class RealEventCameraInterface(VisionModelBase):
 
             if batches:
                 events = np.concatenate(batches)
-                events = mask_events_below_line(events, mask_line_y=mask_y, frame_height=DAVIS346_HEIGHT)
+                events = mask_events_below_line(events, mask_line_y=mask_y, frame_height=self.cam_height_px)
                 surface *= self._decay_display
                 if len(events) > 0:
                     np.add.at(surface, (events["y"], events["x"]), 1.0)
@@ -122,10 +131,16 @@ class RealEventCameraInterface(VisionModelBase):
         """Alias for :meth:`get_surfaces` — decaying event-accumulator images for display."""
         return self.get_surfaces()
 
-    def get_observation(self, state_true=None) -> CameraPair | None:
+    def get_y(self, state_true=None) -> Measurement:
+        cams_raw = self.get_z()
+        
+        y_meas = self.cams_to_measurement(cams_px=cams_raw)
+        
+        return y_meas
+        
+    def get_z(self) -> CameraPair | None:
         """
-        Return latest CameraPair from Hough (same interface as sim).
-        state_true is ignored; real cams use background event stream.
+        Return latest CameraPair(Pixels) from Hough
         """
         with self._lock:
             obs1_px = self._latest1
@@ -135,36 +150,17 @@ class RealEventCameraInterface(VisionModelBase):
             print("No observation vision.py line 226")
             return None
 
-        obs1 = self.cam.pixel_to_camnorm(obs1_px)
-        obs2 = self.cam.pixel_to_camnorm(obs2_px)
-
         return CameraPair(
-            CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
-            CameraObservation(slope=obs2.slope, intercept=obs2.intercept),
+            CameraObservation(slope=obs1_px.slope, intercept=obs1_px.intercept),
+            CameraObservation(slope=obs2_px.slope, intercept=obs2_px.intercept),
         )
 
-    def _is_valid_pose(self, pose) -> bool:
-        
-        # 1. Numerical sanity: protects against NaNs, inf, model explosions
-        if not np.all(np.isfinite([pose.X, pose.Y, pose.alpha_x, pose.alpha_y])):
-            return False
-        
-        return True
+    def cams_to_measurement(self, cams_px):
+            
+        y_meas = self.dvs_regression_model.estimate(cams_px)
 
-    def reconstruct(self, cams):
-
-        if self.dvs_regression_model is not None:
-            # get_observation() returns camnorm; SimpleDVSRegressionModel expects pixel lines.
-            obs1_px = self.cam.camnorm_to_pixel(cams.cam1)
-            obs2_px = self.cam.camnorm_to_pixel(cams.cam2)
-
-            cams_px = CameraPair(cam1=obs1_px, cam2=obs2_px)
-            pose_from_model = self.dvs_regression_model.estimate(cams_px)
-
-            if self._is_valid_pose(pose_from_model):
-                return pose_from_model
-
-        return super().reconstruct(cams)
+        if super.is_valid_pose(y_meas):
+            return y_meas
 
     def reset(self):
         """Reset both Hough algorithms."""

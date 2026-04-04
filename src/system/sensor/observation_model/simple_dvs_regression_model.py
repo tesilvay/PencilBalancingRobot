@@ -1,5 +1,5 @@
 """
-Simple per-camera regression model for DVS pose estimation.
+Simple per-camera regression model for DVS y_meas estimation.
 
 Two artifact kinds:
 
@@ -12,7 +12,7 @@ Two artifact kinds:
    tables; runtime uses four 1D linear interpolations after converting camnorm lines to pixels.
 
 Public estimate API: ``estimate(cams: CameraPair)`` — pixel-space observations per camera;
-``x_at_mask`` is ``line_x_at_pixel_y`` at each camera's mask line. Returned pose is clamped:
+``x_at_mask`` is ``line_x_at_pixel_y`` at each camera's mask line. Returned y_meas is clamped:
 tilts to ±10°, and (X, Y) radially to the workspace disk (``metadata.workspace_radius_m`` or
 ``safe_radius_m``, default 0.068 m, ref from ``workspace_x_ref_m`` / ``workspace_y_ref_m``).
 """
@@ -26,7 +26,7 @@ from typing import Any, Dict, Sequence
 
 import numpy as np
 
-from src.shared import CameraObservation, CameraPair, PoseMeasurement
+from src.shared import CameraObservation, CameraPair, Measurement
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
 
@@ -76,21 +76,21 @@ def _interp1d(xq: float, xp: np.ndarray, fp: np.ndarray) -> float:
     return float(np.interp(float(xq), xp, fp))
 
 
-# Post-estimate limits: tilts ±10°, XY kept inside disk (see _clamp_pose_measurement).
+# Post-estimate limits: tilts ±10°, XY kept inside disk (see _clamp_measurement).
 _SIMPLEDVS_MAX_TILT_RAD = float(np.deg2rad(10.0))
 _DEFAULT_WORKSPACE_SAFE_RADIUS_M = 0.068
 
 
-def _clamp_pose_measurement(p: PoseMeasurement, metadata: Dict[str, Any] | None) -> PoseMeasurement:
+def _clamp_measurement(p: Measurement, metadata: Dict[str, Any] | None) -> Measurement:
     """Clip tilts to ±10°; project (X, Y) onto disk around ref with safe radius from metadata."""
-    ax = float(np.clip(p.alpha_x, -_SIMPLEDVS_MAX_TILT_RAD, _SIMPLEDVS_MAX_TILT_RAD))
-    ay = float(np.clip(p.alpha_y, -_SIMPLEDVS_MAX_TILT_RAD, _SIMPLEDVS_MAX_TILT_RAD))
+    ax = float(np.clip(p.ax, -_SIMPLEDVS_MAX_TILT_RAD, _SIMPLEDVS_MAX_TILT_RAD))
+    ay = float(np.clip(p.ay, -_SIMPLEDVS_MAX_TILT_RAD, _SIMPLEDVS_MAX_TILT_RAD))
     meta = dict(metadata or {})
     raw_r = meta.get("workspace_radius_m", meta.get("safe_radius_m", _DEFAULT_WORKSPACE_SAFE_RADIUS_M))
     safe_r = float(raw_r)
     x_ref = float(meta.get("workspace_x_ref_m", 0.0))
     y_ref = float(meta.get("workspace_y_ref_m", 0.0))
-    X, Y = float(p.X), float(p.Y)
+    X, Y = float(p.px), float(p.py)
     if safe_r > 0.0 and np.isfinite(safe_r):
         dx = X - x_ref
         dy = Y - y_ref
@@ -99,7 +99,7 @@ def _clamp_pose_measurement(p: PoseMeasurement, metadata: Dict[str, Any] | None)
             s = safe_r / dist
             X = x_ref + dx * s
             Y = y_ref + dy * s
-    return PoseMeasurement(X=X, Y=Y, alpha_x=ax, alpha_y=ay)
+    return Measurement(px=X, py=Y, ax=ax, ay=ay)
 
 
 @dataclass(frozen=True)
@@ -137,14 +137,14 @@ class SimpleDVSRegressionModel:
         if has_affine == has_ds:
             raise ValueError("Set exactly one of: (cam1, cam2) affine pair or full dataset tables")
 
-    def estimate(self, cams: CameraPair) -> PoseMeasurement:
+    def estimate(self, cams: CameraPair) -> Measurement:
         obs1_px = cams.cam1
         obs2_px = cams.cam2
         if self.cam1 is not None and self.cam2 is not None:
             X, alpha_x = self.cam1.estimate_axis(obs1_px, mask_y=int(self.mask_y_cam1))
             Y, alpha_y = self.cam2.estimate_axis(obs2_px, mask_y=int(self.mask_y_cam2))
-            raw = PoseMeasurement(X=float(X), Y=float(Y), alpha_x=float(alpha_x), alpha_y=float(alpha_y))
-            return _clamp_pose_measurement(raw, self.metadata)
+            raw = Measurement(px=float(X), py=float(Y), ax=float(alpha_x), ay=float(alpha_y))
+            return _clamp_measurement(raw, self.metadata)
 
         x1 = float(line_x_at_pixel_y(obs1_px, float(self.mask_y_cam1)))
         x2 = float(line_x_at_pixel_y(obs2_px, float(self.mask_y_cam2)))
@@ -160,8 +160,8 @@ class SimpleDVSRegressionModel:
         Y = _interp1d(x2, xp_y, fp_y)
         alpha_x = _interp1d(s1, xp_ax, fp_ax)
         alpha_y = _interp1d(s2, xp_ay, fp_ay)
-        raw = PoseMeasurement(X=X, Y=Y, alpha_x=alpha_x, alpha_y=alpha_y)
-        return _clamp_pose_measurement(raw, self.metadata)
+        raw = Measurement(px=X, py=Y, ax=alpha_x, ay=alpha_y)
+        return _clamp_measurement(raw, self.metadata)
 
     # ------------------------------------------------------------
     # Serialization (affine only)

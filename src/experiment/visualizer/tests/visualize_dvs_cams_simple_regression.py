@@ -1,8 +1,8 @@
 """
-Standalone DVS camera visualization with line overlay + simple regression pose preview.
+Standalone DVS camera visualization with line overlay + simple regression y_meas preview.
 
 Same as `hardware/visualize_dvs_cams.py` for camera IO, masking, and line tracking,
-but the window title always shows pose from `SimpleDVSRegressionModel.estimate`
+but the window title always shows y_meas from `SimpleDVSRegressionModel.estimate`
 (affine v1 or b1/b2/s1/s2 dataset). Line fits are **pixel** `CameraObservation`s,
 matching `RealEventCameraInterface.reconstruct` and the calibrator.
 """
@@ -32,7 +32,7 @@ def _window_closed(window_name: str) -> bool:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Visualize DVS cams and show pose from simple regression model")
+    parser = argparse.ArgumentParser(description="Visualize DVS cams and show y_meas from simple regression model")
     parser.add_argument("--cam1", help="Camera 1 serial or device (omit to use discovery)")
     parser.add_argument("--cam2", help="Camera 2 serial or device (omit to use discovery)")
     parser.add_argument(
@@ -102,7 +102,7 @@ def main() -> None:
     surface1 = np.zeros((H, W), dtype=np.float32)
     surface2 = np.zeros((H, W), dtype=np.float32)
 
-    WINDOW_NAME = "DVS cam preview (simple regression pose)"
+    WINDOW_NAME = "DVS cam preview (simple regression y_meas)"
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     w, h = get_default_window_size(has_cams=True, has_workspace=False)
     cv2.resizeWindow(WINDOW_NAME, w, h)
@@ -152,11 +152,11 @@ def main() -> None:
         frame1 = cv2.cvtColor(frame1, cv2.COLOR_GRAY2BGR)
         frame2 = cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
 
-        # Draw overlays + compute pose if available.
-        pose_str = "pose=?"
+        # Draw overlays + compute y_meas if available.
+        y_meas_str = "y_meas=?"
         if result1 is not None and not isinstance(result1, tuple) and result2 is not None and not isinstance(result2, tuple):
-            pose = model.estimate(CameraPair(cam1=result1, cam2=result2))
-            pose_str = f"X={pose.X:+.4f} Y={pose.Y:+.4f} ax={pose.alpha_x:+.3f} ay={pose.alpha_y:+.3f}"
+            y_meas = model.estimate(CameraPair(cam1=result1, cam2=result2))
+            y_meas_str = f"px={y_meas.px:+.4f} py={y_meas.py:+.4f} ax={y_meas.ax:+.3f} ay={y_meas.ay:+.3f}"
 
         for frame, result, mask_y in [(frame1, result1, mask_y_cam1), (frame2, result2, mask_y_cam2)]:
             if 0 < mask_y < H:
@@ -174,7 +174,7 @@ def main() -> None:
                     if 0 <= xi < W:
                         cv2.circle(frame, (xi, mask_y), 5, (0, 255, 0), -1)
 
-        title = f"{args.mode} | {pose_str} | Q: quit"
+        title = f"{args.mode} | {y_meas_str} | Q: quit"
         composite = build_composite(title, frame1, frame2, None)
         cv2.imshow(WINDOW_NAME, composite)
 

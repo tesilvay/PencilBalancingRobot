@@ -96,7 +96,7 @@ if HAS_NUMBA:
         if cross_c >= 0.0 or math.fabs(cross_c) < min_sin * prod:
             return False
 
-        # _elbows_opposed
+        # _elbows_opy_measd
         cross_left = (ax - O_l_x) * (py - ay) - (ay - O_l_y) * (px - ax)
         cross_right = (cx - B_l_x) * (py - cy) - (cy - B_l_y) * (px - cx)
         if cross_left * cross_right >= 0.0:

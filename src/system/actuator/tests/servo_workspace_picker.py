@@ -1,7 +1,7 @@
 """
 Standalone tool: connect to servos, show workspace (same view as main with cams+servos),
 let the user pick a point by clicking. The point is checked against workspace (x_ref, y_ref, safe_radius),
-a TableCommand is generated and sent to the servos. Use this to verify the table moves to the chosen point.
+a ControlInput is generated and sent to the servos. Use this to verify the table moves to the chosen point.
 
 With a real serial port, the same pre-run calibration as main runs first (terminal UI: arrow keys
 to align origin, Enter to accept), then the OpenCV workspace picker opens.
@@ -19,7 +19,7 @@ from src.shared import (
     HardwareParams,
     RunParams,
     PhysicalParams,
-    TableCommand,
+    ControlInput,
 )
 from core.system_builder import build_mechanism, build_actuator
 from hardware.servos.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
@@ -82,7 +82,7 @@ def clamp_to_workspace(x: float, y: float, workspace: WorkspaceParams) -> tuple[
 
 def _render_workspace_canvas(
     workspace: WorkspaceParams,
-    command: TableCommand | None,
+    command: ControlInput | None,
     workspace_size: int = 350,
     grid_step_m: float = 0.02,
 ) -> np.ndarray:
@@ -122,9 +122,9 @@ def _render_workspace_canvas(
     cv2.line(canvas, (center, center - cross_len), (center, center + cross_len), circle_color, 1)
 
     if command is not None:
-        x_des, y_des = clamp_to_workspace(command.x_des, command.y_des, workspace)
-        px = int(center + (x_des - x_ref) * scale)
-        py = int(center - (y_des - y_ref) * scale)
+        px_cmd, py_cmd = clamp_to_workspace(command.px_cmd, command.py_cmd, workspace)
+        px = int(center + (px_cmd - x_ref) * scale)
+        py = int(center - (py_cmd - y_ref) * scale)
         if 0 <= px < workspace_size and 0 <= py < workspace_size:
             cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
 
@@ -182,7 +182,7 @@ def run(
     w, h = get_default_window_size(has_cams=False, has_workspace=True)
     cv2.resizeWindow(WINDOW_NAME, w, h)
 
-    current_command: TableCommand | None = None
+    current_command: ControlInput | None = None
     center = workspace_size // 2
     scale = (
         (workspace_size - 40) / (2 * workspace.safe_radius)
@@ -209,7 +209,7 @@ def run(
         else:
             print(f"Moving to ({x_world:.4f}, {y_world:.4f}) m")
 
-        cmd = TableCommand(x_des=x_world, y_des=y_world)
+        cmd = ControlInput(px_cmd=x_world, py_cmd=y_world)
         actuator.send(cmd)
         current_command = cmd
 
@@ -234,7 +234,7 @@ def run(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Pick a point in the workspace; send TableCommand to servos and visualize."
+        description="Pick a point in the workspace; send ControlInput to servos and visualize."
     )
     parser.add_argument(
         "--port",

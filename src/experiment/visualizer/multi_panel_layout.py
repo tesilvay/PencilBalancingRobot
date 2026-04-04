@@ -16,7 +16,7 @@ GAP = 55
 BANNER_HEIGHT = 40
 ONE_PANEL_MARGIN = 20
 
-# Default initial window size (pixels) when using WINDOW_NORMAL. Set and forget; not exposed in main.
+# Default initial window size (pixels) when using WINDOW_NORMAL. Set and forget; not exy_measd in main.
 # Chosen to fit inside 1920×1080 while preserving content aspect ratio.
 # Layout: 2-panel = cams only, 3-panel = cams + workspace, 1-panel = workspace only.
 DEFAULT_WINDOW_WIDTH_2PANEL = 1920   # content 747×300 → scale to width 1920, height 770

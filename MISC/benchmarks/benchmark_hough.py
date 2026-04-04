@@ -18,7 +18,7 @@ from core.sim_types import (
     CameraObservation,
     CameraPair,
     SystemState,
-    TableCommand,
+    ControlInput,
     HoughTrackerParams,
     PhysicalParams,
     PlantParams,
@@ -236,7 +236,7 @@ def run_falling_pencil_trial(
 
     x_ref = params.workspace.x_ref
     y_ref = params.workspace.y_ref
-    command = TableCommand(x_ref, y_ref)
+    command = ControlInput(x_ref, y_ref)
 
     steps = int(total_time / dt)
 

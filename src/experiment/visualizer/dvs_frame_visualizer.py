@@ -5,10 +5,9 @@ import numpy as np
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.shared import CameraObservation, PoseMeasurement, TableCommand, WorkspaceParams
+from src.shared import CameraObservation, Measurement, ControlInput, WorkspaceParams
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
-from src.system.sensor.interface.base import get_measurements
 from visualization.composite_layout import build_composite, build_one_dvs_composite, get_default_window_size
 
 EventFramesFn = Callable[[], tuple[np.ndarray, np.ndarray] | None]
@@ -35,7 +34,7 @@ class VizResult:
 
 
 class WorkspacePanelRenderer:
-    """Workspace grid, safe circle, command dot, paused slate, optional tilt arrow from pose."""
+    """Workspace grid, safe circle, command dot, paused slate, optional tilt arrow from y_meas."""
 
     def __init__(
         self,
@@ -54,10 +53,10 @@ class WorkspacePanelRenderer:
         else:
             self._scale = 4000.0
 
-    def _draw_tilt_arrow(self, canvas: np.ndarray, px: int, py: int, pose: PoseMeasurement) -> None:
+    def _draw_tilt_arrow(self, canvas: np.ndarray, px: int, py: int, y_meas: Measurement) -> None:
         """Single arrow: +α_x → right; length scales with tilt up to max at 15° (see module cap)."""
-        ax = float(pose.alpha_x)
-        ay = float(pose.alpha_y)
+        ax = float(y_meas.ax)
+        ay = float(y_meas.ay)
         m = float(np.hypot(ax, ay))
         if not np.isfinite(m) or m < 1e-9:
             return
@@ -74,7 +73,7 @@ class WorkspacePanelRenderer:
         # Tip marker makes arrow endpoint easier to identify.
         cv2.circle(canvas, (ex, ey), 3, (80, 200, 255), -1)
 
-    def build(self, command: TableCommand | None, *, paused: bool = False, pose: PoseMeasurement | None = None) -> np.ndarray:
+    def build(self, command: ControlInput | None, *, paused: bool = False, y_meas: Measurement | None = None) -> np.ndarray:
         if paused:
             canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
             canvas[:] = 30
@@ -131,17 +130,17 @@ class WorkspacePanelRenderer:
         )
 
         if command is not None:
-            x_des, y_des = command.x_des, command.y_des
-            px = int(self._center + (x_des - x_ref) * self._scale)
-            py = int(self._center - (y_des - y_ref) * self._scale)
+            px_cmd, py_cmd = command.px_cmd, command.py_cmd
+            px = int(self._center + (px_cmd - x_ref) * self._scale)
+            py = int(self._center - (py_cmd - y_ref) * self._scale)
             if 0 <= px < self._workspace_size and 0 <= py < self._workspace_size:
                 cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
 
-        if pose is not None:
-            px_p = int(self._center + (pose.X - x_ref) * self._scale)
-            py_p = int(self._center - (pose.Y - y_ref) * self._scale)
+        if y_meas is not None:
+            px_p = int(self._center + (y_meas.px - x_ref) * self._scale)
+            py_p = int(self._center - (y_meas.py - y_ref) * self._scale)
             if 0 <= px_p < self._workspace_size and 0 <= py_p < self._workspace_size:
-                self._draw_tilt_arrow(canvas, px_p, py_p, pose)
+                self._draw_tilt_arrow(canvas, px_p, py_p, y_meas)
 
         return canvas
 
@@ -183,13 +182,13 @@ class RealtimeVisualizerBase:
         self._window_ready = True
 
     @staticmethod
-    def _append_pose_banner(title_str: str, pose: PoseMeasurement | None) -> str:
-        if pose is None:
+    def _append_y_meas_banner(title_str: str, y_meas: Measurement | None) -> str:
+        if y_meas is None:
             return title_str
-        x_mm = pose.X * 1000.0
-        y_mm = pose.Y * 1000.0
-        ax_deg = pose.alpha_x * 180.0 / np.pi
-        ay_deg = pose.alpha_y * 180.0 / np.pi
+        x_mm = y_meas.px * 1000.0
+        y_mm = y_meas.py * 1000.0
+        ax_deg = y_meas.ax * 180.0 / np.pi
+        ay_deg = y_meas.ay * 180.0 / np.pi
         return (
             title_str
             + f" | X={x_mm:6.1f} mm, Y={y_mm:6.1f} mm, ax={ax_deg:5.1f} deg, ay={ay_deg:5.1f} deg"
@@ -229,7 +228,7 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
         img1 = np.zeros((self.height, self.width), dtype=np.uint8)
         img2 = np.zeros((self.height, self.width), dtype=np.uint8)
         if measurement is not None:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             self.draw_line(img1, b1, s1)
             self.draw_line(img2, b2, s2)
         f1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
@@ -239,12 +238,12 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces, command, paused
         if measurement is None:
@@ -257,7 +256,7 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
         self._ensure_window(has_workspace=False)
         frame1, frame2 = self._cam_pair_bgr(measurement)
         title_str = title if title is not None else "Experiment | Q: quit"
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, None)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):
@@ -267,7 +266,7 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
 
 
 class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
-    """Simulated cameras + workspace panel (command dot, grid, pose tilt arrows)."""
+    """Simulated cameras + workspace panel (command dot, grid, y_meas tilt arrows)."""
 
     def __init__(
         self,
@@ -281,12 +280,12 @@ class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces, paused
         if measurement is None:
@@ -298,9 +297,9 @@ class SimDvsWorkspaceVisualizer(SimDvsVisualizer):
 
         self._ensure_window(has_workspace=True)
         frame1, frame2 = self._cam_pair_bgr(measurement)
-        workspace_canvas = self._ws.build(command, paused=False, pose=pose)
+        workspace_canvas = self._ws.build(command, paused=False, y_meas=y_meas)
         title_str = title if title is not None else "Experiment | Q: quit"
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):
@@ -371,18 +370,18 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces, command, paused
         self._ensure_window(has_workspace=False)
         frame1, frame2 = self._bgr_from_surfaces()
         if measurement is not None:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             if 0 < self.mask_y_cam1 < self.height:
                 cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
             if 0 < self.mask_y_cam2 < self.height:
@@ -391,7 +390,7 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
             self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
 
         title_str = title if title is not None else "Experiment | Q: quit"
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, None)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):
@@ -418,18 +417,18 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces
         self._ensure_window(has_workspace=True)
         frame1, frame2 = self._bgr_from_surfaces()
         if measurement is not None:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             if 0 < self.mask_y_cam1 < self.height:
                 cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
             if 0 < self.mask_y_cam2 < self.height:
@@ -438,7 +437,7 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
             self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
 
         is_paused = paused is True
-        workspace_canvas = self._ws.build(command, paused=is_paused, pose=None if is_paused else pose)
+        workspace_canvas = self._ws.build(command, paused=is_paused, y_meas=None if is_paused else y_meas)
         if title is not None:
             title_str = title
         else:
@@ -447,7 +446,7 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
                 if is_paused
                 else "Experiment | Space: pause | Q: quit"
             )
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):
@@ -546,13 +545,13 @@ class OneDvsVisualizer(RealtimeVisualizerBase):
                 surf = out[self.cam_index]
                 bgr = cv2.cvtColor(np.clip(surf * self._surface_gain, 0, 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
                 if measurement is not None and not skip_line_for_mask:
-                    b1, s1, b2, s2 = get_measurements(measurement)
+                    b1, s1, b2, s2 = measurement.unpack()
                     b, s = (b1, s1) if self.cam_index == 0 else (b2, s2)
                     self._draw_line_bgr_overlay(bgr, b, s)
                 return bgr, (0, 255, 0)
         img = np.zeros((self.height, self.width), dtype=np.uint8)
         if measurement is not None and not skip_line_for_mask:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             b, s = (b1, s1) if self.cam_index == 0 else (b2, s2)
             self._draw_line_gray(img, b, s)
         return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), (255, 255, 255)
@@ -577,12 +576,12 @@ class OneDvsVisualizer(RealtimeVisualizerBase):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
         mask_line_y: int | None = None,
     ) -> VizResult:
         del surfaces, command, paused
@@ -599,12 +598,12 @@ class OneDvsVisualizer(RealtimeVisualizerBase):
             my = int(mask_line_y)
             cv2.line(frame1, (0, my), (self.width - 1, my), (0, 165, 255), 2)
             if measurement is not None:
-                b1, s1, b2, s2 = get_measurements(measurement)
+                b1, s1, b2, s2 = measurement.unpack()
                 b, s = (b1, s1) if self.cam_index == 0 else (b2, s2)
                 self._draw_line_masked_bgr(frame1, b, s, my, color=masked_overlay_color)
-        side_text = self._append_pose_banner(
+        side_text = self._append_y_meas_banner(
             title if title is not None else "One camera | Q: quit",
-            pose,
+            y_meas,
         )
         composite = build_one_dvs_composite(frame1, side_text, banner_short="One DVS | Q: quit")
         cv2.imshow(self._window_name, composite)

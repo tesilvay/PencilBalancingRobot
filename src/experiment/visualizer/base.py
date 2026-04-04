@@ -5,7 +5,7 @@ import numpy as np
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.shared import PoseMeasurement, TableCommand, WorkspaceParams
+from src.shared import Measurement, ControlInput, WorkspaceParams
 
 try:
     from visualization.composite_layout import get_default_window_size
@@ -34,7 +34,7 @@ class VizResult:
 
 
 class WorkspacePanelRenderer:
-    """Workspace grid, safe circle, command dot, paused slate, optional tilt arrow from pose."""
+    """Workspace grid, safe circle, command dot, paused slate, optional tilt arrow from y_meas."""
 
     def __init__(
         self,
@@ -53,9 +53,9 @@ class WorkspacePanelRenderer:
         else:
             self._scale = 4000.0
 
-    def _draw_tilt_arrow(self, canvas: np.ndarray, px: int, py: int, pose: PoseMeasurement) -> None:
-        ax = float(pose.alpha_x)
-        ay = float(pose.alpha_y)
+    def _draw_tilt_arrow(self, canvas: np.ndarray, px: int, py: int, y_meas: Measurement) -> None:
+        ax = float(y_meas.ax)
+        ay = float(y_meas.ay)
         m = float(np.hypot(ax, ay))
         if not np.isfinite(m) or m < 1e-9:
             return
@@ -69,7 +69,7 @@ class WorkspacePanelRenderer:
         cv2.arrowedLine(canvas, (px, py), (ex, ey), (80, 200, 255), 2, tipLength=0.3)
         cv2.circle(canvas, (ex, ey), 3, (80, 200, 255), -1)
 
-    def build(self, command: TableCommand | None, *, paused: bool = False, pose: PoseMeasurement | None = None) -> np.ndarray:
+    def build(self, command: ControlInput | None, *, paused: bool = False, y_meas: Measurement | None = None) -> np.ndarray:
         if paused:
             canvas = np.zeros((self._workspace_size, self._workspace_size), dtype=np.uint8)
             canvas[:] = 30
@@ -126,17 +126,17 @@ class WorkspacePanelRenderer:
         )
 
         if command is not None:
-            x_des, y_des = command.x_des, command.y_des
-            px = int(self._center + (x_des - x_ref) * self._scale)
-            py = int(self._center - (y_des - y_ref) * self._scale)
+            px_cmd, py_cmd = command.px_cmd, command.py_cmd
+            px = int(self._center + (px_cmd - x_ref) * self._scale)
+            py = int(self._center - (py_cmd - y_ref) * self._scale)
             if 0 <= px < self._workspace_size and 0 <= py < self._workspace_size:
                 cv2.circle(canvas, (px, py), 5, (0, 255, 0), -1)
 
-        if pose is not None:
-            px_p = int(self._center + (pose.X - x_ref) * self._scale)
-            py_p = int(self._center - (pose.Y - y_ref) * self._scale)
+        if y_meas is not None:
+            px_p = int(self._center + (y_meas.px - x_ref) * self._scale)
+            py_p = int(self._center - (y_meas.py - y_ref) * self._scale)
             if 0 <= px_p < self._workspace_size and 0 <= py_p < self._workspace_size:
-                self._draw_tilt_arrow(canvas, px_p, py_p, pose)
+                self._draw_tilt_arrow(canvas, px_p, py_p, y_meas)
 
         return canvas
 
@@ -178,13 +178,13 @@ class RealtimeVisualizerBase:
         self._window_ready = True
 
     @staticmethod
-    def _append_pose_banner(title_str: str, pose: PoseMeasurement | None) -> str:
-        if pose is None:
+    def _append_y_meas_banner(title_str: str, y_meas: Measurement | None) -> str:
+        if y_meas is None:
             return title_str
-        x_mm = pose.X * 1000.0
-        y_mm = pose.Y * 1000.0
-        ax_deg = pose.alpha_x * 180.0 / np.pi
-        ay_deg = pose.alpha_y * 180.0 / np.pi
+        x_mm = y_meas.px * 1000.0
+        y_mm = y_meas.py * 1000.0
+        ax_deg = y_meas.ax * 180.0 / np.pi
+        ay_deg = y_meas.ay * 180.0 / np.pi
         return (
             title_str
             + f" | X={x_mm:6.1f} mm, Y={y_mm:6.1f} mm, ax={ax_deg:5.1f} deg, ay={ay_deg:5.1f} deg"

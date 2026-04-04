@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from src.shared import CameraPair, PoseMeasurement
+from src.shared import CameraPair, Measurement
 
 from .base import RegressionModel
 from .simple_dvs_regression_model import SimpleDVSRegressionModel
@@ -26,5 +26,5 @@ class SimpleDVSRegressionModelLoader(RegressionModel):
     def __init__(self, params: SimpleDVSRegressionModelParams):
         self._model = SimpleDVSRegressionModel.load(params.calibration_path)
 
-    def estimate(self, cams: CameraPair) -> PoseMeasurement:
+    def estimate(self, cams: CameraPair) -> Measurement:
         return self._model.estimate(cams)

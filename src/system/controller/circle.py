@@ -6,8 +6,8 @@ from src.shared import (
     PlantParams,
     TimingParams,
     WorkspaceParams,
-    SystemState,
-    TableCommand,
+    State,
+    ControlInput,
     default_plant,
     default_timing,
     default_workspace,
@@ -44,7 +44,7 @@ class CircleController:
         self.dt       = params.timing.dt
         self.t        = 0.0
 
-    def compute(self, state: SystemState) -> TableCommand:
+    def compute(self, state: State) -> ControlInput:
         self.t += self.dt
 
         cx = self.x_ref.px
@@ -53,7 +53,7 @@ class CircleController:
         x = cx + self.radius * np.cos(self.omega * self.t)
         y = cy + self.radius * np.sin(self.omega * self.t)
 
-        return TableCommand(x, y)
+        return ControlInput(x, y)
 
     def reset(self):
         self.t = 0.0

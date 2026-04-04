@@ -31,13 +31,13 @@ class Logger:
     def reset(self, initial_state, initial_command):
         # store as python lists (works for both finite + infinite)
         self._states = [initial_state.as_vector()]
-        self._commands = [[initial_command.x_des, initial_command.y_des]]
+        self._commands = [[initial_command.px_cmd, initial_command.py_cmd]]
         self._acc = []
         self._state_est_err = []
 
     def record(self, state, command, acc, state_est_err):
         self._states.append(state.as_vector())
-        self._commands.append([command.x_des, command.y_des])
+        self._commands.append([command.px_cmd, command.py_cmd])
         self._acc.append(acc.as_vector())
         self._state_est_err.append(state_est_err)
 

@@ -6,8 +6,8 @@ import control as ct
 from src.shared import (
     PlantParams,
     WorkspaceParams,
-    SystemState,
-    TableCommand,
+    State,
+    ControlInput,
     default_plant,
     default_workspace,
     make_reference_state,
@@ -41,8 +41,8 @@ class PolePlacementController(BaseController):
         self.x_ref = x_ref.as_vector()
         self.u_ref = -np.linalg.pinv(B) @ (A @ self.x_ref)
 
-    def compute(self, state: SystemState) -> TableCommand:
+    def compute(self, state: State) -> ControlInput:
         x     = state.as_vector()
         error = x - self.x_ref
         u     = self.u_ref - self.K @ error
-        return TableCommand(u[0], u[1])
+        return ControlInput(u[0], u[1])

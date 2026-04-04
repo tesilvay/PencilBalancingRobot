@@ -30,8 +30,8 @@ class Mechanism:
         self.workspace_offset = (float(dx), float(dy))
 
     def command_to_angles(self, command) -> tuple[float, float]:
-        x = command.x_des + self.workspace_offset[0]
-        y = command.y_des + self.workspace_offset[1]
+        x = command.px_cmd + self.workspace_offset[0]
+        y = command.py_cmd + self.workspace_offset[1]
         target_mm = np.array([x, y]) * 1000.0
         theta1, theta2 = self._mech.ik(target_mm)
         return np.rad2deg(theta1), np.rad2deg(theta2)

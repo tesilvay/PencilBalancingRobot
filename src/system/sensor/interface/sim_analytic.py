@@ -3,13 +3,13 @@ from collections import deque
 
 import numpy as np
 from src.shared import (
-    SystemState,
-    CameraObservation,
+    State,
     CameraPair,
     CameraParams,
+    Measurement
 )
 
-from .base import VisionModelBase, get_measurements
+from .base import VisionModelBase
 
 
 @dataclass
@@ -28,7 +28,7 @@ SIM_ANALYTIC_PRESETS = {
     "noisy": {
         "base": "default",
         "noise_std":   1e-3,
-        "delay_steps": 2,
+        "delay_steps": 0,
     },
 }
 
@@ -36,7 +36,8 @@ SIM_ANALYTIC_PRESETS = {
 class SimVisionModel(VisionModelBase):
 
     def __init__(self, params: SimAnalyticParams):
-        super().__init__(params.cam_params)
+        self.xr = params.cam_params.xr
+        self.yr = params.cam_params.yr
 
         self.noise_std   = params.noise_std
         self.delay_steps = params.delay_steps
@@ -45,12 +46,23 @@ class SimVisionModel(VisionModelBase):
     # -------------------------------------------------
     # Project true 3D state into both camera views
     # -------------------------------------------------
-    def get_observation(self, state_true: SystemState) -> CameraPair:
+    
+    def get_y(self, state_true: State) -> Measurement:
         
-        cams = super().project(state_true)
+        # returns cams in camnorm
+        cams_raw = self.get_z(state_true)
         
-        noisy_cams = self._add_noise(cams)
-
+        # add noise and delay to simulate realism
+        cams_noisy = self._add_noise(cams_raw)
+        cams = self._add_delay(cams_noisy)
+        
+        # turns camnorm cams into a y_meas with the analytic equations
+        y_meas = self.cams_to_measurement(cams_camnorm=cams)
+        
+        return y_meas
+    
+    def _add_delay(self, noisy_cams: CameraPair) -> CameraPair:
+        
         if self.delay_steps > 0:
             self.buffer.append(noisy_cams)
 
@@ -61,22 +73,45 @@ class SimVisionModel(VisionModelBase):
 
         return noisy_cams
     
-    def _add_noise(self, cams: CameraPair):
-        
-        b1, s1, b2, s2 = get_measurements(cams)
+    def _add_noise(self, cams: CameraPair) -> CameraPair:
          
         if self.noise_std is not None:
-            s1 += np.random.normal(0, self.noise_std)
-            b1 += np.random.normal(0, self.noise_std)
-            s2 += np.random.normal(0, self.noise_std)
-            b2 += np.random.normal(0, self.noise_std)
+            cams.cam1.slope += np.random.normal(0, self.noise_std)
+            cams.cam1.intercept += np.random.normal(0, self.noise_std)
+            cams.cam2.slope += np.random.normal(0, self.noise_std)
+            cams.cam2.intercept += np.random.normal(0, self.noise_std)
         
-        cam1 = CameraObservation(slope=s1, intercept=b1)
-        cam2 = CameraObservation(slope=s2, intercept=b2)
+        return cams
+    
+    def get_z(self, state_true: State) -> CameraPair:
 
-        noisy_cams = CameraPair(cam1=cam1, cam2=cam2)
-        
-        return noisy_cams
+        return super().project_state_to_z(state_true)
+    
+    def cams_to_measurement(self, cams_camnorm: CameraPair) -> Measurement:
+
+        b1, s1, b2, s2 = cams_camnorm.unpack()
+
+        denom = b1 * b2 + 1.0
+        if abs(denom) < 1e-8:
+            denom = 1e-8
+
+        px = (b1 * self.yr + b1 * b2 * self.xr) / denom
+        py = (b2 * self.xr - b1 * b2 * self.yr) / denom
+        ax = (s1 + b1 * s2) / denom
+        ay = (s2 - b2 * s1) / denom
+
+        ax = float(np.clip(ax, -np.pi / 2, np.pi / 2))
+        ay = float(np.clip(ay, -np.pi / 2, np.pi / 2))
+
+        y_meas = Measurement(
+            px=px,
+            py=py,
+            ax=ax,
+            ay=ay,
+        )
+
+        return y_meas
+    
 
     def reset(self):
         self.buffer.clear()

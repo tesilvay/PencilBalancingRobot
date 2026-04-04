@@ -3,9 +3,8 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from src.shared import CameraObservation, PoseMeasurement, TableCommand
+from src.shared import CameraObservation, Measurement, ControlInput
 from src.system.sensor.observation_model.camera_model import CameraModel
-from src.system.sensor.interface.base import get_measurements
 from visualization.composite_layout import build_composite
 
 from .base import RealtimeVisualizerBase, VizResult, _window_closed
@@ -58,7 +57,7 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
         img1 = np.zeros((self.height, self.width), dtype=np.uint8)
         img2 = np.zeros((self.height, self.width), dtype=np.uint8)
         if measurement is not None:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             self.draw_line(img1, b1, s1)
             self.draw_line(img2, b2, s2)
         f1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2BGR)
@@ -68,12 +67,12 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces, command, paused
         if measurement is None:
@@ -86,7 +85,7 @@ class SimDvsVisualizer(RealtimeVisualizerBase):
         self._ensure_window(has_workspace=False)
         frame1, frame2 = self._cam_pair_bgr(measurement)
         title_str = title if title is not None else "Experiment | Q: quit"
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, None)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):

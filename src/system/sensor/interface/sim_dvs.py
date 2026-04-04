@@ -2,12 +2,14 @@ from dataclasses import dataclass
 
 import numpy as np
 from src.shared import (
+    State,
+    Measurement,
     CameraObservation,
     CameraPair,
     CameraParams,
 )
 
-from .base import VisionModelBase, get_measurements
+from .base import VisionModelBase
 from src.system.sensor.observation_model.camera_model import CameraModel
 
 
@@ -36,22 +38,25 @@ class SimEventCameraInterface(VisionModelBase):
 
     def __init__(self, params: SimDVSParams):
         import copy
-        cam = params.cam_params
-        super().__init__(cam)
+        p = params
+        cam = p.cam_params
+        
+        self.cam_height_px = p.cam_params.DAVIS346_HEIGHT
+        self.cam_width_px = p.cam_params.DAVIS346_WIDTH
 
-        self.cam1_algo = copy.deepcopy(params.algo)
-        self.cam2_algo = copy.deepcopy(params.algo)
-        dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
-        dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
+        self.cam1_algo = copy.deepcopy(p.algo)
+        self.cam2_algo = copy.deepcopy(p.algo)
+        
         self.sigma_px = 1.0
         
         self.cam = CameraModel()
-        self._surface1 = np.zeros((self.cam.height, self.cam.width), dtype=np.float32)
-        self._surface2 = np.zeros((self.cam.height, self.cam.width), dtype=np.float32)
+        self._surface1 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
+        self._surface2 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
+
         self._decay_display = 0.5
         
-        self._dvs_mask_line_y_cam1 = int(dvs_mask_line_y_cam1)
-        self._dvs_mask_line_y_cam2 = int(dvs_mask_line_y_cam2)
+        self._dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
+        self._dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
         
         # tuneable noise parameters
         self.event_density_base = 300
@@ -201,16 +206,23 @@ class SimEventCameraInterface(VisionModelBase):
 
         return events
 
+    def get_surfaces(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Return copy of current simulated event surfaces for visualization."""
+        return self._surface1.copy(), self._surface2.copy()
 
+    def get_event_accumulator_frames(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """Alias for :meth:`get_surfaces` for visualizer compatibility."""
+        return self.get_surfaces()
+      
     def _empty_events(self):
         return np.zeros(0, dtype=[("x", np.int16), ("y", np.int16)])
 
-    def get_observation(self, state_true):
+    def get_z(self, state_true):
 
         # compute true line
-        cams = super().project(state_true)
+        cams_raw = super().project_state_to_z(state_true)
 
-        b1, s1, b2, s2 = get_measurements(cams)
+        b1, s1, b2, s2 = cams_raw.unpack()
 
         events1 = self.generate_events(b1, s1, state_true, cam_id=1)
         events2 = self.generate_events(b2, s2, state_true, cam_id=2)
@@ -221,29 +233,45 @@ class SimEventCameraInterface(VisionModelBase):
         if len(events2) > 0:
             np.add.at(self._surface2, (events2["y"], events2["x"]), 1.0)
 
-        result1 = self.cam1_algo.update(events1)
-        result2 = self.cam2_algo.update(events2)
+        # Run algo with events
+        obs1 = self.cam1_algo.update(events1)
+        obs2 = self.cam2_algo.update(events2)
 
         # tracker not ready yet (returns (None, None) or CameraObservation)
-        if isinstance(result1, tuple) or isinstance(result2, tuple):
+        if isinstance(obs1, tuple) or isinstance(obs2, tuple):
             return None
-
-        obs1 = self.cam.pixel_to_camnorm(result1)
-        obs2 = self.cam.pixel_to_camnorm(result2)
 
         return CameraPair(
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
             CameraObservation(slope=obs2.slope, intercept=obs2.intercept)
         )
-
-    def get_surfaces(self) -> tuple[np.ndarray, np.ndarray] | None:
-        """Return copy of current simulated event surfaces for visualization."""
-        return self._surface1.copy(), self._surface2.copy()
-
-    def get_event_accumulator_frames(self) -> tuple[np.ndarray, np.ndarray] | None:
-        """Alias for :meth:`get_surfaces` for visualizer compatibility."""
-        return self.get_surfaces()
         
+    def cams_to_measurement(self, cams_px):
+        
+        if self.dvs_regression_model is not None:
+            y_meas = self.dvs_regression_model.estimate(cams_px)
+
+            if super.is_valid_pose(y_meas):
+                return y_meas
+        
+        else:
+            obs1 = self.cam.pixel_to_camnorm(cams_px.cam1)
+            obs2 = self.cam.pixel_to_camnorm(cams_px.cam2)
+
+            cams = CameraPair(cam1=obs1, cam2=obs2)
+        
+            return super().cams_to_measurement(cams_camnorm=cams)
+
+    def get_y(self, state_true: State) -> Measurement:
+        
+        # returns cams in pix
+        cams = self.get_z(state_true)
+        
+        y_meas = self.cams_to_measurement(cams_px=cams)
+        
+        return y_meas
+
+  
     def reset(self):
         self.cam1_algo.reset()
         self.cam2_algo.reset()

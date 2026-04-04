@@ -20,7 +20,7 @@ from core.sim_types import (
     CameraParams,
     PlantParams,
     WorkspaceParams,
-    TableCommand,
+    ControlInput,
     CameraObservation,
     CameraPair,
 )
@@ -120,7 +120,7 @@ def run_estimator_trial(
     )
 
     w = params.workspace
-    command = TableCommand(x_des=w.x_ref, y_des=w.y_ref)
+    command = ControlInput(px_cmd=w.x_ref, py_cmd=w.y_ref)
 
     true_history = np.zeros((steps, 8))
     est_history = np.zeros((steps, 8))

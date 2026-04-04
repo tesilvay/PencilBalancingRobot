@@ -3,10 +3,9 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from src.shared import CameraObservation, PoseMeasurement, TableCommand
+from src.shared import CameraObservation, Measurement, ControlInput
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
-from src.system.sensor.interface.base import get_measurements
 from visualization.composite_layout import build_one_dvs_composite
 
 from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_closed
@@ -109,13 +108,13 @@ class OneDvsVisualizer(RealtimeVisualizerBase):
                 surf = out[self.cam_index]
                 bgr = cv2.cvtColor(np.clip(surf * self._surface_gain, 0, 255).astype(np.uint8), cv2.COLOR_GRAY2BGR)
                 if measurement is not None and not skip_line_for_mask:
-                    b1, s1, b2, s2 = get_measurements(measurement)
+                    b1, s1, b2, s2 = measurement.unpack()
                     b, s = (b1, s1) if self.cam_index == 0 else (b2, s2)
                     self._draw_line_bgr_overlay(bgr, b, s)
                 return bgr, (0, 255, 0)
         img = np.zeros((self.height, self.width), dtype=np.uint8)
         if measurement is not None and not skip_line_for_mask:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             b, s = (b1, s1) if self.cam_index == 0 else (b2, s2)
             self._draw_line_gray(img, b, s)
         return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR), (255, 255, 255)
@@ -140,12 +139,12 @@ class OneDvsVisualizer(RealtimeVisualizerBase):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
         mask_line_y: int | None = None,
     ) -> VizResult:
         del surfaces, command, paused
@@ -162,12 +161,12 @@ class OneDvsVisualizer(RealtimeVisualizerBase):
             my = int(mask_line_y)
             cv2.line(frame1, (0, my), (self.width - 1, my), (0, 165, 255), 2)
             if measurement is not None:
-                b1, s1, b2, s2 = get_measurements(measurement)
+                b1, s1, b2, s2 = measurement.unpack()
                 b, s = (b1, s1) if self.cam_index == 0 else (b2, s2)
                 self._draw_line_masked_bgr(frame1, b, s, my, color=masked_overlay_color)
-        side_text = self._append_pose_banner(
+        side_text = self._append_y_meas_banner(
             title if title is not None else "One camera | Q: quit",
-            pose,
+            y_meas,
         )
         composite = build_one_dvs_composite(frame1, side_text, banner_short="One DVS | Q: quit")
         cv2.imshow(self._window_name, composite)

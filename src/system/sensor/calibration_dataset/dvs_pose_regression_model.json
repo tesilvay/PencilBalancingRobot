@@ -115,6 +115,6 @@
       }
     },
     "total_samples": 25,
-    "frames_per_pose_target": 300
+    "frames_per_y_meas_target": 300
   }
 }

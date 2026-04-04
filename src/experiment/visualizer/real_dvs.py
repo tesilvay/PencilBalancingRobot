@@ -3,10 +3,9 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from src.shared import CameraObservation, PoseMeasurement, TableCommand
+from src.shared import CameraObservation, Measurement, ControlInput
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
-from src.system.sensor.interface.base import get_measurements
 from visualization.composite_layout import build_composite
 
 from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_closed
@@ -86,18 +85,18 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces, command, paused
         self._ensure_window(has_workspace=False)
         frame1, frame2 = self._bgr_from_surfaces()
         if measurement is not None:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             if 0 < self.mask_y_cam1 < self.height:
                 cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
             if 0 < self.mask_y_cam2 < self.height:
@@ -106,7 +105,7 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
             self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
 
         title_str = title if title is not None else "Experiment | Q: quit"
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, None)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):

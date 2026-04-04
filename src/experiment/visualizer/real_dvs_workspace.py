@@ -3,8 +3,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from src.shared import PoseMeasurement, TableCommand, WorkspaceParams, default_workspace
-from src.system.sensor.interface.base import get_measurements
+from src.shared import Measurement, ControlInput, WorkspaceParams, default_workspace
 from visualization.composite_layout import build_composite
 
 from .base import WorkspacePanelRenderer, EventFramesFn, VizResult, _window_closed
@@ -47,18 +46,18 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
     def render(
         self,
         measurement,
-        command: TableCommand | None = None,
+        command: ControlInput | None = None,
         *,
         surfaces: tuple[np.ndarray, np.ndarray] | None = None,
         title: str | None = None,
         paused: bool = False,
-        pose: PoseMeasurement | None = None,
+        y_meas: Measurement | None = None,
     ) -> VizResult:
         del surfaces
         self._ensure_window(has_workspace=True)
         frame1, frame2 = self._bgr_from_surfaces()
         if measurement is not None:
-            b1, s1, b2, s2 = get_measurements(measurement)
+            b1, s1, b2, s2 = measurement.unpack()
             if 0 < self.mask_y_cam1 < self.height:
                 cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
             if 0 < self.mask_y_cam2 < self.height:
@@ -67,7 +66,7 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
             self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
 
         is_paused = paused is True
-        workspace_canvas = self._ws.build(command, paused=is_paused, pose=None if is_paused else pose)
+        workspace_canvas = self._ws.build(command, paused=is_paused, y_meas=None if is_paused else y_meas)
         if title is not None:
             title_str = title
         else:
@@ -76,7 +75,7 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
                 if is_paused
                 else "Experiment | Space: pause | Q: quit"
             )
-        title_str = self._append_pose_banner(title_str, pose)
+        title_str = self._append_y_meas_banner(title_str, y_meas)
         composite = build_composite(title_str, frame1, frame2, workspace_canvas)
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):

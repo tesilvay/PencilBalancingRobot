@@ -69,33 +69,3 @@ VISUALIZER_3D_PRESETS = {
         "fps": 60,
     }
 }
-
-
-
-
-
-
-# ── Experiment ────────────────────────────────────────────────
-
-EXPERIMENT_PRESETS = {
-    "sim": {
-        "system":         "default:simple_sim",
-        "logger":         "default:default",
-        "stop_condition": "any:default",
-        "visualizer":     {},
-        "progress":       "default:default",
-        "pacing":         "null:default",
-        "scheduler":      "realtime:default",
-    },
-    "realtime_sim": {
-        "base": "sim",
-        "visualizer": {"sim": "sim:default"},
-        "pacing":     "realtime:default",
-    },
-    "real": {
-        "base": "sim",
-        "system":     "default:real",
-        "visualizer": {"real": "real:default"},
-        "pacing":     "realtime:default",
-    },
-}

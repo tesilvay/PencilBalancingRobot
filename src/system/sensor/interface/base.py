@@ -1,57 +1,54 @@
 import numpy as np
 from src.shared import (
-    SystemState,
+    State,
     CameraParams,
     CameraObservation,
     CameraPair,
-    PoseMeasurement,
+    Measurement,
 )
-
-
-def get_measurements(cams: CameraPair):
-    b1 = cams.cam1.intercept
-    s1 = cams.cam1.slope
-
-    b2 = cams.cam2.intercept
-    s2 = cams.cam2.slope
-    
-    return b1, s1, b2, s2
 
 
 class VisionModelBase:
 
     def __init__(self, camera_params: CameraParams):
-        self.xr = camera_params.xr
-        self.yr = camera_params.yr
+        raise NotImplementedError
 
+    def get_y(self, state_true: State) -> Measurement:
+        # get z (raw sensor measurement)
+        # cams_to_measurement (reconstruct)
+        raise NotImplementedError
+    
+    def cams_to_measurement(self, cams_camnorm: CameraPair) -> Measurement:
 
-    def reconstruct(self, cams: CameraPair) -> PoseMeasurement:
-
-        b1, s1, b2, s2 = get_measurements(cams)
+        b1, s1, b2, s2 = cams_camnorm.unpack()
 
         denom = b1 * b2 + 1.0
         if abs(denom) < 1e-8:
             denom = 1e-8
 
-        X = (b1 * self.yr + b1 * b2 * self.xr) / denom
-        Y = (b2 * self.xr - b1 * b2 * self.yr) / denom
-        alpha_x = (s1 + b1 * s2) / denom
-        alpha_y = (s2 - b2 * s1) / denom
+        px = (b1 * self.yr + b1 * b2 * self.xr) / denom
+        py = (b2 * self.xr - b1 * b2 * self.yr) / denom
+        ax = (s1 + b1 * s2) / denom
+        ay = (s2 - b2 * s1) / denom
 
-        alpha_x = float(np.clip(alpha_x, -np.pi / 2, np.pi / 2))
-        alpha_y = float(np.clip(alpha_y, -np.pi / 2, np.pi / 2))
+        ax = float(np.clip(ax, -np.pi / 2, np.pi / 2))
+        ay = float(np.clip(ay, -np.pi / 2, np.pi / 2))
 
-        pose = PoseMeasurement(
-            X=X,
-            Y=Y,
-            alpha_x=alpha_x,
-            alpha_y=alpha_y,
+        y_meas = Measurement(
+            px=px,
+            py=py,
+            ax=ax,
+            ay=ay,
         )
 
-        return pose
-        
-    def project(self, state_true: SystemState) -> CameraPair:
-
+        return y_meas
+    
+    def get_z(self) -> CameraPair:
+        # get z (raw sensor measurement)
+        raise NotImplementedError
+    
+    def project_state_to_z(self, state_true: State) -> CameraPair:
+    
         X = state_true.px
         Y = state_true.py
         alpha_x = state_true.ax
@@ -75,3 +72,12 @@ class VisionModelBase:
         cam2 = CameraObservation(slope=s2, intercept=b2)
 
         return CameraPair(cam1=cam1, cam2=cam2)
+    
+    def is_valid_y_meas(self, y_meas) -> bool:
+        
+        # 1. Numerical sanity: protects against NaNs, inf, model explosions
+        if not np.all(np.isfinite([y_meas.px, y_meas.py, y_meas.ax, y_meas.ay])):
+            return False
+        
+        return True
+

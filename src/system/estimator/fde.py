@@ -1,55 +1,43 @@
 from dataclasses import dataclass
 
 import numpy as np
-from src.shared import SystemState, PoseMeasurement, TableCommand
+from src.shared import State, Measurement, ControlInput, NullParams
 
 from .base import BaseEstimator
 
-
-@dataclass
-class FDEParams:
-    pass
-
-
-FDE_PRESETS = {"default": {}}
-
-
 class FiniteDifferenceEstimator(BaseEstimator):
 
-    def __init__(self, params: FDEParams):
+    def __init__(self, params: NullParams):
         super().__init__()
-        self.prev_pose = None
+        self.prev_y_meas = None
 
-    def update(
+    def estimate(
         self,
-        pose: PoseMeasurement,
+        y_meas: Measurement,
         dt: float,
-        command_u: TableCommand | None = None,
-    ) -> SystemState:
+        u_cmd: ControlInput | None = None,
+    ) -> tuple[State, np.ndarray]:
 
-        if self.prev_pose is None:
+        if self.prev_y_meas is None:
             vel = np.zeros(4)
         else:
             vel = np.array([
-                (pose.X - self.prev_pose.X) / dt,
-                (pose.alpha_x - self.prev_pose.alpha_x) / dt,
-                (pose.Y - self.prev_pose.Y) / dt,
-                (pose.alpha_y - self.prev_pose.alpha_y) / dt
+                (y_meas.px - self.prev_y_meas.px) / dt,
+                (y_meas.ax - self.prev_y_meas.ax) / dt,
+                (y_meas.py - self.prev_y_meas.py) / dt,
+                (y_meas.ay - self.prev_y_meas.ay) / dt
             ])
 
-        self.prev_pose = pose
+        self.prev_y_meas = y_meas
 
-        return SystemState(
-            px=pose.X,
-            vx=vel[0],
-            ax=pose.alpha_x,
-            wx=vel[1],
-            py=pose.Y,
-            vy=vel[2],
-            ay=pose.alpha_y,
-            wy=vel[3]
+        x_hat= State(
+            px=y_meas.px,  vx=vel[0],
+            ax=y_meas.ax,  wx=vel[1],
+            py=y_meas.py,  vy=vel[2],
+            ay=y_meas.ay,  wy=vel[3]
         )
+        innovation = super().calc_innovation(y_meas, x_hat)
+        return x_hat, innovation
 
     def reset(self):
-        super().reset()
-        self.prev_pose = None
+        self.prev_y_meas = None

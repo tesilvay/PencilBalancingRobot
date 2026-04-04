@@ -16,7 +16,7 @@ import curses
 import time
 from typing import Tuple
 
-from src.shared import TableCommand, WorkspaceParams, PoseMeasurement
+from src.shared import ControlInput, WorkspaceParams, Measurement
 
 
 def _clamp_to_workspace(x_des: float, y_des: float, workspace: WorkspaceParams) -> tuple[float, float]:
@@ -40,9 +40,9 @@ def _clamp_to_workspace(x_des: float, y_des: float, workspace: WorkspaceParams) 
     return x_des, y_des
 
 
-def _read_pose_from_vision(vision) -> PoseMeasurement | None:
+def _read_y_meas_from_vision(vision) -> Measurement | None:
     """
-    Best-effort: return PoseMeasurement from the most recent DVS observation.
+    Best-effort: return Measurement from the most recent DVS observation.
 
     Real DVS vision ignores the state_true argument and uses background threads.
     """
@@ -52,8 +52,8 @@ def _read_pose_from_vision(vision) -> PoseMeasurement | None:
         measurement = vision.get_observation(None)
         if measurement is None:
             return None
-        pose = vision.reconstruct(measurement)
-        return pose
+        y_meas = vision.reconstruct(measurement)
+        return y_meas
     except Exception:
         # Calibration UI should not crash the process if camera momentarily fails.
         return None
@@ -90,33 +90,33 @@ def _curses_calibration_loop(
     x_cmd = float(workspace.x_ref)
     y_cmd = float(workspace.y_ref)
 
-    actuator.send(TableCommand(x_des=x_cmd, y_des=y_cmd))
+    actuator.send(ControlInput(px_cmd=x_cmd, py_cmd=y_cmd))
 
     stdscr.clear()
     curses.curs_set(0)
     stdscr.keypad(True)
     stdscr.timeout(50)  # ms
 
-    last_pose: PoseMeasurement | None = None
-    last_pose_t = 0.0
+    last_y_meas: Measurement | None = None
+    last_y_meas_t = 0.0
     last_send_t = time.time()
     last_action = "Centered at origin and sent initial command."
     last_delta = (0.0, 0.0)
 
     def send_command() -> None:
         nonlocal last_send_t
-        actuator.send(TableCommand(x_des=x_cmd, y_des=y_cmd))
+        actuator.send(ControlInput(px_cmd=x_cmd, py_cmd=y_cmd))
         last_send_t = time.time()
 
     while True:
         now = time.time()
 
-        # Read pose at a modest rate; avoids burning CPU in the calibration loop.
-        if now - last_pose_t > 0.08:
-            pose = _read_pose_from_vision(vision)
-            if pose is not None:
-                last_pose = pose
-            last_pose_t = now
+        # Read y_meas at a modest rate; avoids burning CPU in the calibration loop.
+        if now - last_y_meas_t > 0.08:
+            y_meas = _read_y_meas_from_vision(vision)
+            if y_meas is not None:
+                last_y_meas = y_meas
+            last_y_meas_t = now
 
         key = stdscr.getch()
         if key != -1:
@@ -167,22 +167,22 @@ def _curses_calibration_loop(
         _draw_line(stdscr, 4, f"Command (x_cmd, y_cmd) = ({x_cmd:+.4f}, {y_cmd:+.4f}) m")
         _draw_line(stdscr, 5, f"Current offset (x_offset, y_offset) = ({x_offset_now:+.4f}, {y_offset_now:+.4f}) m")
 
-        if last_pose is None:
-            _draw_line(stdscr, 7, "Measured pose: waiting for vision...")
+        if last_y_meas is None:
+            _draw_line(stdscr, 7, "Measured y_meas: waiting for vision...")
         else:
-            err_x = last_pose.X - workspace.x_ref
-            err_y = last_pose.Y - workspace.y_ref
+            err_x = last_y_meas.px - workspace.x_ref
+            err_y = last_y_meas.py - workspace.y_ref
             _draw_line(
                 stdscr,
                 7,
                 (
-                    "Measured pose: "
-                    f"({last_pose.X:+.4f}, {last_pose.Y:+.4f}) m | "
+                    "Measured y_meas: "
+                    f"({last_y_meas.px:+.4f}, {last_y_meas.py:+.4f}) m | "
                     f"error vs origin ({err_x:+.4f}, {err_y:+.4f}) m"
                 ),
             )
 
-        _draw_line(stdscr, 9, "Use the measured pose/error (or your visual cue) to align the origin.")
+        _draw_line(stdscr, 9, "Use the measured y_meas/error (or your visual cue) to align the origin.")
 
         # Small footer to show we are still alive.
         _draw_line(stdscr, 11, f"Last command sent {now - last_send_t:+.2f}s ago")
@@ -205,10 +205,10 @@ def calibrate_servo_workspace_offset(
     Run a blocking terminal calibration to compute (x_offset, y_offset).
 
     Pass system=None when no perception stack is available (e.g. workspace picker);
-    measured pose lines in the UI stay idle. With a real system, vision readouts are best-effort.
+    measured y_meas lines in the UI stay idle. With a real system, vision readouts are best-effort.
     """
     if not hasattr(actuator, "send"):
-        raise TypeError("actuator must provide a send(TableCommand) method")
+        raise TypeError("actuator must provide a send(ControlInput) method")
 
     try:
         x_offset, y_offset = curses.wrapper(

@@ -1,4 +1,4 @@
-from src.shared import SimulationResult, TableCommand, TerminalInfo, clamp_table_command_to_workspace, SystemState
+from src.shared import SimulationResult, ControlInput, TerminalInfo, clamp_control_input_to_workspace, SystemState
 from visualization.realtime_visualizer import VizResult
 import cv2
 from numpy import array
@@ -73,14 +73,14 @@ class ExperimentRunner:
 
     def _compute_command(self, state_est):
         u_raw = self.controller.compute(state_est)
-        command = clamp_table_command_to_workspace(u_raw, self.workspace)
+        command = clamp_control_input_to_workspace(u_raw, self.workspace)
         if hasattr(self.controller, "set_applied_command"):
             self.controller.set_applied_command(command)
         return command
 
-    def _workspace_center_command(self) -> TableCommand:
+    def _workspace_center_command(self) -> ControlInput:
         ws = self.workspace
-        return clamp_table_command_to_workspace(TableCommand(ws.x_ref, ws.y_ref), ws)
+        return clamp_control_input_to_workspace(ControlInput(ws.x_ref, ws.y_ref), ws)
 
     def _calculate_state_est_error(self, est, true):
         
