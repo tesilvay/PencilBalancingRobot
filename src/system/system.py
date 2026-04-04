@@ -1,16 +1,12 @@
 from dataclasses import dataclass, field
-from src.shared import(
-    TimingParams,
-    default_timing
-)
+from src.shared import NullParams
 
 
 @dataclass
 class SystemParams:
-    timing:      TimingParams = field(default_factory=default_timing)
     plant:       object
-    controllers: dict
-    estimators:  dict
+    controllers: list
+    estimators:  list
     sensor:      object
     actuator:    object
     supervisor:  object
@@ -19,16 +15,16 @@ class SystemParams:
 SYSTEM_PRESETS = {
     "dynamic_sim": {
         "plant":       "sim:default",
-        "controllers": {"follower": "pole:default", "smooth": "smooth_pole:default"},
-        "estimators":  {"lpf": "lpf:default", "kalman": "kalman:default"},
+        "controllers": ["follower:default","smooth_pole:default"],
+        "estimators":  ["lpf:default", "kalman:default"],
         "sensor":      "sim_dvs:hough",
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
     },
     "simple_sim": {
         "base": "dynamic_sim",
-        "controllers": {"smooth": "smooth_pole:default"},
-        "estimators":  {"kalman": "kalman:default"},
+        "controllers": ["smooth_pole:default"],
+        "estimators":  ["kalman:default"],
         "supervisor":  "static:default",
     },
     "real": {
@@ -42,7 +38,6 @@ SYSTEM_PRESETS = {
 class System:
     def __init__(self, params: SystemParams):
         self.plant       = params.plant
-        self.dt          = params.timing.dt
         self.controllers = params.controllers   # dict[str, Controller]
         self.estimators  = params.estimators    # dict[str, Estimator]
         self.sensor      = params.sensor
@@ -77,7 +72,7 @@ class System:
         # 3. system owns the swap — including warm-start on estimator switch
         new_estimator = self.estimators[est_key]
         if new_estimator is not self.active_estimator:
-            new_estimator.initialize_from(self.active_estimator)
+            new_estimator.reset(x_hat)
 
         self.active_controller = self.controllers[ctrl_key]
         self.active_estimator  = new_estimator

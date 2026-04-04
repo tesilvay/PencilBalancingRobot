@@ -50,15 +50,21 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
             ay=y_filt[3], wy=vel[3],
         )
 
-        self.prev_y = y
+        self.prev_y = y_meas
         self.prev_y_filt = y_filt  # fixed
         self.prev_vel = vel
         self.prev_x_hat = x_hat
         innovation = super().calc_innovation(y_meas, x_hat)
         return x_hat, innovation
 
-    def reset(self):
-        self.prev_x_hat = None
-        self.prev_y = None
-        self.prev_y_filt = None  # fixed
-        self.prev_vel = np.zeros(4)
+    def reset(self, x_hat: State | None = None):
+        if x_hat is None:
+            self.prev_x_hat = None
+            self.prev_y = None
+            self.prev_y_filt = None
+            self.prev_vel = np.zeros(4)
+        else:
+            self.prev_x_hat = x_hat
+            self.prev_y = None  # no measurement to recover
+            self.prev_y_filt = np.array([x_hat.px, x_hat.ax, x_hat.py, x_hat.ay])
+            self.prev_vel = np.array([x_hat.vx, x_hat.wx, x_hat.vy, x_hat.wy])

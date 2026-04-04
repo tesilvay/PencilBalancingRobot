@@ -14,9 +14,9 @@ STOP_CONDITION_REGISTRY.update({
     "stabilized": Spec(StabilizedCondition, StabilizedParams,        STABILIZED_CONDITION_PRESETS),
     "max_steps":  Spec(MaxStepsCondition,   MaxStepsConditionParams, MAX_STEPS_CONDITION_PRESETS),
     "any":        Spec(
-        AnyStopCondition,
-        AnyStopConditionParams,
-        ANY_STOP_CONDITION_PRESETS,
+        cls=AnyStopCondition,
+        Params=AnyStopConditionParams,
+        Presets=ANY_STOP_CONDITION_PRESETS,
         registries={"conditions": STOP_CONDITION_REGISTRY},
     ),
     "infinite":   Spec(InfiniteCondition, NullParams, NULL_PRESETS),

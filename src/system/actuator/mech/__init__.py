@@ -4,6 +4,9 @@ from src.shared import Spec
 from src.system.actuator.mech.transform import FiveBarTransform
 from src.system.actuator.mech.mechanism import FiveBarMechanism
 
+# WARNING
+# ALL VALUES ARE IN MM FOR THIS CLASS
+
 @dataclass
 class MechanismParams:
     O:  np.ndarray   # origin point
@@ -13,10 +16,10 @@ class MechanismParams:
 
 MECHANISM_PRESETS = {
     "default": {
-        "O":  np.array([0.0, 0.0]),
-        "B":  np.array([0.05, 0.0]),
-        "la": 0.09,
-        "lb": 0.09,
+        "O":  np.array([128.77, 178.13]),
+        "B":  np.array([101.77, 210.13]),
+        "la": 175,
+        "lb": 175,
     }
 }
 

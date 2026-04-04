@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 from src.shared import (
@@ -7,6 +7,7 @@ from src.shared import (
     CameraObservation,
     CameraPair,
     CameraParams,
+    default_camera_params,
 )
 
 from .base import VisionModelBase
@@ -15,19 +16,17 @@ from src.system.sensor.observation_model.camera_model import CameraModel
 
 @dataclass
 class SimDVSParams:
-    cam_params: CameraParams
+    cam_params = field(default_factory=default_camera_params)
     algo:       object
     obs_model:  object
 
 
 SIM_DVS_PRESETS = {
     "hough": {
-        "cam_params": "default:default",
         "algo":       "hough:default",
         "obs_model":  "none:default",
     },
     "sam": {
-        "cam_params": "default:default",
         "algo":       "sam:default",
         "obs_model":  "none:default",
     },

@@ -5,33 +5,29 @@ from .base import StopCondition
 
 @dataclass
 class AnyStopConditionParams:
-    conditions: dict
+    conditions: list
 
 
 ANY_STOP_CONDITION_PRESETS = {
     "max_steps": {
-        "conditions": {
-            "max_steps": "max_steps:default",
-        }
+        "conditions": ["max_steps:default"]
     },
     "early_stop": {
-        "conditions": {
-            "fall":       "fall:default",
-            "stabilized": "stabilized:default",
-            "max_steps":  "max_steps:default",
-        }
+        "conditions": [
+            "fall:default",
+            "stabilized:default",
+            "max_steps:default",
+        ]
     },
     "infinite": {
-        "conditions": {
-            "infinite": "infinite:default",
-        }
+        "conditions": ["infinite:default"]
     },
     "default": {
-        "conditions": {
-            "fall":       "fall:default",
-            "stabilized": "stabilized:default",
-            "max_steps":  "max_steps:default",
-        }
+        "conditions": [
+            "fall:default",
+            "stabilized:default",
+            "max_steps:default",
+        ]
     },
 }
 
@@ -39,7 +35,7 @@ ANY_STOP_CONDITION_PRESETS = {
 class AnyStopCondition(StopCondition):
     def __init__(self, params: AnyStopConditionParams):
         # conditions is a dict[str, StopCondition]; iterate over values
-        self.conditions = list(params.conditions.values())
+        self.conditions = params.conditions
 
     def reset(self):
         for c in self.conditions:

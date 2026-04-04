@@ -12,7 +12,6 @@ VISION_INTERFACE_REGISTRY = {
         SimAnalyticParams,
         SIM_ANALYTIC_PRESETS,
         sim_only=True,
-        registries={"cam_params": CAMERA_PRESETS_REGISTRY},
     ),
     "sim_dvs": Spec(
         SimEventCameraInterface,
@@ -20,7 +19,6 @@ VISION_INTERFACE_REGISTRY = {
         SIM_DVS_PRESETS,
         sim_only=True,
         registries={
-            "cam_params": CAMERA_PRESETS_REGISTRY,
             "algo":       LINE_ALGO_REGISTRY,
             "obs_model":  REG_MODEL_REGISTRY,
         },
@@ -31,7 +29,6 @@ VISION_INTERFACE_REGISTRY = {
         REAL_DVS_PRESETS,
         sim_only=False,
         registries={
-            "cam_params": CAMERA_PRESETS_REGISTRY,
             "algo":       LINE_ALGO_REGISTRY,
             "obs_model":  REG_MODEL_REGISTRY,
         },

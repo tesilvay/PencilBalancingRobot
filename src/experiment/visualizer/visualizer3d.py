@@ -7,13 +7,36 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FFMpegWriter
 import numpy as np
 
+from dataclasses import dataclass, field
+from typing import Any
+
+from src.shared import WorkspaceParams, default_workspace
+
+
+@dataclass
+class Visualizer3DParams:
+    L:            float = 0.15
+    fps:          int = 60
+    history:      np.ndarray | None = None
+    dt:           float | None = None
+    workspace:    WorkspaceParams = field(default_factory=default_workspace)
+    mech:         Any = None
+    mech_history: np.ndarray | None = None
+    cmd_history:  np.ndarray | None = None
+
+
+VISUALIZER_3D_PRESETS = {
+    "default": {
+        "L":   0.15,
+        "fps": 60,
+    }
+}
+
+
 
 class Visualizer3D:
 
-    def __init__(self, params):
-        from src.experiment.visualizer.visualizer_3d import Visualizer3DParams
-        if not isinstance(params, Visualizer3DParams):
-            raise TypeError(f"Expected Visualizer3DParams, got {type(params).__name__}")
+    def __init__(self, params: Visualizer3DParams):
 
         self.history = params.history
         self.dt = params.dt

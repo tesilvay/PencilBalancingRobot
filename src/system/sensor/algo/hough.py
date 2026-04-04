@@ -3,7 +3,7 @@ import math
 
 import numpy as np
 
-from src.shared import CameraObservation, CameraParams, CAMERA_PRESETS_REGISTRY
+from src.shared import CameraObservation, CameraParams, default_camera_params
 from .base import DVSLineAlgorithm
 
 try:
@@ -15,54 +15,41 @@ except ModuleNotFoundError:
             return fn
         return _decorator
 
-
-# ── Internal Hough state ──────────────────────────────────────────────────────
-
-@dataclass
-class HoughTrackerParams:
-    mixing_factor:    float = 0.02
-    inlier_stddev_px: float = 4.0
-    min_determinant:  float = 1e-6
-
-
 @dataclass
 class HoughQuadraticState:
+    """
+    Quadratic coefficients for the continuous Hough objective
+    J(m, b) = a*m^2 + cross_mb*m*b + c*b^2 + linear_m*m + linear_b*b.
+    """
     quadratic_m2: float = 0.0
-    cross_mb:     float = 0.0
+    cross_mb: float = 0.0
     quadratic_b2: float = 0.0
-    linear_m:     float = 0.0
-    linear_b:     float = 0.0
-
-
-# ── Registry Params ───────────────────────────────────────────────────────────
+    linear_m: float = 0.0
+    linear_b: float = 0.0
 
 @dataclass
 class HoughLineParams:
-    cam_params:       CameraParams
+    
+    cam_params = field(default_factory=default_camera_params)
+    # tracker params
     mixing_factor:    float
     inlier_stddev_px: float
     min_determinant:  float
     max_events:       int | None = None
-    quadratic_m2:     float = 0.0
-    cross_mb:         float = 0.0
-    quadratic_b2:     float = 0.0
-    linear_m:         float = 0.0
-    linear_b:         float = 0.0
+    
+    # quadratic state
+    state = HoughQuadraticState()
 
 
 HOUGH_PRESETS = {
     "default": {
-        "cam_params":       "default:default",
         "mixing_factor":    0.02,
         "inlier_stddev_px": 4.0,
         "min_determinant":  1e-6,
-        "quadratic_m2":     0.0,
-        "cross_mb":         0.0,
-        "quadratic_b2":     0.0,
-        "linear_m":         0.0,
-        "linear_b":         0.0,
     }
 }
+
+
 
 
 @njit(cache=True)
@@ -110,18 +97,17 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
         self.height = int(cam.DAVIS346_HEIGHT)
         self.cx = self.width  / 2
         self.cy = self.height / 2
-
-        self.params = HoughTrackerParams(
-            mixing_factor    = params.mixing_factor,
-            inlier_stddev_px = params.inlier_stddev_px,
-            min_determinant  = params.min_determinant,
-        )
+        
+        self.mixing_factor    = params.mixing_factor,
+        self.inlier_stddev_px = params.inlier_stddev_px,
+        self.min_determinant  = params.min_determinant,
+        
         self.max_events = params.max_events
 
         sigma = self.params.inlier_stddev_px
         self._inv_2sigma2 = 1.0 / (2.0 * sigma * sigma)
 
-        self.state = HoughQuadraticState()
+        self.state = params.state
         self.current_centered_line: CameraObservation | None = None
         self.reset()
 
@@ -191,3 +177,4 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
 
     def reset(self):
         self._seed_vertical_line()
+    

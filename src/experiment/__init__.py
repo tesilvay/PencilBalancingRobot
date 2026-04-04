@@ -5,11 +5,10 @@ from .visualizer      import VISUALIZER_REGISTRY
 from .progress        import PROGRESS_REGISTRY
 from .pacing          import PACING_REGISTRY
 from .scheduler       import SCHEDULER_REGISTRY
+from .experiment      import ExperimentParams, EXPERIMENT_PRESETS
 from src.shared       import Spec
 from src.system       import SYSTEM_REGISTRY
 
-from new_architecture.params import ExperimentParams
-from new_architecture.presets import EXPERIMENT_PRESETS
 
 EXPERIMENT_REGISTRY = {
     "default": Spec(

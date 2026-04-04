@@ -11,20 +11,20 @@ EXPERIMENT_PRESETS = {
         "system":         "default:simple_sim",
         "logger":         "default:default",
         "stop_condition": "any:default",
-        "visualizer":     {},
+        "visualizer":     ["3d:default"],
         "progress":       "default:default",
         "pacing":         "null:default",
         "scheduler":      "realtime:default",
     },
     "realtime_sim": {
         "base": "sim",
-        "visualizer": {"sim": "sim:default"},
+        "visualizer": ["sim:default"],
         "pacing":     "realtime:default",
     },
     "real": {
         "base": "sim",
         "system":     "default:real",
-        "visualizer": {"real": "real:default"},
+        "visualizer": ["real:default"],
         "pacing":     "realtime:default",
     },
 }
@@ -34,7 +34,7 @@ class ExperimentParams:
     system:         object
     logger:         object
     stop_condition: object
-    visualizer:     dict
+    visualizer:     list
     progress:       object
     pacing:         object
     scheduler:      object

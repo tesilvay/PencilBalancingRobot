@@ -1,20 +1,19 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
-from src.shared import CameraObservation, CameraParams
+from src.shared import CameraObservation, CameraParams, default_camera_params
 
 from .base import DVSLineAlgorithm
 
 
 @dataclass
 class SamLineParams:
-    cam_params:  CameraParams
+    cam_params = field(default_factory=default_camera_params)
     min_points:  int
 
 
 SAM_PRESETS = {
     "default": {
-        "cam_params": "default:default",
         "min_points": 50,
     }
 }

@@ -152,6 +152,11 @@ class Measurement:
     ax: float
     ay: float
     
+    def as_vector(self) -> np.ndarray:
+        return np.array([
+            self.px, self.ax, self.py, self.ay,
+        ])
+    
     def print_y_meas(self):
         print(
             f"y:   "
@@ -184,13 +189,11 @@ CAMERA_PRESETS = {
     },
 }
 
-def _build_camera_params(params: "CameraParams") -> "CameraParams":
-    """Identity builder so build_from_registry can construct CameraParams."""
-    return params
 
-CAMERA_PRESETS_REGISTRY = {
-    "default": Spec(_build_camera_params, CameraParams, CAMERA_PRESETS)
-}
+def default_camera_params() -> CameraParams:
+    return CameraParams(**CAMERA_PRESETS["default"])
+
+
 
 
 @dataclass
@@ -269,11 +272,8 @@ def build_from_registry(registry, spec_string):
         sub_registry = (spec.registries or {}).get(k)
         if isinstance(v, str) and ":" in v:
             resolved[k] = build_from_registry(sub_registry, v)
-        elif isinstance(v, dict) and sub_registry:
-            resolved[k] = {
-                name: build_from_registry(sub_registry, s)
-                for name, s in v.items()
-            }
+        elif isinstance(v, list) and sub_registry:
+            resolved[k] = [build_from_registry(sub_registry, s) for s in v]
         else:
             resolved[k] = v
 

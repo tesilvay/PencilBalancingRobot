@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import threading
 import time
 
@@ -17,10 +17,12 @@ from src.system.sensor.reader.dvs_camera_reader import (
 )
 from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
 
+from src.shared import default_camera_params
+
 
 @dataclass
 class RealDVSParams:
-    cam_params:               CameraParams
+    cam_params = field(default_factory=default_camera_params)
     algo:                     object
     obs_model:                object
     cam1_device:              str | None = None
@@ -30,7 +32,6 @@ class RealDVSParams:
 
 REAL_DVS_PRESETS = {
     "hough": {
-        "cam_params":               "default:default",
         "algo":                     "hough:default",
         "obs_model":                "simple:default",
         "noise_filter_duration_ms": None,
