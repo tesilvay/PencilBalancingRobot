@@ -1,7 +1,8 @@
 from .experiment      import Experiment
 from .logger          import LOGGER_REGISTRY
 from .stop_condition  import STOP_CONDITION_REGISTRY
-from .visualizer      import VISUALIZER_REGISTRY
+from .realtime_visualizer import REALTIME_VISUALIZER_REGISTRY
+from .offline_visualizer import OFFLINE_VISUALIZER_REGISTRY
 from .progress        import PROGRESS_REGISTRY
 from .pacing          import PACING_REGISTRY
 from .scheduler       import SCHEDULER_REGISTRY
@@ -16,13 +17,14 @@ EXPERIMENT_REGISTRY = {
         Params     = ExperimentParams,
         Presets    = EXPERIMENT_PRESETS,
         registries = {
-            "system":         SYSTEM_REGISTRY,
-            "logger":         LOGGER_REGISTRY,
-            "stop_condition": STOP_CONDITION_REGISTRY,
-            "visualizer":     VISUALIZER_REGISTRY,
-            "progress":       PROGRESS_REGISTRY,
-            "pacing":         PACING_REGISTRY,
-            "scheduler":      SCHEDULER_REGISTRY,
+            "system":              SYSTEM_REGISTRY,
+            "logger":              LOGGER_REGISTRY,
+            "stop_condition":      STOP_CONDITION_REGISTRY,
+            "realtime_visualizer": REALTIME_VISUALIZER_REGISTRY,
+            "offline_visualizer":  OFFLINE_VISUALIZER_REGISTRY,
+            "progress":            PROGRESS_REGISTRY,
+            "pacing":              PACING_REGISTRY,
+            "scheduler":           SCHEDULER_REGISTRY,
         }
     )
 }

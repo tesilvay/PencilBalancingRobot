@@ -94,6 +94,8 @@ class RealEventCameraInterface(VisionModelBase):
         self._thread1.start()
         self._thread2.start()
 
+        self.last_line_observation = None
+
     def _reader_loop(self, reader, algo, _cam_id: int):
         """Background loop: drain all queued batches, update algo, store latest."""
 
@@ -134,7 +136,8 @@ class RealEventCameraInterface(VisionModelBase):
 
     def get_y(self, state_true=None) -> Measurement:
         cams_raw = self.get_z()
-        
+        self.last_line_observation = cams_raw
+
         y_meas = self.cams_to_measurement(cams_px=cams_raw)
         
         return y_meas
@@ -165,6 +168,7 @@ class RealEventCameraInterface(VisionModelBase):
 
     def reset(self):
         """Reset both Hough algorithms."""
+        self.last_line_observation = None
         self.cam1_algo.reset()
         self.cam2_algo.reset()
         with self._lock:

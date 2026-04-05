@@ -7,7 +7,8 @@ from .system.supervisor         import SUPERVISOR_REGISTRY
 from .experiment                import EXPERIMENT_REGISTRY
 from .experiment.logger         import LOGGER_REGISTRY
 from .experiment.stop_condition import STOP_CONDITION_REGISTRY
-from .experiment.visualizer     import VISUALIZER_REGISTRY
+from .experiment.realtime_visualizer import REALTIME_VISUALIZER_REGISTRY
+from .experiment.offline_visualizer import OFFLINE_VISUALIZER_REGISTRY
 from .experiment.progress       import PROGRESS_REGISTRY
 from .experiment.pacing         import PACING_REGISTRY
 from .experiment.scheduler      import SCHEDULER_REGISTRY

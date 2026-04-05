@@ -12,6 +12,9 @@ from typing import Any
 
 from src.shared import WorkspaceParams, default_workspace
 
+from .base import OfflineVisualizerBase
+from src.experiment.logger.logger import SimulationResult
+
 
 @dataclass
 class Visualizer3DParams:
@@ -34,7 +37,7 @@ VISUALIZER_3D_PRESETS = {
 
 
 
-class Visualizer3D:
+class Visualizer3D(OfflineVisualizerBase):
 
     def __init__(self, params: Visualizer3DParams):
 
@@ -131,6 +134,21 @@ class Visualizer3D:
 
         plt.ion()
         plt.show()
+
+    def finalize(self, result: SimulationResult, *, dt: float) -> None:
+        """Load trajectories from a trial and play back interactively (no file write)."""
+        self.history = np.asarray(result.state_history, dtype=float)
+        self.dt = float(dt)
+        self.tip_history = []
+        if result.cmd_history is not None and len(result.cmd_history) > 0:
+            self.cmd_history = np.asarray(result.cmd_history, dtype=float)
+        else:
+            self.cmd_history = None
+        self.mech_history = result.mech_history
+        if self.history.size == 0:
+            return
+        self.total_sim_time = float(self.history.shape[0] * self.dt)
+        self.render_video(save_video=False)
 
     # -------------------------------------------------
     # Render a single frame

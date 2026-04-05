@@ -33,11 +33,12 @@ SYSTEM_PRESETS = {
         "supervisor":  "dynamic:default",
     },
     "simple_sim": {
-        "base": "dynamic_sim",
+        "plant":       "sim:default",
         "controllers": ["smooth_pole:default"],
         "estimators":  ["kalman:default"],
-        "supervisor":  "static:default",
         "sensor":      "sim_analytic:default",
+        "actuator":    "mock:default",
+        "supervisor":  "static:default",
     },
     "real": {
         "base": "dynamic_sim",
@@ -65,6 +66,7 @@ class System:
         self.step_data: StepData | None = None
         self.x = None
         self.u = None
+        self.last_y_meas = None
 
     def step(self, dt):
         
@@ -72,6 +74,7 @@ class System:
         
         # get measurements
         y = self.sensor.get_y(x_true)
+        self.last_y_meas = y
         
         # every estimator calculates innovation too
         x_hat, innovation = self.active_estimator.estimate(y_meas=y, dt=dt, u_cmd=self.u) 
@@ -98,8 +101,11 @@ class System:
     def reset(self):
         self.active_controller.reset()
         self.active_estimator.reset()
+        if hasattr(self.sensor, "reset"):
+            self.sensor.reset()
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
+        self.last_y_meas = None
         
         self.step_data = StepData(
             x=self.x,

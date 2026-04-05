@@ -22,7 +22,8 @@ from src.experiment.stop_condition import STOP_CONDITION_REGISTRY
 from src.experiment.progress import PROGRESS_REGISTRY
 from src.experiment.pacing import PACING_REGISTRY
 from src.experiment.scheduler import SCHEDULER_REGISTRY
-from src.experiment.visualizer import VISUALIZER_REGISTRY
+from src.experiment.realtime_visualizer import REALTIME_VISUALIZER_REGISTRY
+from src.experiment.offline_visualizer import OFFLINE_VISUALIZER_REGISTRY
 from src.system import SYSTEM_REGISTRY
 from src.experiment import EXPERIMENT_REGISTRY
 
@@ -62,17 +63,31 @@ def test_leaf_registry_build(registry, spec_string):
     assert obj is not None
 
 
-_VISUALIZER_CASES = list(
+_REALTIME_VIZ_CASES = list(
     _collect_cases(
-        VISUALIZER_REGISTRY,
-        "visualizer",
+        REALTIME_VISUALIZER_REGISTRY,
+        "realtime_visualizer",
+    )
+)
+
+
+@pytest.mark.parametrize("registry,spec_string", _REALTIME_VIZ_CASES)
+def test_realtime_visualizer_registry_build(registry, spec_string):
+    obj = build_from_registry(registry, spec_string)
+    assert obj is not None
+
+
+_OFFLINE_VIZ_CASES = list(
+    _collect_cases(
+        OFFLINE_VISUALIZER_REGISTRY,
+        "offline_visualizer",
         xfail_types=("3d",),
     )
 )
 
 
-@pytest.mark.parametrize("registry,spec_string", _VISUALIZER_CASES)
-def test_visualizer_registry_build(registry, spec_string):
+@pytest.mark.parametrize("registry,spec_string", _OFFLINE_VIZ_CASES)
+def test_offline_visualizer_registry_build(registry, spec_string):
     obj = build_from_registry(registry, spec_string)
     assert obj is not None
 

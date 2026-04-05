@@ -44,54 +44,60 @@ class BalancerPlant:
     # Public API
     # ------------------------------------------------------------------
 
-    def step(self, state_x: State, command_u: ControlInput, dt: float):
+    def step(self, state_x: State, u_cmd: ControlInput, dt: float):
 
-        x         = state_x.px
-        x_dot     = state_x.vx
-        alpha_x   = state_x.ax
-        alpha_x_dot = state_x.wx
+        px = state_x.px
+        vx = state_x.vx
+        ax = state_x.ax
+        wx = state_x.wx
 
-        y         = state_x.py
-        y_dot     = state_x.vy
-        alpha_y   = state_x.ay
-        alpha_y_dot = state_x.wy
+        py = state_x.py
+        vy = state_x.vy
+        ay = state_x.ay
+        wy = state_x.wy
 
-        command_u_limited = self.clamp_command(command_u)
-        px_cmd, py_cmd = command_u_limited.px_cmd, command_u_limited.py_cmd
+        # create command and limit to workspace
+        u_cmd_limited = self.clamp_command(u_cmd)
+        px_cmd, py_cmd = u_cmd_limited.px_cmd, u_cmd_limited.py_cmd
 
-        x_ddot = (1 / self.tau**2) * (px_cmd - x) - (2 * self.zeta / self.tau) * x_dot
-        y_ddot = (1 / self.tau**2) * (py_cmd - y) - (2 * self.zeta / self.tau) * y_dot
+        # find acceleration and clamp it to realistic values
+        vx_dot = (1 / self.tau**2) * (px_cmd - px) - (2 * self.zeta / self.tau) * vx
+        vy_dot = (1 / self.tau**2) * (py_cmd - py) - (2 * self.zeta / self.tau) * vy
+        vx_dot, vy_dot = self._clamp_acceleration(vx_dot, vy_dot)
+        
+        # find angular acceleration
+        wx_dot = (self.g / self.l) * ax - (1 / self.l) * vx_dot
+        wy_dot = (self.g / self.l) * ay - (1 / self.l) * vy_dot
 
-        x_ddot, y_ddot = self._clamp_acceleration(x_ddot, y_ddot)
+        # based on acc, get vel and pos too
+        vx += vx_dot * dt
+        px += vx  * dt
 
-        alpha_x_ddot = (self.g / self.l) * alpha_x - (1 / self.l) * x_ddot
-        alpha_y_ddot = (self.g / self.l) * alpha_y - (1 / self.l) * y_ddot
+        vy += vy_dot * dt
+        py += vy  * dt
 
-        x_dot += x_ddot * dt
-        x     += x_dot  * dt
+        # make sure we stay inside the workspace
+        px, vx, py, vy = self._apply_workspace_limits(px, vx, py, vy)
 
-        y_dot += y_ddot * dt
-        y     += y_dot  * dt
+        # based on angular acc, get w and ang too
+        wx += wx_dot * dt
+        ax  += wx  * dt
 
-        x, x_dot, y, y_dot = self._apply_workspace_limits(x, x_dot, y, y_dot)
+        wy += wy_dot * dt
+        ay  += wy  * dt
 
-        alpha_x_dot += alpha_x_ddot * dt
-        alpha_x     += alpha_x_dot  * dt
-
-        alpha_y_dot += alpha_y_ddot * dt
-        alpha_y     += alpha_y_dot  * dt
-
-        alpha_x = float(np.clip(alpha_x, -np.pi / 2, np.pi / 2))
-        alpha_y = float(np.clip(alpha_y, -np.pi / 2, np.pi / 2))
+        # make sure we limit angle to being flat on table
+        ax = float(np.clip(ax, -np.pi / 2, np.pi / 2))
+        ay = float(np.clip(ay, -np.pi / 2, np.pi / 2))
 
         return (
             State(
-                px=x, vx=x_dot,
-                ax=alpha_x, wx=alpha_x_dot,
-                py=y, vy=y_dot,
-                ay=alpha_y, wy=alpha_y_dot,
+                px=px, vx=vx,
+                ax=ax, wx=wx,
+                py=py, vy=vy,
+                ay=ay, wy=wy,
             ),
-            TableAccel(x_ddot=x_ddot, y_ddot=y_ddot),
+            TableAccel(x_ddot=vx_dot, y_ddot=vy_dot),
         )
 
     # ------------------------------------------------------------------
@@ -116,11 +122,11 @@ class BalancerPlant:
 
         return ControlInput(px_cmd, py_cmd)
 
-    def _clamp_acceleration(self, x_ddot, y_ddot):
+    def _clamp_acceleration(self, vx_dot, vy_dot):
         if self.max_acc is None:
-            return x_ddot, y_ddot
+            return vx_dot, vy_dot
 
-        acc_vec = np.array([x_ddot, y_ddot])
+        acc_vec = np.array([vx_dot, vy_dot])
         norm    = np.linalg.norm(acc_vec)
 
         if norm > self.max_acc and norm > 0:
@@ -128,13 +134,13 @@ class BalancerPlant:
 
         return acc_vec[0], acc_vec[1]
 
-    def _apply_workspace_limits(self, x, x_dot, y, y_dot):
+    def _apply_workspace_limits(self, x, vx, y, vy):
         dx   = x - self.x_ref
         dy   = y - self.y_ref
         dist = np.sqrt(dx * dx + dy * dy)
 
         if self.safe_radius is None or dist <= self.safe_radius:
-            return x, x_dot, y, y_dot
+            return x, vx, y, vy
 
         scale = self.safe_radius / dist
         dx   *= scale
@@ -143,7 +149,7 @@ class BalancerPlant:
         y     = self.y_ref + dy
 
         normal = np.array([dx, dy]) / self.safe_radius
-        vel    = np.array([x_dot, y_dot])
+        vel    = np.array([vx, vy])
         v_out  = np.dot(vel, normal)
 
         if v_out > 0:

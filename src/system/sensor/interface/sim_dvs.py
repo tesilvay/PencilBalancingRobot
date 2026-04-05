@@ -54,7 +54,8 @@ class SimEventCameraInterface(VisionModelBase):
         self._surface2 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
 
         self._decay_display = 0.5
-        
+        self.last_line_observation = None
+
         self._dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
         self._dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
         
@@ -266,13 +267,15 @@ class SimEventCameraInterface(VisionModelBase):
         
         # returns cams in pix
         cams = self.get_z(state_true)
-        
+        self.last_line_observation = cams
+
         y_meas = self.cams_to_measurement(cams_px=cams)
         
         return y_meas
 
   
     def reset(self):
+        self.last_line_observation = None
         self.cam1_algo.reset()
         self.cam2_algo.reset()
         self._surface1.fill(0.0)

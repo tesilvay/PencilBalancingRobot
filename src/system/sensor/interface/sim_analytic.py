@@ -42,6 +42,7 @@ class SimVisionModel(VisionModelBase):
         self.noise_std   = params.noise_std
         self.delay_steps = params.delay_steps
         self.buffer = deque(maxlen=params.delay_steps + 1)
+        self.last_line_observation = None
 
     # -------------------------------------------------
     # Project true 3D state into both camera views
@@ -57,6 +58,7 @@ class SimVisionModel(VisionModelBase):
         cams = self._add_delay(cams_noisy)
         
         # turns camnorm cams into a y_meas with the analytic equations
+        self.last_line_observation = cams
         y_meas = self.cams_to_measurement(cams_camnorm=cams)
         
         return y_meas
@@ -114,4 +116,5 @@ class SimVisionModel(VisionModelBase):
     
 
     def reset(self):
+        self.last_line_observation = None
         self.buffer.clear()

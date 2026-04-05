@@ -41,7 +41,16 @@ def parse_args() -> argparse.Namespace:
     overrides.add_argument("--system",         metavar="TYPE:PRESET", help="override system")
     overrides.add_argument("--logger",         metavar="TYPE:PRESET", help="override logger")
     overrides.add_argument("--stop-condition", metavar="TYPE:PRESET", help="override stop condition")
-    overrides.add_argument("--visualizer",     metavar="TYPE:PRESET", help="override realtime visualizer")
+    overrides.add_argument(
+        "--realtime-visualizer",
+        metavar="TYPE:PRESET",
+        help="override realtime visualizer (e.g. sim:default, null:default)",
+    )
+    overrides.add_argument(
+        "--offline-visualizer",
+        metavar="TYPE:PRESET",
+        help="override offline visualizer (e.g. 3d:default, null:default)",
+    )
     overrides.add_argument("--progress",       metavar="TYPE:PRESET", help="override progress reporter")
 
     parser.add_argument(
@@ -63,12 +72,9 @@ def collect_overrides(args: argparse.Namespace) -> dict:
         "system":         args.system,
         "logger":         args.logger,
         "stop_condition": args.stop_condition,   # argparse maps --stop-condition → stop_condition
-        "progress":       args.progress,
-        # visualizer is a dict field — a single --visualizer flag sets the
-        # realtime key; extend here if you add more visualizer slots.
-        "visualizer": (
-            {"realtime": args.visualizer} if args.visualizer else None
-        ),
+        "progress":            args.progress,
+        "realtime_visualizer": args.realtime_visualizer,
+        "offline_visualizer":  args.offline_visualizer,
     }
     return {k: v for k, v in mapping.items() if v is not None}
 

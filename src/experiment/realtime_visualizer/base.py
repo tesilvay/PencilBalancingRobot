@@ -142,7 +142,13 @@ class WorkspacePanelRenderer:
 
 
 class RealtimeVisualizerBase:
+    """OpenCV realtime view. :meth:`render` is the experiment loop hook."""
+
     _window_name = "Pencil Balancer"
+
+    def render(self, measurement=None, command=None, **kwargs) -> VizResult:
+        """Draw one frame. Typical kwargs: ``pose`` / ``y_meas``, ``paused``, ``surfaces``, ``title``."""
+        raise NotImplementedError
 
     @staticmethod
     def _to_finite_scalar(x) -> float | None:
