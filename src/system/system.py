@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
+
 import numpy as np
+
 from src.shared import (
     NullParams,
     State,
@@ -8,6 +10,9 @@ from src.shared import (
     ControlInput,
     StepData,
     TableAccel,
+    WorkspaceParams,
+    clamp_control_input_to_workspace,
+    default_workspace,
 )
 
 @dataclass
@@ -21,13 +26,14 @@ class SystemParams:
     actuator:    object
     supervisor:  object
     init_spread: InitConditionsSpread = field(default_factory=default_spread)
+    workspace:   WorkspaceParams     = field(default_factory=default_workspace)
 
 
 SYSTEM_PRESETS = {
     "simple_sim": {
         "plant":       "sim:default",
         "controllers": ["smooth_pole:default"],
-        "estimators":  ["kalman:default"],
+        "estimators":  ["lpf:default"],
         "sensor":      "sim_analytic:default",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
@@ -48,6 +54,13 @@ SYSTEM_PRESETS = {
 }
 
 
+def _workspace_from_plant(plant, fallback: WorkspaceParams) -> WorkspaceParams:
+    """Use plant geometry when available so command clamp matches sim workspace limits."""
+    if all(hasattr(plant, a) for a in ("x_ref", "y_ref", "safe_radius")):
+        return WorkspaceParams(plant.x_ref, plant.y_ref, plant.safe_radius)
+    return fallback
+
+
 class System:
     def __init__(self, params: SystemParams):
         self.plant       = params.plant
@@ -57,6 +70,7 @@ class System:
         self.actuator    = params.actuator
         self.supervisor  = params.supervisor
         self.init_spread = params.init_spread
+        self.workspace   = _workspace_from_plant(params.plant, params.workspace)
 
         if not self.controllers or not self.estimators:
             raise ValueError("System requires non-empty controllers and estimators lists.")
@@ -68,6 +82,11 @@ class System:
         self.u = None
         self.last_y_meas = None
 
+    def finalize_command(self, u_raw: ControlInput) -> ControlInput:
+        u_applied = clamp_control_input_to_workspace(u_raw, self.workspace)
+        self.active_controller.set_applied_command(u_applied)
+        return u_applied
+
     def step(self, dt):
         
         x_true, acc = self.plant.step(self.x, self.u, dt)
@@ -78,9 +97,10 @@ class System:
         
         # every estimator calculates innovation too
         x_hat, innovation = self.active_estimator.estimate(y_meas=y, dt=dt, u_cmd=self.u) 
-        u_cmd = self.active_controller.compute(x_hat)
-        
-        self.actuator.apply(u_cmd)
+        u_raw = self.active_controller.compute(x_hat)
+        u_cmd = self.finalize_command(u_raw)
+
+        mech_joints = self.actuator.apply(u_cmd)
 
         # 2. supervisor decides what should be active next step
         ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)
@@ -95,8 +115,14 @@ class System:
         
         self.x = x_true
         self.u = u_cmd
-        
-        self.step_data = StepData(x=x_true, u=u_cmd, acc=acc, innovation=innovation)
+
+        self.step_data = StepData(
+            x=x_true,
+            u=u_cmd,
+            acc=acc,
+            innovation=innovation,
+            mech_joints=mech_joints,
+        )
     
     def reset(self):
         self.active_controller.reset()
@@ -106,12 +132,14 @@ class System:
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
         self.last_y_meas = None
-        
+
+        mj0 = self.actuator.mech_joint_snapshot(self.u)
         self.step_data = StepData(
             x=self.x,
             u=self.u,
             acc=TableAccel(x_ddot=0.0, y_ddot=0.0),
             innovation=np.zeros(4),
+            mech_joints=mj0,
         )
     
     

@@ -56,9 +56,7 @@ class BalancerPlant:
         ay = state_x.ay
         wy = state_x.wy
 
-        # create command and limit to workspace
-        u_cmd_limited = self.clamp_command(u_cmd)
-        px_cmd, py_cmd = u_cmd_limited.px_cmd, u_cmd_limited.py_cmd
+        px_cmd, py_cmd = u_cmd.px_cmd, u_cmd.py_cmd
 
         # find acceleration and clamp it to realistic values
         vx_dot = (1 / self.tau**2) * (px_cmd - px) - (2 * self.zeta / self.tau) * vx
@@ -103,24 +101,6 @@ class BalancerPlant:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-
-    def clamp_command(self, command_u):
-        px_cmd, py_cmd = command_u.px_cmd, command_u.py_cmd
-        safe_radius  = self.safe_radius
-
-        if safe_radius is None:
-            return ControlInput(px_cmd, py_cmd)
-
-        dx   = px_cmd - self.x_ref
-        dy   = py_cmd - self.y_ref
-        dist = float(np.sqrt(dx * dx + dy * dy))
-
-        if dist > safe_radius and dist > 0:
-            scale = safe_radius / dist
-            px_cmd = self.x_ref + dx * scale
-            py_cmd = self.y_ref + dy * scale
-
-        return ControlInput(px_cmd, py_cmd)
 
     def _clamp_acceleration(self, vx_dot, vy_dot):
         if self.max_acc is None:

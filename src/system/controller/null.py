@@ -1,7 +1,9 @@
 from src.shared import NullParams, ControlInput
 
+from .base import BaseController
 
-class NullController:
+
+class NullController(BaseController):
     def __init__(self, params: NullParams):
         pass
 

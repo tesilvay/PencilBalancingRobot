@@ -65,7 +65,9 @@ REAL_DVS_WORKSPACE_VISUALIZER_PRESETS = {
 
 VISUALIZER_3D_PRESETS = {
     "default": {
-        "L":   0.15,
-        "fps": 60,
+        "L":         0.15,
+        "fps":       24,
+        "add_trail": True,
+        "mech":      "five_bar:default",
     }
 }

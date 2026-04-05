@@ -214,7 +214,10 @@ class StepData:
     # Measurement-space residual [px, ax, py, ay]; estimators return ndarray (1d or column).
     # None when unavailable (e.g. some hardware paths).
     innovation: np.ndarray | None = None
-    
+    # Five-bar joint points in mechanism global frame, mm: rows A, C, P; cols x, y.
+    # NaN when the actuator has no mechanism or IK/workspace fails.
+    mech_joints: np.ndarray | None = None
+
 
 # ── Camera / vision types ─────────────────────────────────────────────────────
 

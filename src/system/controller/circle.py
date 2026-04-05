@@ -14,6 +14,8 @@ from src.shared import (
     make_reference_state,
 )
 
+from .base import BaseController
+
 
 @dataclass
 class CircleParams:
@@ -32,7 +34,7 @@ CIRCLE_PRESETS = {
 }
 
 
-class CircleController:
+class CircleController(BaseController):
 
     def __init__(self, params: CircleParams):
         x_ref = make_reference_state(params.workspace)

@@ -1,6 +1,9 @@
 from __future__ import annotations
 from dataclasses import dataclass
 import serial, time
+
+import numpy as np
+
 from .base import Actuator
 
 @dataclass
@@ -29,13 +32,23 @@ class ServoActuator(Actuator):
         time.sleep(2)
         self._send_raw("MODE,EXP")
 
-    def apply(self, command) -> None:
+    def mech_joint_snapshot(self, command) -> np.ndarray:
+        try:
+            joints, _ = self.mechanism.command_geometry(command)
+            return joints
+        except (ValueError, TypeError):
+            return np.full((3, 2), np.nan, dtype=float)
+
+    def apply(self, command) -> np.ndarray:
+        try:
+            joints, angles_deg = self.mechanism.command_geometry(command)
+        except (ValueError, TypeError):
+            return np.full((3, 2), np.nan, dtype=float)
         now = time.time()
-        if now - self.last_send < self.period:
-            return
-        theta1, theta2 = self.mechanism.command_to_angles(command)
-        self._send_raw(f"CMD,{theta1:.2f},{theta2:.2f}")
-        self.last_send = now
+        if now - self.last_send >= self.period:
+            self._send_raw(f"CMD,{angles_deg[0]:.2f},{angles_deg[1]:.2f}")
+            self.last_send = now
+        return joints
 
     def reset(self) -> None:
         self.last_send = 0.0

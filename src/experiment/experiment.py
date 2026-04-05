@@ -94,7 +94,7 @@ class Experiment:
 
     def reset(self):
         self.system.reset()
-        self.logger.reset(self.system.x, self.system.u)
+        self.logger.reset(self.system.step_data)
         self.stop_condition.reset()
         self.scheduler.reset()
 

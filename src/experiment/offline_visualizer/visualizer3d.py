@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime
 from contextlib import nullcontext
 import matplotlib.pyplot as plt
@@ -18,8 +19,9 @@ from src.experiment.logger.logger import SimulationResult
 
 @dataclass
 class Visualizer3DParams:
-    L:            float = 0.15
-    fps:          int = 60
+    L:            float
+    fps:          int
+    add_trail:    bool = True
     history:      np.ndarray | None = None
     dt:           float | None = None
     workspace:    WorkspaceParams = field(default_factory=default_workspace)
@@ -30,8 +32,10 @@ class Visualizer3DParams:
 
 VISUALIZER_3D_PRESETS = {
     "default": {
-        "L":   0.15,
-        "fps": 60,
+        "L":         0.15,
+        "fps":       24,
+        "add_trail": True,
+        "mech":      "five_bar:default",
     }
 }
 
@@ -55,6 +59,7 @@ class Visualizer3D(OfflineVisualizerBase):
         self.mech = params.mech
         self.mech_history = params.mech_history
         self.cmd_history = params.cmd_history
+        self.add_trail = params.add_trail
 
         w = params.workspace
         self.x_ref = w.x_ref
@@ -93,11 +98,12 @@ class Visualizer3D(OfflineVisualizerBase):
             linewidth=1,
             color='gray'
         )
+        self.trail_plot.set_visible(params.add_trail)
 
         # --- Safe workspace circle ---
         if self.safe_radius is not None:
 
-            theta = np.linspace(0, 2*np.pi, 200)
+            theta = np.linspace(0, 2*np.pi, 20)
 
             circle_x = self.x_ref + self.safe_radius * np.cos(theta)
             circle_y = self.y_ref + self.safe_radius * np.sin(theta)
@@ -134,6 +140,11 @@ class Visualizer3D(OfflineVisualizerBase):
 
         plt.ion()
         plt.show()
+
+    def _clear_mech_links(self) -> None:
+        for link in (self.link_OA, self.link_AP, self.link_BC, self.link_CP):
+            link.set_data([], [])
+            link.set_3d_properties([])
 
     def finalize(self, result: SimulationResult, *, dt: float) -> None:
         """Load trajectories from a trial and play back interactively (no file write)."""
@@ -194,51 +205,37 @@ class Visualizer3D(OfflineVisualizerBase):
             [base[2], tip[2]]
         )
 
-        # --- Update Trail ---
-        self.tip_history.append(tip)
+        # --- Trail (optional; skip work when disabled) ---
+        if self.add_trail:
+            self.tip_history.append(tip)
+            if len(self.tip_history) > self.trail_length:
+                self.tip_history.pop(0)
+            trail_array = np.array(self.tip_history)
+            self.trail_plot.set_data(
+                trail_array[:, 0],
+                trail_array[:, 1],
+            )
+            self.trail_plot.set_3d_properties(trail_array[:, 2])
+        else:
+            self.tip_history.clear()
+            self.trail_plot.set_data([], [])
+            self.trail_plot.set_3d_properties([])
 
-        if len(self.tip_history) > self.trail_length:
-            self.tip_history.pop(0)
-
-        trail_array = np.array(self.tip_history)
-
-        self.trail_plot.set_data(
-            trail_array[:, 0],
-            trail_array[:, 1]
-        )
-        self.trail_plot.set_3d_properties(
-            trail_array[:, 2]
-        )
-        
-        # --- Mechanism ---
-        if self.mech is not None:
-
+        # --- Mechanism (joints precomputed during sim; no per-frame solve) ---
+        if self.mech is not None and self.mech_history is not None:
             scale = 1.0 / 1000.0
             O = np.array(self.mech.tf.O_g) * scale
             B = np.array(self.mech.tf.B_g) * scale
-
-            if self.mech_history is not None:
-                sim_index = int(round(sim_time / self.dt))
-                if 0 <= sim_index < len(self.mech_history):
-                    A_mm = self.mech_history[sim_index, 0, :]
-                    C_mm = self.mech_history[sim_index, 1, :]
-                    P_mm = self.mech_history[sim_index, 2, :]
-                    if not (np.any(np.isnan(A_mm)) or np.any(np.isnan(C_mm)) or np.any(np.isnan(P_mm))):
-                        A = A_mm * scale
-                        C = C_mm * scale
-                        P = P_mm * scale
-                        self.link_OA.set_data([O[0], A[0]], [O[1], A[1]])
-                        self.link_OA.set_3d_properties([0, 0])
-                        self.link_AP.set_data([A[0], P[0]], [A[1], P[1]])
-                        self.link_AP.set_3d_properties([0, 0])
-                        self.link_BC.set_data([B[0], C[0]], [B[1], C[1]])
-                        self.link_BC.set_3d_properties([0, 0])
-                        self.link_CP.set_data([C[0], P[0]], [C[1], P[1]])
-                        self.link_CP.set_3d_properties([0, 0])
-            else:
-                try:
-                    target_mm = np.array([x, y]) * 1000.0
-                    _, _, A_mm, C_mm, P_mm = self.mech.solve(target_mm)
+            sim_index_m = int(round(sim_time / self.dt))
+            if 0 <= sim_index_m < len(self.mech_history):
+                A_mm = self.mech_history[sim_index_m, 0, :]
+                C_mm = self.mech_history[sim_index_m, 1, :]
+                P_mm = self.mech_history[sim_index_m, 2, :]
+                if not (
+                    np.any(np.isnan(A_mm))
+                    or np.any(np.isnan(C_mm))
+                    or np.any(np.isnan(P_mm))
+                ):
                     A = A_mm * scale
                     C = C_mm * scale
                     P = P_mm * scale
@@ -250,8 +247,12 @@ class Visualizer3D(OfflineVisualizerBase):
                     self.link_BC.set_3d_properties([0, 0])
                     self.link_CP.set_data([C[0], P[0]], [C[1], P[1]])
                     self.link_CP.set_3d_properties([0, 0])
-                except Exception:
-                    pass
+                else:
+                    self._clear_mech_links()
+            else:
+                self._clear_mech_links()
+        elif self.mech is not None:
+            self._clear_mech_links()
 
         # --- Text (table command from history if available; cmd_x, cmd_y already set above) ---
         if self.cmd_history is None or not (0 <= sim_index < len(self.cmd_history)):
@@ -268,7 +269,7 @@ class Visualizer3D(OfflineVisualizerBase):
 
         if interactive:
             self.fig.canvas.draw_idle()
-            plt.pause(0.001)
+            self.fig.canvas.flush_events()
         else:
             self.fig.canvas.draw()
 
@@ -284,7 +285,8 @@ class Visualizer3D(OfflineVisualizerBase):
 
         save_video:
             True  → saves MP4 file
-            False → just plays animation live
+            False → plays live, pacing each frame to wall time (1/fps)/video_speed;
+                    if rendering is slower, no extra sleep (smooth but may lag real time).
         """
 
         if save_video:
@@ -328,10 +330,17 @@ class Visualizer3D(OfflineVisualizerBase):
 
                 state = self.history[sim_index]
 
-                self.render_frame(state, sim_time, interactive=not save_video)
-
                 if save_video:
+                    self.render_frame(state, sim_time, interactive=False)
                     writer.grab_frame()
+                else:
+                    wall_period = self.frame_period / video_speed
+                    t0 = time.perf_counter()
+                    self.render_frame(state, sim_time, interactive=True)
+                    elapsed = time.perf_counter() - t0
+                    sleep_for = wall_period - elapsed
+                    if sleep_for > 0:
+                        time.sleep(sleep_for)
 
                 frame_number += 1
 

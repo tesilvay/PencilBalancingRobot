@@ -30,6 +30,13 @@ def _acc_to_row(acc: TableAccel | np.ndarray) -> np.ndarray:
     return a
 
 
+def _mech_to_row(mech_joints: np.ndarray | None) -> np.ndarray:
+    if mech_joints is None:
+        return np.full((3, 2), np.nan, dtype=float)
+    a = np.asarray(mech_joints, dtype=float).reshape(3, 2)
+    return a
+
+
 def _innovation_to_row(innovation: np.ndarray | None) -> np.ndarray:
     if innovation is None:
         return np.full(4, np.nan, dtype=float)
@@ -45,11 +52,14 @@ class Logger:
         self._commands = None
         self._acc = None
         self._innovation = None
+        self._mech = None
 
-    def reset(self, initial_state, initial_command):
-        # store as python lists (works for both finite + infinite)
-        self._states = [initial_state.as_vector()]
-        self._commands = [[initial_command.px_cmd, initial_command.py_cmd]]
+    def reset(self, initial_step_data: StepData):
+        self._states = [initial_step_data.x.as_vector()]
+        self._commands = [
+            [initial_step_data.u.px_cmd, initial_step_data.u.py_cmd]
+        ]
+        self._mech = [_mech_to_row(initial_step_data.mech_joints)]
         self._acc = []
         self._innovation = []
 
@@ -58,11 +68,13 @@ class Logger:
         self._commands.append([step_data.u.px_cmd, step_data.u.py_cmd])
         self._acc.append(_acc_to_row(step_data.acc))
         self._innovation.append(_innovation_to_row(step_data.innovation))
+        self._mech.append(_mech_to_row(step_data.mech_joints))
 
     def get_result(self) -> SimulationResult:
         # Convert once at the end
         state_history = np.array(self._states)
         cmd_history = np.array(self._commands)
+        mech_history = np.array(self._mech)
 
         if self._acc:
             acc_history = np.array(self._acc)
@@ -77,6 +89,7 @@ class Logger:
         return SimulationResult(
             state_history=state_history,
             acc_history=acc_history,
+            mech_history=mech_history,
             cmd_history=cmd_history,
             innovation_history=innovation_history,
         )
