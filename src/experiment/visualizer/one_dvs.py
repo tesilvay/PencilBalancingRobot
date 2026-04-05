@@ -6,7 +6,7 @@ import numpy as np
 from src.shared import CameraObservation, Measurement, ControlInput
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
-from visualization.composite_layout import build_one_dvs_composite
+from .multi_panel_layout import build_one_dvs_composite
 
 from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_closed
 

@@ -5,14 +5,14 @@ from .base import Supervisor
 
 @dataclass
 class StaticSupervisorParams:
-    controller_key: str
-    estimator_key:  str
+    controller_index: int
+    estimator_index: int
 
 
 STATIC_SUPERVISOR_PRESETS = {
     "default": {
-        "controller_key": "smooth_pole",
-        "estimator_key":  "kalman",
+        "controller_index": 0,
+        "estimator_index":  0,
     }
 }
 
@@ -21,5 +21,5 @@ class StaticSupervisor(Supervisor):
     def __init__(self, params: StaticSupervisorParams):
         self.params = params
 
-    def update(self, x_est, innovation, dt) -> tuple[str, str]:
-        return self.params.controller_key, self.params.estimator_key
+    def update(self, x_est, innovation, dt) -> tuple[int, int]:
+        return self.params.controller_index, self.params.estimator_index

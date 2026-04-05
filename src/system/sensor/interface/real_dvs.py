@@ -22,9 +22,9 @@ from src.shared import default_camera_params
 
 @dataclass
 class RealDVSParams:
-    cam_params = field(default_factory=default_camera_params)
     algo:                     object
     obs_model:                object
+    cam_params:               CameraParams = field(default_factory=default_camera_params)
     cam1_device:              str | None = None
     cam2_device:              str | None = None
     noise_filter_duration_ms: float | None = None

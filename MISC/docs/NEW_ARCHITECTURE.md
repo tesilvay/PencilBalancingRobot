@@ -46,8 +46,12 @@ A preset is a flat dict of values for a class. Values are either:
 - **Scalars** — `float`, `int`, `str`, `np.ndarray`, etc. Passed through directly.
 - **`"type:preset"` strings** — signals a nested object. `build_from_registry`
   recurses into the matching registry to build it.
-- **`{"name": "type:preset", ...}` dicts** — signals a dict of objects (e.g.
-  multiple controllers). Each value is recursed independently.
+- **`["type:preset", ...]` lists** — homogeneous collaborators built from the
+  same registry (e.g. multiple controllers or estimators). Order is preserved;
+  the **supervisor** selects the active instance by **integer index** into these
+  lists, so preset order and supervisor logic must stay aligned.
+- **`{"name": "type:preset", ...}` dicts** — named maps of nested objects; each
+  value is recursed independently (use when string keys are part of the API).
 
 Presets support inheritance via `"base"`:
 
@@ -77,6 +81,12 @@ def build_from_registry(registry, spec_string):
         if isinstance(v, str) and ":" in v:
             # nested object — recurse
             resolved[k] = build_from_registry(sub_registry, v)
+
+        elif isinstance(v, list) and sub_registry:
+            # homogeneous list — preserve order (supervisor indices)
+            resolved[k] = [
+                build_from_registry(sub_registry, s) for s in v
+            ]
 
         elif isinstance(v, dict) and sub_registry:
             # dict of objects — recurse each value

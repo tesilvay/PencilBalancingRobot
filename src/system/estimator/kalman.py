@@ -13,7 +13,6 @@ from src.shared import (
 )
 
 from .base import BaseEstimator
-from .kalman_core import run_linear_kalman_step
 
 
 @dataclass

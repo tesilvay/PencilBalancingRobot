@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from src.shared import CameraObservation, Measurement, ControlInput, WorkspaceParams
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
-from visualization.composite_layout import build_composite, build_one_dvs_composite, get_default_window_size
+from .multi_panel_layout import build_composite, build_one_dvs_composite, get_default_window_size
 
 EventFramesFn = Callable[[], tuple[np.ndarray, np.ndarray] | None]
 

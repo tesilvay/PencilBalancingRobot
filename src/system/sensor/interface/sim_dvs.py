@@ -16,9 +16,10 @@ from src.system.sensor.observation_model.camera_model import CameraModel
 
 @dataclass
 class SimDVSParams:
-    cam_params = field(default_factory=default_camera_params)
     algo:       object
     obs_model:  object
+    cam_params: CameraParams = field(default_factory=default_camera_params)
+    
 
 
 SIM_DVS_PRESETS = {

@@ -15,6 +15,7 @@ EXPERIMENT_PRESETS = {
         "progress":       "default:default",
         "pacing":         "null:default",
         "scheduler":      "realtime:default",
+        "n_trials":       1,
     },
     "realtime_sim": {
         "base": "sim",
@@ -38,6 +39,7 @@ class ExperimentParams:
     progress:       object
     pacing:         object
     scheduler:      object
+    n_trials:       int
     timing:         TimingParams = field(default_factory=default_timing)
     
 
@@ -55,16 +57,21 @@ class Experiment:
         self.pacing         = p.pacing
         self.scheduler      = p.scheduler
         self.dt             = p.timing.dt
+        self.n_trials       = p.n_trials
 
     def run_trial(self):
-        self.system.reset()
-        while not self.stop_condition.should_stop(self.system.state):
+        self.reset()
+        while not self.stop_condition.should_stop(self.system.x, self.dt):
             self.system.step(self.dt)
-            self.logger.log(self.system.state)
-            self.visualizer.update(self.system.state)  # real-time hook (no-op in sim)
+            self.logger.log(self.system.x)
+            self.visualizer.update(self.system.x)  # real-time hook (no-op in sim)
         self.visualizer.render(self.logger.get_data())  # post-run hook (no-op in real)
         
         return self.logger.get_result()
+    
+    def reset(self):
+        self.system.reset()
+        self.stop_condition.reset()
 
     def run_experiment(self):
         results = []

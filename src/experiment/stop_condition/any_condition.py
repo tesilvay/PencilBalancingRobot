@@ -36,14 +36,18 @@ class AnyStopCondition(StopCondition):
     def __init__(self, params: AnyStopConditionParams):
         # conditions is a dict[str, StopCondition]; iterate over values
         self.conditions = params.conditions
+        self.i = 0
 
     def reset(self):
+        self.i = 0
         for c in self.conditions:
             if hasattr(c, "reset"):
                 c.reset()
 
-    def should_stop(self, i, state, dt):
-        return any(c.should_stop(i, state, dt) for c in self.conditions)
+    def should_stop(self, state, dt):
+        is_stop = any(c.should_stop(i=self.i, state=state, dt=dt) for c in self.conditions)
+        self.i += 1
+        return is_stop
 
     def is_stabilized(self):
         return any(

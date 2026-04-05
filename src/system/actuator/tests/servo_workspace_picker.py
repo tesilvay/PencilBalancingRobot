@@ -23,7 +23,7 @@ from src.shared import (
 )
 from core.system_builder import build_mechanism, build_actuator
 from hardware.servos.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
-from visualization.composite_layout import (
+from src.experiment.visualizer.multi_panel_layout import (
     BANNER_HEIGHT,
     ONE_PANEL_MARGIN,
     build_composite,

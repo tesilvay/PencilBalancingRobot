@@ -59,7 +59,42 @@ TIMING_PRESETS = {
 def default_timing() -> TimingParams:
     return TimingParams(**TIMING_PRESETS["default"])
 
+# ── Initial Conditions ────────────────────────────────────────────────────────
 
+@dataclass
+class InitConditionsSpread:
+    pos_m:   float
+    ang_deg: float
+    vel_mps: float
+    w_degps: float
+    
+INIT_CONDITIONS_SPREAD_PRESETS = {
+    "easy": {
+        "pos_m":   0, 
+        "ang_deg": 2,
+        "vel_mps": 0,
+        "w_degps": 0,
+    },
+    "angle": {
+        "base": "easy",
+        "ang_deg": 8,
+    },
+    "real": {
+        "base": "easy",
+        "pos_m": 10e3, 
+        "ang_deg": 5,
+    },
+    "hard": {
+        "pos_m": 30e-3, 
+        "ang_deg": 8,
+        "vel_mps": 5e-3,
+        "w_degps": 4,
+    },
+}
+
+def default_spread() -> InitConditionsSpread:
+    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["easy"])
+    
 # ── Null ──────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -273,6 +308,8 @@ def build_from_registry(registry, spec_string):
         if isinstance(v, str) and ":" in v:
             resolved[k] = build_from_registry(sub_registry, v)
         elif isinstance(v, list) and sub_registry:
+            # Homogeneous collaborators (e.g. controllers): order is part of the
+            # contract — supervisors pick active instances by index.
             resolved[k] = [build_from_registry(sub_registry, s) for s in v]
         else:
             resolved[k] = v

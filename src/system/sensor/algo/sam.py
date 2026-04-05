@@ -8,8 +8,10 @@ from .base import DVSLineAlgorithm
 
 @dataclass
 class SamLineParams:
-    cam_params = field(default_factory=default_camera_params)
+    
     min_points:  int
+    cam_params: CameraParams = field(default_factory=default_camera_params)
+    
 
 
 SAM_PRESETS = {

@@ -36,7 +36,7 @@ import cv2
 import numpy as np
 
 from src.shared import CameraPair, HoughTrackerParams
-from visualization.composite_layout import build_composite, get_default_window_size
+from .multi_panel_layout import build_composite, get_default_window_size
 from perception.camera_model import CameraModel
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y

@@ -63,7 +63,7 @@ class Visualizer3D:
 
         self.ax.set_xlim(-0.15, 0.15)
         self.ax.set_ylim(-0.15, 0.15)
-        self.ax.set_zlim(0, L)
+        self.ax.set_zlim(0, self.L)
 
         self.ax.set_xlabel("X")
         self.ax.set_ylabel("Y")

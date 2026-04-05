@@ -29,13 +29,14 @@ class HoughQuadraticState:
 
 @dataclass
 class HoughLineParams:
-    
-    cam_params = field(default_factory=default_camera_params)
+
     # tracker params
     mixing_factor:    float
     inlier_stddev_px: float
     min_determinant:  float
     max_events:       int | None = None
+    
+    cam_params: CameraParams = field(default_factory=default_camera_params)
     
     # quadratic state
     state = HoughQuadraticState()

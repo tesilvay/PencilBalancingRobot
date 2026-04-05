@@ -10,6 +10,7 @@ class DynamicSupervisorParams:
     stable_hold_s:     float
     consistent_hold_s: float
     loss_threshold:    float
+    loss_hold_s:       float
 
 
 DYNAMIC_SUPERVISOR_PRESETS = {
@@ -18,6 +19,7 @@ DYNAMIC_SUPERVISOR_PRESETS = {
         "stable_hold_s":     2.0,
         "consistent_hold_s": 1.0,
         "loss_threshold":    0.3,
+        "loss_hold_s":       0.5,
     }
 }
 
@@ -30,7 +32,7 @@ class DynamicSupervisor(Supervisor):
         self._t_stable = 0.0
         self._t_lost   = 0.0
 
-    def update(self, x_est, innovation, dt) -> tuple[str, str]:
+    def update(self, x_est, innovation, dt) -> tuple[int, int]:
         self._t_state += dt
         self._step(x_est, innovation, dt)
         return self._active()
@@ -67,12 +69,14 @@ class DynamicSupervisor(Supervisor):
         self.state    = new_state
         self._t_state = 0.0
 
-    def _active(self) -> tuple[str, str]:
+    def _active(self) -> tuple[int, int]:
+        # Indices match SYSTEM_PRESETS "dynamic_sim" list order:
+        # controllers: [pole, smooth_pole], estimators: [lpf, kalman]
         return {
-            "ACQUISITION":         ("follower", "lpf"),
-            "STABILIZATION_READY": ("follower", "lpf"),
-            "STABILIZING":         ("smooth_pole",   "kalman"),
-            "BALANCED":            ("smooth_pole",    "kalman"),
+            "ACQUISITION":         (0, 0),
+            "STABILIZATION_READY": (0, 0),
+            "STABILIZING":         (1, 1),
+            "BALANCED":            (1, 1),
         }[self.state]
 
     def _is_stable(self, x_est):   return norm(x_est[:2]) < self.params.stable_threshold

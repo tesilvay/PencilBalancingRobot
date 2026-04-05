@@ -6,6 +6,7 @@ from src.shared import (
     State,
     CameraPair,
     Measurement,
+    CameraParams,
     default_camera_params,
 )
 
@@ -16,7 +17,7 @@ from .base import VisionModelBase
 class SimAnalyticParams:
     noise_std:   float | None
     delay_steps: int
-    cam_params = field(default_factory=default_camera_params)
+    cam_params: CameraParams = field(default_factory=default_camera_params)
 
 
 SIM_ANALYTIC_PRESETS = {

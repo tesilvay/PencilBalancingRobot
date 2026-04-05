@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 from src.shared import Measurement, ControlInput, WorkspaceParams, default_workspace
-from visualization.composite_layout import build_composite
+from .multi_panel_layout import build_composite
 
 from .base import WorkspacePanelRenderer, EventFramesFn, VizResult, _window_closed
 from .real_dvs import RealDvsVisualizer, RealDvsVisualizerParams

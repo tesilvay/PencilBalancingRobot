@@ -5,7 +5,7 @@ import cv2
 import numpy as np
 from src.shared import CameraObservation, Measurement, ControlInput
 from src.system.sensor.observation_model.camera_model import CameraModel
-from visualization.composite_layout import build_composite
+from .multi_panel_layout import build_composite
 
 from .base import RealtimeVisualizerBase, VizResult, _window_closed
 

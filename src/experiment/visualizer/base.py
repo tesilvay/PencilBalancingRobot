@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from src.shared import Measurement, ControlInput, WorkspaceParams
 
 try:
-    from visualization.composite_layout import get_default_window_size
+    from .multi_panel_layout import get_default_window_size
 except ImportError:
     def get_default_window_size(**kwargs):
         return 1200, 600
