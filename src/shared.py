@@ -19,7 +19,7 @@ class PlantParams:
 PLANT_PRESETS = {
     "default": {
         "g": 9.81, "com_length": 0.15, "tau": 0.03, "zeta": 0.8,
-        "max_acc": 9.81 * 3, "num_states": 8,
+        "max_acc": 9.81 * 10, "num_states": 8,
     }
 }
 
@@ -49,7 +49,7 @@ def default_workspace() -> WorkspaceParams:
 @dataclass
 class TimingParams:
     total_time: float = 5.0
-    dt:         float = 4e-3
+    dt:         float = 1e-3
 
 TIMING_PRESETS = {
     "default": {"total_time": 5.0, "dt": 4e-3},
@@ -76,13 +76,16 @@ INIT_CONDITIONS_SPREAD_PRESETS = {
         "w_degps": 0,
     },
     "angle": {
-        "base": "easy",
+        "pos_m":   0, 
         "ang_deg": 8,
+        "vel_mps": 0,
+        "w_degps": 0,
     },
     "real": {
-        "base": "easy",
-        "pos_m": 10e3, 
+        "pos_m": 10e-3, 
         "ang_deg": 5,
+        "vel_mps": 0,
+        "w_degps": 0,
     },
     "hard": {
         "pos_m": 30e-3, 
@@ -93,7 +96,7 @@ INIT_CONDITIONS_SPREAD_PRESETS = {
 }
 
 def default_spread() -> InitConditionsSpread:
-    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["easy"])
+    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["real"])
     
 # ── Null ──────────────────────────────────────────────────────────────────────
 

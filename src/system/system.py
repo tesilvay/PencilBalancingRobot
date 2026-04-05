@@ -24,14 +24,6 @@ class SystemParams:
 
 
 SYSTEM_PRESETS = {
-    "dynamic_sim": {
-        "plant":       "sim:default",
-        "controllers": ["pole:default", "smooth_pole:default"],
-        "estimators":  ["lpf:default", "kalman:default"],
-        "sensor":      "sim_dvs:hough",
-        "actuator":    "mock:default",
-        "supervisor":  "dynamic:default",
-    },
     "simple_sim": {
         "plant":       "sim:default",
         "controllers": ["smooth_pole:default"],
@@ -39,6 +31,14 @@ SYSTEM_PRESETS = {
         "sensor":      "sim_analytic:default",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
+    },
+    "dynamic_sim": {
+        "plant":       "sim:default",
+        "controllers": ["pole:default", "smooth_pole:default"],
+        "estimators":  ["lpf:default", "kalman:default"],
+        "sensor":      "sim_dvs:hough",
+        "actuator":    "mock:default",
+        "supervisor":  "dynamic:default",
     },
     "real": {
         "base": "dynamic_sim",

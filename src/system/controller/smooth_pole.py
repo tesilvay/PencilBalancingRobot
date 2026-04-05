@@ -74,10 +74,8 @@ class SmoothPolePlacementController(BaseController):
         xi  = np.concatenate([x, self._u_prev])
         v   = -(self.K @ (xi - self.xi_ref)).ravel()
         u   = self._u_prev + v
+        self._u_prev = u
         return ControlInput(float(u[0]), float(u[1]))
-
-    def set_applied_command(self, cmd: ControlInput) -> None:
-        self._u_prev = np.array([cmd.px_cmd, cmd.py_cmd], dtype=float)
 
     def reset(self):
         self._u_prev = self.u_ref.copy()

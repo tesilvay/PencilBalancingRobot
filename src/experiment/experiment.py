@@ -7,7 +7,7 @@ EXPERIMENT_PRESETS = {
     "sim": {
         "system":              "default:simple_sim",
         "logger":              "default:default",
-        "stop_condition":      "any:default",
+        "stop_condition":      "max_steps:default",
         "realtime_visualizer": "null:default",
         "offline_visualizer":  "3d:default",
         "progress":            "default:default",
@@ -70,7 +70,8 @@ class Experiment:
 
     def run_trial(self):
         self.reset()
-        while not self.stop_condition.should_stop(self.system.x, self.dt):
+        i = 0
+        while not self.stop_condition.should_stop(i, self.system.x, self.dt):
             self.system.step(self.dt)
             self.logger.record(self.system.step_data)
             self.scheduler.tick()
@@ -85,6 +86,7 @@ class Experiment:
                 if vr.quit:
                     break
             self.pacing.pace()
+            i += 1
 
         result = self.logger.get_result()
         self.offline_visualizer.finalize(result, dt=self.dt)
