@@ -37,7 +37,7 @@ class WorkspaceParams:
     safe_radius: float | None = None
 
 WORKSPACE_PRESETS = {
-    "default": {"x_ref": 0.0, "y_ref": 0.0, "safe_radius": 68e-3}
+    "default": {"x_ref": 0.0, "y_ref": 0.0, "safe_radius": 6.8e-2}
 }
 
 def default_workspace() -> WorkspaceParams:

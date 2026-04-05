@@ -93,10 +93,10 @@ class System:
         self.active_controller = self.controllers[ctrl_i]
         self.active_estimator = new_estimator
         
-        self.x = x_hat
+        self.x = x_true
         self.u = u_cmd
         
-        self.step_data = StepData(x=x_hat, u=u_cmd, acc=acc, innovation=innovation)
+        self.step_data = StepData(x=x_true, u=u_cmd, acc=acc, innovation=innovation)
     
     def reset(self):
         self.active_controller.reset()
