@@ -103,7 +103,6 @@ class NullParams:
 
 NULL_PRESETS = {"default": {}}
 
-
 # ── Spec ──────────────────────────────────────────────────────────────────────
 
 @dataclass
@@ -201,6 +200,18 @@ class Measurement:
             f"ay={np.rad2deg(self.ay):+.2f}°"
         )
 
+
+# ── Logger ────────────────────────────────────────────────────────────────────
+
+@dataclass
+class StepData:
+    x:     State
+    u:     ControlInput
+    acc:   TableAccel
+    # Measurement-space residual [px, ax, py, ay]; estimators return ndarray (1d or column).
+    # None when unavailable (e.g. some hardware paths).
+    innovation: np.ndarray | None = None
+    
 
 # ── Camera / vision types ─────────────────────────────────────────────────────
 

@@ -99,9 +99,9 @@ class KalmanEstimator(BaseEstimator):
         S = self.H @ P_pred @ self.H.T + self.R
         K = P_pred @ self.H.T @ np.linalg.inv(S)
 
-        innovation = z - self.H @ x_pred
+        innovation = (z - self.H @ x_pred).ravel()
 
-        self.x_hat = x_pred + K @ innovation
+        self.x_hat = x_pred + K @ innovation.reshape(-1, 1)
         self.P = (np.eye(8) - K @ self.H) @ P_pred
         
         x_hat = State.from_iterable(self.x_hat.flatten())

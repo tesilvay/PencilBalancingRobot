@@ -152,7 +152,8 @@ def main() -> int:
     results    = experiment.run_experiment()
 
     metrics = Metrics()
-    summary = metrics.evaluate(results)
+    trial_metrics = [metrics.evaluate(r) for r in results]
+    summary = metrics.summarize(trial_metrics)
     metrics.print_summary(summary)
 
     return 0

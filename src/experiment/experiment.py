@@ -63,7 +63,7 @@ class Experiment:
         self.reset()
         while not self.stop_condition.should_stop(self.system.x, self.dt):
             self.system.step(self.dt)
-            self.logger.log(self.system.x)
+            self.logger.record(self.system.step_data)
             self.visualizer.update(self.system.x)  # real-time hook (no-op in sim)
         self.visualizer.render(self.logger.get_data())  # post-run hook (no-op in real)
         
@@ -71,6 +71,7 @@ class Experiment:
     
     def reset(self):
         self.system.reset()
+        self.logger.reset(self.system.x, self.system.u)
         self.stop_condition.reset()
 
     def run_experiment(self):

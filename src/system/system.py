@@ -1,11 +1,13 @@
 from dataclasses import dataclass, field
 import numpy as np
 from src.shared import (
-    NullParams, 
-    State, 
-    InitConditionsSpread, 
+    NullParams,
+    State,
+    InitConditionsSpread,
     default_spread,
     ControlInput,
+    StepData,
+    TableAccel,
 )
 
 @dataclass
@@ -59,6 +61,8 @@ class System:
             raise ValueError("System requires non-empty controllers and estimators lists.")
         self.active_controller = self.controllers[0]
         self.active_estimator  = self.estimators[0]
+        
+        self.step_data: StepData | None = None
         self.x = None
         self.u = None
 
@@ -85,14 +89,24 @@ class System:
 
         self.active_controller = self.controllers[ctrl_i]
         self.active_estimator = new_estimator
+        
         self.x = x_hat
         self.u = u_cmd
+        
+        self.step_data = StepData(x=x_hat, u=u_cmd, acc=acc, innovation=innovation)
     
     def reset(self):
         self.active_controller.reset()
         self.active_estimator.reset()
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
+        
+        self.step_data = StepData(
+            x=self.x,
+            u=self.u,
+            acc=TableAccel(x_ddot=0.0, y_ddot=0.0),
+            innovation=np.zeros(4),
+        )
     
     
     # doesn't take x_ref into account yet
