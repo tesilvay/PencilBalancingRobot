@@ -11,7 +11,7 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import Any
 
-from src.shared import WorkspaceParams, default_workspace
+from src.shared import ControlInput, WorkspaceParams, default_workspace
 
 from .base import OfflineVisualizerBase
 from src.experiment.logger.logger import SimulationResult
@@ -58,6 +58,8 @@ class Visualizer3D(OfflineVisualizerBase):
 
         self.mech = params.mech
         self.mech_history = params.mech_history
+        # Logged actuator geometry (IK at commanded setpoint); kept for debugging only.
+        self.mech_history_cmd: np.ndarray | None = None
         self.cmd_history = params.cmd_history
         self.add_trail = params.add_trail
 
@@ -146,6 +148,45 @@ class Visualizer3D(OfflineVisualizerBase):
             link.set_data([], [])
             link.set_3d_properties([])
 
+    def _build_mech_history_from_state(self) -> None:
+        """Fill ``mech_history`` with IK at true table pose (px, py) per frame.
+
+        Uses the same workspace frame as :meth:`Mechanism.command_geometry` so the
+        five-bar matches the pencil base. Logged ``mech_history_cmd`` remains the
+        command-based geometry for debugging.
+        """
+        if self.mech is None or self.history is None or self.history.size == 0:
+            self.mech_history = None
+            return
+        n = int(self.history.shape[0])
+        out = np.full((n, 3, 2), np.nan, dtype=float)
+        for i in range(n):
+            row = self.history[i]
+            if row.shape[0] < 8:
+                continue
+            px, py = float(row[0]), float(row[4])
+            try:
+                joints, _ = self.mech.command_geometry(
+                    ControlInput(px_cmd=px, py_cmd=py)
+                )
+                out[i, :, :] = np.asarray(joints, dtype=float).reshape(3, 2)
+            except (ValueError, TypeError):
+                pass
+        self.mech_history = out
+
+    def _ensure_mech_history_aligned(self) -> None:
+        """Precompute mechanism joints if ``render_video`` runs without ``finalize``."""
+        if self.mech is None or self.history is None or self.history.size == 0:
+            return
+        n = int(self.history.shape[0])
+        need = (
+            self.mech_history is None
+            or self.mech_history.ndim != 3
+            or int(self.mech_history.shape[0]) != n
+        )
+        if need:
+            self._build_mech_history_from_state()
+
     def finalize(self, result: SimulationResult, *, dt: float) -> None:
         """Load trajectories from a trial and play back interactively (no file write)."""
         self.history = np.asarray(result.state_history, dtype=float)
@@ -155,10 +196,16 @@ class Visualizer3D(OfflineVisualizerBase):
             self.cmd_history = np.asarray(result.cmd_history, dtype=float)
         else:
             self.cmd_history = None
-        self.mech_history = result.mech_history
+        if result.mech_history is not None and len(result.mech_history) > 0:
+            self.mech_history_cmd = np.asarray(result.mech_history, dtype=float)
+        else:
+            self.mech_history_cmd = None
+        self.mech_history = None
         if self.history.size == 0:
             return
         self.total_sim_time = float(self.history.shape[0] * self.dt)
+        if self.mech is not None:
+            self._build_mech_history_from_state()
         self.render_video(save_video=False)
 
     # -------------------------------------------------
@@ -221,7 +268,7 @@ class Visualizer3D(OfflineVisualizerBase):
             self.trail_plot.set_data([], [])
             self.trail_plot.set_3d_properties([])
 
-        # --- Mechanism (joints precomputed during sim; no per-frame solve) ---
+        # --- Mechanism (joints from true-state IK; precomputed before playback) ---
         if self.mech is not None and self.mech_history is not None:
             scale = 1.0 / 1000.0
             O = np.array(self.mech.tf.O_g) * scale
@@ -299,6 +346,8 @@ class Visualizer3D(OfflineVisualizerBase):
             writer = FFMpegWriter(fps=self.fps)
 
         total_sim_time = self.history.shape[0] * self.dt
+
+        self._ensure_mech_history_aligned()
 
         print("Rendering...")
 
