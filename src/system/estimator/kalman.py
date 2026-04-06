@@ -36,6 +36,14 @@ KALMAN_PRESETS = {
         "q_vel_ang": 1e-2,
         "r_y_meas_pos": 1e-2,
         "r_y_meas_ang": 7e-2,
+    },
+    "test":{
+        "q_y_meas_pos": 1e-4,
+        "q_y_meas_ang": 1e-4,
+        "q_vel_pos": 1e-2,
+        "q_vel_ang": 1e-2,
+        "r_y_meas_pos": 1e-3,
+        "r_y_meas_ang": 1e-3,
     }
 }
 
@@ -57,7 +65,7 @@ class KalmanEstimator(BaseEstimator):
             p.r_y_meas_pos, p.r_y_meas_ang,
         ])
 
-        self.P_init = np.eye(8) * 2e-2
+        self.P_init = np.eye(8) * 2e-1
         self.x_hat_init_0 = np.zeros((8, 1))
         self.P = self.P_init.copy()
         self.x_hat = self.x_hat_init_0.copy()

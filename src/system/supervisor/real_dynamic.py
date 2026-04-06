@@ -21,8 +21,9 @@ REAL_DYNAMIC_SUPERVISOR_PRESETS = {
         "run_controller_index": 1,
         "acquisition_estimator_index": 0,
         "run_estimator_index": 1,
-        "stable_threshold_deg": 3.0,
-        "stable_hold_s": 2.0,
+        "stable_threshold_deg": 4.0,
+        "stable_threshold_m": 20e-3,
+        "stable_hold_s": 1.0,
         "estimator_switch_delay_s": 0.5,
         "manual_step_m": 0.002,
     }
@@ -64,4 +65,7 @@ class RealDynamicSupervisor(RealServoSupervisorBase):
 
     def _on_upright_ready(self) -> None:
         self.state = "STABILIZING"
+        self._t_state = 0.0
+
+    def _on_reset_to_acquisition(self) -> None:
         self._t_state = 0.0

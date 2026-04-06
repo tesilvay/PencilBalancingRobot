@@ -68,6 +68,7 @@ SYSTEM_PRESETS = {
         "base": "real_vision",
         "plants": ["sim:default", "sim:default"],
         "controllers": ["null:default", "smooth_pole:smoother"],
+        "estimators":  ["lpf:smoother"],
         "actuator": "servo:default",
         "supervisor": "real:default",
     },
@@ -75,7 +76,7 @@ SYSTEM_PRESETS = {
         "base": "real_vision",
         "plants": ["sim:default", "sim:default"],
         "controllers": ["null:default", "smooth_pole:smoother"],
-        "estimators": ["lpf:test", "kalman:default"],
+        "estimators": ["lpf:smoother", "kalman:test"],
         "actuator": "servo:default",
         "supervisor": "real_dynamic:default",
     },
@@ -189,6 +190,8 @@ class System:
         u_cmd = self.finalize_command(u_raw)
 
         mech_joints = self.actuator.apply(u_cmd)
+        
+        #print(innovation)
 
         # 2. supervisor decides what should be active next step
         ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)
@@ -202,6 +205,8 @@ class System:
 
         self.x = x_true
         self.u = u_cmd
+        if hasattr(self.supervisor, "note_applied_command"):
+            self.supervisor.note_applied_command(u_cmd)
 
         self.step_data = StepData(
             x=x_true,
@@ -232,6 +237,8 @@ class System:
             self.sensor.reset()
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
+        if hasattr(self.supervisor, "note_applied_command"):
+            self.supervisor.note_applied_command(self.u)
         self.last_y_meas = None
         self._offset_latched_fallback = False
         self._offset_xy = self._offset_from_state(self.x)

@@ -58,15 +58,20 @@ class Supervisor:
     def reset(self):
         pass
 
+    def note_applied_command(self, command: ControlInput) -> None:
+        del command
+
 
 @dataclass(kw_only=True)
 class RealStartupParams:
     centering_controller_index: int
     run_controller_index: int
     stable_threshold_deg: float
+    stable_threshold_m: float
     stable_hold_s: float
     manual_step_m: float
     workspace: WorkspaceParams
+    reacquire_ramp_s: float = 0.25
 
 
 class RealServoSupervisorBase(Supervisor):
@@ -76,6 +81,7 @@ class RealServoSupervisorBase(Supervisor):
     _RIGHT_KEYS = {83, 2555904, 65363, ord("d"), ord("D")}
     _ACCEPT_KEYS = {10, 13}
     _RESET_KEYS = {ord("r"), ord("R")}
+    _REACQUIRE_KEYS = {ord(" ")}
 
     def __init__(self, params: RealStartupParams):
         self.params = params
@@ -83,6 +89,10 @@ class RealServoSupervisorBase(Supervisor):
         self.actuator = None
         self.state = "SERVO_CENTERING"
         self._manual_target = self._workspace_center_command()
+        self._last_applied_command = self._workspace_center_command()
+        self._reacquire_start_command = self._workspace_center_command()
+        self._reacquire_elapsed_s = 0.0
+        self._reacquire_active = False
         self._t_stable = 0.0
         self._last_transition: dict | None = None
 
@@ -99,7 +109,7 @@ class RealServoSupervisorBase(Supervisor):
         if self.state == "SERVO_CENTERING":
             return self._manual_target
         if self.state == "ACQUISITION":
-            return self._workspace_center_command()
+            return self._acquisition_command()
         return None
 
     @property
@@ -122,10 +132,19 @@ class RealServoSupervisorBase(Supervisor):
         self._manual_target = self._workspace_center_command()
 
     def handle_key(self, key: int | None) -> bool:
-        if key is None or self.state != "SERVO_CENTERING":
+        if key is None:
             return False
 
         key_low = key & 0xFF
+        if key in self._REACQUIRE_KEYS or key_low in self._REACQUIRE_KEYS:
+            if self.state != "SERVO_CENTERING":
+                self._reset_to_acquisition_state()
+                return True
+            return False
+
+        if self.state != "SERVO_CENTERING":
+            return False
+
         if key in self._UP_KEYS or key_low in self._UP_KEYS:
             self._nudge(0.0, self.params.manual_step_m)
             return True
@@ -150,11 +169,22 @@ class RealServoSupervisorBase(Supervisor):
         self.state = "SERVO_CENTERING"
         self._t_stable = 0.0
         self._last_transition = None
+        self._last_applied_command = self._workspace_center_command()
+        self._reacquire_start_command = self._workspace_center_command()
+        self._reacquire_elapsed_s = 0.0
+        self._reacquire_active = False
         self._reset_manual_target()
+
+    def note_applied_command(self, command: ControlInput) -> None:
+        self._last_applied_command = command
 
     def _update_startup(self, x_est, dt: float) -> None:
         if self.state != "ACQUISITION":
             return
+        if self._reacquire_active:
+            self._reacquire_elapsed_s += dt
+            if self._reacquire_elapsed_s >= self.params.reacquire_ramp_s:
+                self._reacquire_active = False
         if self._is_upright(x_est):
             self._t_stable += dt
         else:
@@ -176,6 +206,19 @@ class RealServoSupervisorBase(Supervisor):
             py_cmd=float(self.workspace.y_ref),
         )
 
+    def _acquisition_command(self) -> ControlInput:
+        center = self._workspace_center_command()
+        if not self._reacquire_active:
+            return center
+
+        ramp_s = max(float(self.params.reacquire_ramp_s), 1e-9)
+        alpha = min(max(self._reacquire_elapsed_s / ramp_s, 0.0), 1.0)
+        start = self._reacquire_start_command
+        return ControlInput(
+            px_cmd=float((1.0 - alpha) * start.px_cmd + alpha * center.px_cmd),
+            py_cmd=float((1.0 - alpha) * start.py_cmd + alpha * center.py_cmd),
+        )
+
     def _reset_manual_target(self) -> None:
         self._manual_target = self._workspace_center_command()
         self._apply_workspace_offset(0.0, 0.0)
@@ -193,17 +236,39 @@ class RealServoSupervisorBase(Supervisor):
         self._apply_workspace_offset(dx, dy)
         self.state = "ACQUISITION"
         self._t_stable = 0.0
+        self._reacquire_elapsed_s = 0.0
+        self._reacquire_active = False
 
     def _apply_workspace_offset(self, dx: float, dy: float) -> None:
         actuator = self.actuator
         if actuator is not None and hasattr(actuator, "set_workspace_offset"):
             actuator.set_workspace_offset(dx, dy)
 
+    def _reset_to_acquisition_state(self) -> None:
+        self.state = "ACQUISITION"
+        self._t_stable = 0.0
+        self._reacquire_start_command = self._last_applied_command
+        self._reacquire_elapsed_s = 0.0
+        self._reacquire_active = self.params.reacquire_ramp_s > 0.0
+        self._on_reset_to_acquisition()
+
     def _is_upright(self, x_est) -> bool:
-        return norm([float(x_est.ax), float(x_est.ay)]) < deg2rad(self.params.stable_threshold_deg)
+        px = float(x_est.px - self.workspace.x_ref)
+        py = float(x_est.py - self.workspace.y_ref)
+        ax = float(x_est.ax)
+        ay = float(x_est.ay)
+        
+        thresh_ang = deg2rad(self.params.stable_threshold_deg)
+        thresh_m = self.params.stable_threshold_m
+        return (
+            (norm([ax, ay]) < thresh_ang) and (norm([px,py,]) < thresh_m)
+        )
 
     def _measurement_offset_latched(self) -> bool:
         raise NotImplementedError
 
     def _on_upright_ready(self) -> None:
         raise NotImplementedError
+
+    def _on_reset_to_acquisition(self) -> None:
+        pass

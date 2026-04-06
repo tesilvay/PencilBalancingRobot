@@ -101,11 +101,11 @@ class Experiment:
         if state_name == "SERVO_CENTERING":
             return "Servo Centering | Arrows/WASD: move | Enter: accept | R: reset | Q: quit"
         if state_name == "ACQUISITION":
-            return "Acquisition | Hold pencil upright to start motion | Q: quit"
+            return "Acquisition | Hold pencil upright to start motion | Space: reacquire | Q: quit"
         if state_name == "STABILIZING":
-            return "Stabilizing | Running controller, waiting to switch estimator | Q: quit"
+            return "Stabilizing | Running controller, waiting to switch estimator | Space: reacquire | Q: quit"
         if state_name == "BALANCED":
-            return "Balanced | Closed-loop controller active | Q: quit"
+            return "Balanced | Closed-loop controller active | Space: reacquire | Q: quit"
         return None
 
     def run_trial(self):

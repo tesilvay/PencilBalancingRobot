@@ -26,7 +26,8 @@ class LPFParams:
 
 LPF_PRESETS = {
     "default": {"alpha_meas": 0.0, "alpha_vel": 0.95},
-    "test": {"alpha_meas": 0.75, "alpha_vel": 0.75}
+    "test": {"alpha_meas": 0.75, "alpha_vel": 0.75},
+    "smoother": {"alpha_meas": 0.8, "alpha_vel": 0.8}
 }
 
 

@@ -116,6 +116,7 @@ def test_real_supervisor_starts_in_centering_and_handles_manual_keys():
             run_controller_index=1,
             estimator_index=0,
             stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
             stable_hold_s=0.2,
             manual_step_m=0.002,
             workspace=workspace,
@@ -165,6 +166,7 @@ def test_real_supervisor_transitions_to_balanced_without_estimator_switch():
             run_controller_index=1,
             estimator_index=0,
             stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
             stable_hold_s=0.2,
             manual_step_m=0.001,
             workspace=workspace,
@@ -194,6 +196,7 @@ def test_system_uses_supervisor_command_override_then_returns_to_controller():
             run_controller_index=1,
             estimator_index=0,
             stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
             stable_hold_s=0.05,
             manual_step_m=0.002,
             workspace=workspace,
@@ -255,6 +258,7 @@ def test_real_dynamic_switches_to_next_estimator_after_delay():
             acquisition_estimator_index=0,
             run_estimator_index=1,
             stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
             stable_hold_s=0.05,
             estimator_switch_delay_s=0.2,
             manual_step_m=0.002,
@@ -276,4 +280,144 @@ def test_real_dynamic_switches_to_next_estimator_after_delay():
     assert idx2 == (1, 0)
     idx3 = sup.update(_state(0.0, 0.0, ax=0.0, ay=0.0), np.zeros(4), 0.1)
     assert idx3 == (1, 1)
+    assert sup.state_name == "BALANCED"
+
+
+def test_space_resets_real_supervisors_back_to_acquisition():
+    workspace = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=None)
+
+    real_sup = RealSupervisor(
+        RealSupervisorParams(
+            centering_controller_index=0,
+            run_controller_index=1,
+            estimator_index=0,
+            stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
+            stable_hold_s=0.05,
+            manual_step_m=0.002,
+            workspace=workspace,
+        )
+    )
+    real_sup.attach_runtime(actuator=_Actuator(), workspace=workspace)
+    real_sup.reset()
+    real_sup.handle_key(13)
+    real_sup.update(_state(0.0, 0.0, ax=0.0, ay=0.0), np.zeros(4), 0.05)
+    assert real_sup.state_name == "BALANCED"
+    assert real_sup.handle_key(ord(" ")) is True
+    assert real_sup.state_name == "ACQUISITION"
+    assert real_sup.is_offset_latched is False
+
+    real_dynamic_sup = RealDynamicSupervisor(
+        RealDynamicSupervisorParams(
+            centering_controller_index=0,
+            run_controller_index=1,
+            acquisition_estimator_index=0,
+            run_estimator_index=1,
+            stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
+            stable_hold_s=0.05,
+            estimator_switch_delay_s=0.2,
+            manual_step_m=0.002,
+            workspace=workspace,
+        )
+    )
+    real_dynamic_sup.attach_runtime(actuator=_Actuator(), workspace=workspace)
+    real_dynamic_sup.reset()
+    real_dynamic_sup.handle_key(13)
+    real_dynamic_sup.update(_state(0.0, 0.0, ax=0.0, ay=0.0), np.zeros(4), 0.05)
+    assert real_dynamic_sup.state_name == "STABILIZING"
+    assert real_dynamic_sup.handle_key(ord(" ")) is True
+    assert real_dynamic_sup.state_name == "ACQUISITION"
+    assert real_dynamic_sup.is_offset_latched is False
+    idx = real_dynamic_sup.update(_state(0.0, 0.0, ax=0.0, ay=0.0), np.zeros(4), 0.05)
+    assert idx == (1, 0)
+
+
+def test_space_reacquire_ramps_command_back_to_center():
+    workspace = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=None)
+    sup = RealSupervisor(
+        RealSupervisorParams(
+            centering_controller_index=0,
+            run_controller_index=1,
+            estimator_index=0,
+            stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
+            stable_hold_s=0.05,
+            manual_step_m=0.002,
+            reacquire_ramp_s=0.10,
+            workspace=workspace,
+        )
+    )
+    system, actuator, _c0, c1 = _build_system(
+        sup,
+        states=[
+            _state(0.0, 0.0, ax=0.1, ay=0.0),
+            _state(0.0, 0.0, ax=0.0, ay=0.0),
+            _state(0.0, 0.0, ax=0.0, ay=0.0),
+            _state(0.0, 0.0, ax=0.0, ay=0.0),
+            _state(0.0, 0.0, ax=0.0, ay=0.0),
+            _state(0.0, 0.0, ax=0.0, ay=0.0),
+        ],
+        workspace=workspace,
+    )
+
+    sup.handle_key(13)
+    system.step(0.01)
+    system.step(0.05)
+    assert sup.state_name == "BALANCED"
+    np.testing.assert_allclose(
+        [actuator.commands[-1].px_cmd, actuator.commands[-1].py_cmd],
+        [c1.out.px_cmd, c1.out.py_cmd],
+        atol=1e-12,
+    )
+
+    assert sup.handle_key(ord(" ")) is True
+    assert sup.state_name == "ACQUISITION"
+
+    system.step(0.05)
+    np.testing.assert_allclose(
+        [actuator.commands[-1].px_cmd, actuator.commands[-1].py_cmd],
+        [c1.out.px_cmd, c1.out.py_cmd],
+        atol=1e-12,
+    )
+
+    system.step(0.05)
+    np.testing.assert_allclose(
+        [actuator.commands[-1].px_cmd, actuator.commands[-1].py_cmd],
+        [c1.out.px_cmd * 0.5, c1.out.py_cmd * 0.5],
+        atol=1e-12,
+    )
+
+    system.step(0.05)
+    np.testing.assert_allclose(
+        [actuator.commands[-1].px_cmd, actuator.commands[-1].py_cmd],
+        [workspace.x_ref, workspace.y_ref],
+        atol=1e-12,
+    )
+
+
+def test_real_supervisor_requires_position_inside_meter_threshold():
+    workspace = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=None)
+    sup = RealSupervisor(
+        RealSupervisorParams(
+            centering_controller_index=0,
+            run_controller_index=1,
+            estimator_index=0,
+            stable_threshold_deg=3.0,
+            stable_threshold_m=20e-3,
+            stable_hold_s=0.1,
+            manual_step_m=0.002,
+            workspace=workspace,
+        )
+    )
+    sup.attach_runtime(actuator=_Actuator(), workspace=workspace)
+    sup.reset()
+    sup.handle_key(13)
+
+    idx0 = sup.update(_state(0.03, 0.0, ax=0.0, ay=0.0), np.zeros(4), 0.2)
+    assert idx0 == (0, 0)
+    assert sup.state_name == "ACQUISITION"
+
+    idx1 = sup.update(_state(0.01, 0.0, ax=0.0, ay=0.0), np.zeros(4), 0.2)
+    assert idx1 == (1, 0)
     assert sup.state_name == "BALANCED"
