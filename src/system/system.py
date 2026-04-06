@@ -38,6 +38,14 @@ SYSTEM_PRESETS = {
         "actuator":    "mock:default",
         "supervisor":  "static:default",
     },
+    "placing_only": {
+        "plant":       "placing:steady_hands",
+        "controllers": ["smooth_pole:default"],
+        "estimators":  ["lpf:default"],
+        "sensor":      "sim_analytic:default",
+        "actuator":    "mock:default",
+        "supervisor":  "static:default",
+    },
     "dynamic_sim": {
         "plant":       "sim:default",
         "controllers": ["pole:default", "smooth_pole:default"],
@@ -127,6 +135,8 @@ class System:
     def reset(self):
         self.active_controller.reset()
         self.active_estimator.reset()
+        if hasattr(self.plant, "reset"):
+            self.plant.reset()
         if hasattr(self.sensor, "reset"):
             self.sensor.reset()
         self.x = self.random_state()
