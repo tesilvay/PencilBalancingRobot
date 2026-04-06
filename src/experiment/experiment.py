@@ -15,9 +15,14 @@ EXPERIMENT_PRESETS = {
         "scheduler":           "realtime:default",
         "n_trials":            1,
     },
-    "placing_only": {
+    "placing": {
         "base": "sim",
         "system":"default:placing_only",
+    },
+    "dynamic_sim": {
+        "base": "sim",
+        "system":"default:dynamic_sim",
+        "offline_visualizer":  "3d:save_video",
     },
     "realtime_sim": {
         "base": "sim",

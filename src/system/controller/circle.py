@@ -57,5 +57,6 @@ class CircleController(BaseController):
 
         return ControlInput(x, y)
 
-    def reset(self):
+    def reset(self, x_hat: State | None = None):
+        del x_hat
         self.t = 0.0

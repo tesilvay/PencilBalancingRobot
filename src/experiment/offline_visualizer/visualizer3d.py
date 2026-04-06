@@ -19,6 +19,7 @@ from src.experiment.logger.logger import SimulationResult
 
 @dataclass
 class Visualizer3DParams:
+    save_video:   bool
     L:            float
     fps:          int
     add_trail:    bool = True
@@ -28,14 +29,20 @@ class Visualizer3DParams:
     mech:         Any = None
     mech_history: np.ndarray | None = None
     cmd_history:  np.ndarray | None = None
+    
 
 
 VISUALIZER_3D_PRESETS = {
     "default": {
-        "L":         0.15,
-        "fps":       24,
-        "add_trail": True,
-        "mech":      "five_bar:default",
+        "save_video": False,
+        "L":          0.15,
+        "fps":        24,
+        "add_trail":  True,
+        "mech":       "five_bar:default",
+    },
+    "save_video": {
+        "base": "default",
+        "save_video": True,
     }
 }
 
@@ -46,6 +53,7 @@ class Visualizer3D(OfflineVisualizerBase):
     def __init__(self, params: Visualizer3DParams):
 
         self.history = params.history
+        self.save_video = params.save_video
         self.dt = params.dt
         self.L = params.L
         self.fps = params.fps
@@ -206,7 +214,7 @@ class Visualizer3D(OfflineVisualizerBase):
         self.total_sim_time = float(self.history.shape[0] * self.dt)
         if self.mech is not None:
             self._build_mech_history_from_state()
-        self.render_video(save_video=False)
+        self.render_video(save_video=self.save_video)
 
     # -------------------------------------------------
     # Render a single frame
@@ -337,11 +345,11 @@ class Visualizer3D(OfflineVisualizerBase):
         """
 
         if save_video:
-            os.makedirs("simulation_videos", exist_ok=True)
+            os.makedirs("animations", exist_ok=True)
 
             if filename is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"simulation_videos/pencil_sim_{timestamp}.mp4"
+                filename = f"animations/pencil_sim_{timestamp}.mp4"
 
             writer = FFMpegWriter(fps=self.fps)
 

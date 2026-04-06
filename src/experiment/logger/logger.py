@@ -18,6 +18,8 @@ class SimulationResult:
     mech_history: np.ndarray | None = None
     innovation_history: np.ndarray | None = None
     cmd_history: np.ndarray | None = None
+    offset_history: np.ndarray | None = None
+    offset_latched_history: np.ndarray | None = None
     terminal: TerminalInfo | None = None
 
 
@@ -46,6 +48,15 @@ def _innovation_to_row(innovation: np.ndarray | None) -> np.ndarray:
     return a
 
 
+def _offset_to_row(offset_xy: np.ndarray | None) -> np.ndarray:
+    if offset_xy is None:
+        return np.zeros(2, dtype=float)
+    a = np.asarray(offset_xy, dtype=float).reshape(-1)
+    if a.size != 2:
+        raise ValueError(f"offset_xy must have 2 elements, got shape {a.shape}")
+    return a
+
+
 class Logger:
     def __init__(self, params: NullParams):
         self._states = None
@@ -53,6 +64,8 @@ class Logger:
         self._acc = None
         self._innovation = None
         self._mech = None
+        self._offset = None
+        self._offset_latched = None
 
     def reset(self, initial_step_data: StepData):
         self._states = [initial_step_data.x.as_vector()]
@@ -62,6 +75,8 @@ class Logger:
         self._mech = [_mech_to_row(initial_step_data.mech_joints)]
         self._acc = []
         self._innovation = []
+        self._offset = [_offset_to_row(initial_step_data.offset_xy)]
+        self._offset_latched = [bool(initial_step_data.offset_latched)]
 
     def record(self, step_data: StepData):
         self._states.append(step_data.x.as_vector())
@@ -69,12 +84,16 @@ class Logger:
         self._acc.append(_acc_to_row(step_data.acc))
         self._innovation.append(_innovation_to_row(step_data.innovation))
         self._mech.append(_mech_to_row(step_data.mech_joints))
+        self._offset.append(_offset_to_row(step_data.offset_xy))
+        self._offset_latched.append(bool(step_data.offset_latched))
 
     def get_result(self) -> SimulationResult:
         # Convert once at the end
         state_history = np.array(self._states)
         cmd_history = np.array(self._commands)
         mech_history = np.array(self._mech)
+        offset_history = np.array(self._offset)
+        offset_latched_history = np.array(self._offset_latched, dtype=bool)
 
         if self._acc:
             acc_history = np.array(self._acc)
@@ -92,4 +111,6 @@ class Logger:
             mech_history=mech_history,
             cmd_history=cmd_history,
             innovation_history=innovation_history,
+            offset_history=offset_history,
+            offset_latched_history=offset_latched_history,
         )

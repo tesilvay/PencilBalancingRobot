@@ -20,6 +20,12 @@ STATIC_SUPERVISOR_PRESETS = {
 class StaticSupervisor(Supervisor):
     def __init__(self, params: StaticSupervisorParams):
         self.params = params
+        self._last_transition: dict | None = None
 
     def update(self, x_est, innovation, dt) -> tuple[int, int]:
+        self._last_transition = None
         return self.params.controller_index, self.params.estimator_index
+
+    @property
+    def last_transition(self) -> dict | None:
+        return self._last_transition

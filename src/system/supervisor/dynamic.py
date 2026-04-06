@@ -31,11 +31,22 @@ class DynamicSupervisor(Supervisor):
         self._t_state  = 0.0
         self._t_stable = 0.0
         self._t_lost   = 0.0
+        self._last_transition: dict | None = None
 
     def update(self, x_est, innovation, dt) -> tuple[int, int]:
+        prev_state = self.state
         self._t_state += dt
         self._step(x_est, innovation, dt)
+        self._last_transition = {
+            "prev_state": prev_state,
+            "new_state": self.state,
+            "left_acquisition": (prev_state == "ACQUISITION" and self.state != "ACQUISITION"),
+        }
         return self._active()
+
+    @property
+    def last_transition(self) -> dict | None:
+        return self._last_transition
 
     def _step(self, x_est, innovation, dt):
         if self._is_stable(x_est):  self._t_stable += dt
@@ -79,5 +90,5 @@ class DynamicSupervisor(Supervisor):
             "BALANCED":            (1, 1),
         }[self.state]
 
-    def _is_stable(self, x_est):   return norm(x_est[:2]) < self.params.stable_threshold
+    def _is_stable(self, x_est):   return norm([x_est.px, x_est.py]) < self.params.stable_threshold
     def _is_lost(self, innovation): return innovation is not None and norm(innovation) > self.params.loss_threshold

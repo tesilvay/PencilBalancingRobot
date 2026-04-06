@@ -5,6 +5,7 @@ import numpy as np
 from src.shared import (
     NullParams,
     State,
+    Measurement,
     InitConditionsSpread,
     default_spread,
     ControlInput,
@@ -50,7 +51,7 @@ SYSTEM_PRESETS = {
         "plants":       ["placing:steady_hands", "sim:default"],
         "controllers": ["null:default", "smooth_pole:default"],
         "estimators":  ["lpf:default", "kalman:default"],
-        "sensor":      "sim_dvs:hough",
+        "sensor":      "sim_analytic:default",
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
     },
@@ -83,6 +84,25 @@ class System:
         self.x = None
         self.u = None
         self.last_y_meas = None
+        self._offset_xy = np.zeros(2, dtype=float)
+        self._offset_latched = False
+
+    def _offset_from_state(self, x_true: State) -> np.ndarray:
+        return np.array(
+            [
+                float(x_true.px - self.workspace.x_ref),
+                float(x_true.py - self.workspace.y_ref),
+            ],
+            dtype=float,
+        )
+
+    def _measurement_with_offset(self, y: Measurement, offset_xy: np.ndarray) -> Measurement:
+        return Measurement(
+            px=float(y.px - offset_xy[0]),
+            py=float(y.py - offset_xy[1]),
+            ax=float(y.ax),
+            ay=float(y.ay),
+        )
 
     def finalize_command(self, u_raw: ControlInput) -> ControlInput:
         u_applied = clamp_control_input_to_workspace(u_raw, self.workspace)
@@ -90,15 +110,18 @@ class System:
         return u_applied
 
     def step(self, dt):
-        
+
         x_true, acc = self.active_plant.step(self.x, self.u, dt)
-        
+        if not self._offset_latched:
+            self._offset_xy = self._offset_from_state(x_true)
+
         # get measurements
         y = self.sensor.get_y(x_true)
         self.last_y_meas = y
-        
+        y_corr = self._measurement_with_offset(y, self._offset_xy)
+
         # every estimator calculates innovation too
-        x_hat, innovation = self.active_estimator.estimate(y_meas=y, dt=dt, u_cmd=self.u) 
+        x_hat, innovation = self.active_estimator.estimate(y_meas=y_corr, dt=dt, u_cmd=self.u)
         u_raw = self.active_controller.compute(x_hat)
         u_cmd = self.finalize_command(u_raw)
 
@@ -106,17 +129,25 @@ class System:
 
         # 2. supervisor decides what should be active next step
         ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)
+        transition = getattr(self.supervisor, "last_transition", None)
+        if transition and transition.get("left_acquisition", False):
+            self._offset_xy = self._offset_from_state(x_true)
+            self._offset_latched = True
 
-        # 3. system owns the swap — including warm-start on estimator switch
+        # 3. system owns the swap — including warm-start on switches
         new_estimator = self.estimators[est_i]
         if new_estimator is not self.active_estimator:
             new_estimator.reset(x_hat)
 
+        new_controller = self.controllers[ctrl_i]
+        if new_controller is not self.active_controller:
+            new_controller.reset(x_hat)
+
         # plant and controller change equally
         self.active_plant = self.plants[ctrl_i]
-        self.active_controller = self.controllers[ctrl_i]
+        self.active_controller = new_controller
         self.active_estimator = new_estimator
-        
+
         self.x = x_true
         self.u = u_cmd
 
@@ -126,18 +157,27 @@ class System:
             acc=acc,
             innovation=innovation,
             mech_joints=mech_joints,
+            offset_xy=self._offset_xy.copy(),
+            offset_latched=bool(self._offset_latched),
         )
-    
+
     def reset(self):
+        self.active_plant = self.plants[0]
+        self.active_controller = self.controllers[0]
+        self.active_estimator = self.estimators[0]
+
         self.active_controller.reset()
         self.active_estimator.reset()
-        if hasattr(self.active_plant, "reset"):
-            self.active_plant.reset()
+        for plant in self.plants:
+            if hasattr(plant, "reset"):
+                plant.reset()
         if hasattr(self.sensor, "reset"):
             self.sensor.reset()
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
         self.last_y_meas = None
+        self._offset_latched = False
+        self._offset_xy = self._offset_from_state(self.x)
 
         mj0 = self.actuator.mech_joint_snapshot(self.u)
         self.step_data = StepData(
@@ -146,6 +186,8 @@ class System:
             acc=TableAccel(x_ddot=0.0, y_ddot=0.0),
             innovation=np.zeros(4),
             mech_joints=mj0,
+            offset_xy=self._offset_xy.copy(),
+            offset_latched=False,
         )
     
     

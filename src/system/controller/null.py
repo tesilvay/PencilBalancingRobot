@@ -10,5 +10,6 @@ class NullController(BaseController):
     def compute(self, state):
         return ControlInput(0.0, 0.0)
 
-    def reset(self):
+    def reset(self, x_hat=None):
+        del x_hat
         pass

@@ -79,5 +79,12 @@ class SmoothPolePlacementController(BaseController):
     def set_applied_command(self, u: ControlInput) -> None:
         self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
 
-    def reset(self):
+    def reset(self, x_hat: State | None = None):
+        if x_hat is None:
+            self._u_prev = self.u_ref.copy()
+            return
+
+        # Warm-start internal command memory from the estimated state at switch.
         self._u_prev = self.u_ref.copy()
+        u = self.compute(x_hat)
+        self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)

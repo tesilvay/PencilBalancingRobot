@@ -217,6 +217,10 @@ class StepData:
     # Five-bar joint points in mechanism global frame, mm: rows A, C, P; cols x, y.
     # NaN when the actuator has no mechanism or IK/workspace fails.
     mech_joints: np.ndarray | None = None
+    # XY offset used to zero measured position channels [px, py], meters.
+    offset_xy: np.ndarray | None = None
+    # True when the offset has been frozen after acquisition exit.
+    offset_latched: bool = False
 
 
 # ── Camera / vision types ─────────────────────────────────────────────────────
