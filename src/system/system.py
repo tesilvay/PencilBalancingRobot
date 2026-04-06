@@ -17,7 +17,7 @@ from src.shared import (
 
 @dataclass
 class SystemParams:
-    plant:       object
+    plants:       list
     # Ordered lists of collaborators sharing a common base type. Supervisors
     # select active instances by integer index; order must match preset + supervisor.
     controllers: list
@@ -31,7 +31,7 @@ class SystemParams:
 
 SYSTEM_PRESETS = {
     "simple_sim": {
-        "plant":       "sim:default",
+        "plants":       ["sim:default"],
         "controllers": ["smooth_pole:default"],
         "estimators":  ["lpf:default"],
         "sensor":      "sim_analytic:default",
@@ -39,16 +39,16 @@ SYSTEM_PRESETS = {
         "supervisor":  "static:default",
     },
     "placing_only": {
-        "plant":       "placing:steady_hands",
-        "controllers": ["smooth_pole:default"],
+        "plants":       ["placing:steady_hands"],
+        "controllers": ["null:default"],
         "estimators":  ["lpf:default"],
         "sensor":      "sim_analytic:default",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
     },
     "dynamic_sim": {
-        "plant":       "sim:default",
-        "controllers": ["pole:default", "smooth_pole:default"],
+        "plants":       ["placing:steady_hands", "sim:default"],
+        "controllers": ["null:default", "smooth_pole:default"],
         "estimators":  ["lpf:default", "kalman:default"],
         "sensor":      "sim_dvs:hough",
         "actuator":    "mock:default",
@@ -62,28 +62,22 @@ SYSTEM_PRESETS = {
 }
 
 
-def _workspace_from_plant(plant, fallback: WorkspaceParams) -> WorkspaceParams:
-    """Use plant geometry when available so command clamp matches sim workspace limits."""
-    if all(hasattr(plant, a) for a in ("x_ref", "y_ref", "safe_radius")):
-        return WorkspaceParams(plant.x_ref, plant.y_ref, plant.safe_radius)
-    return fallback
-
 
 class System:
     def __init__(self, params: SystemParams):
-        self.plant       = params.plant
+        self.plants      = params.plants
         self.controllers = params.controllers
         self.estimators  = params.estimators
         self.sensor      = params.sensor
         self.actuator    = params.actuator
         self.supervisor  = params.supervisor
         self.init_spread = params.init_spread
-        self.workspace   = _workspace_from_plant(params.plant, params.workspace)
-
-        if not self.controllers or not self.estimators:
-            raise ValueError("System requires non-empty controllers and estimators lists.")
+        self.workspace   = params.workspace
+        
+        self.active_plant  = self.plants[0]
         self.active_controller = self.controllers[0]
         self.active_estimator  = self.estimators[0]
+        
         
         self.step_data: StepData | None = None
         self.x = None
@@ -97,7 +91,7 @@ class System:
 
     def step(self, dt):
         
-        x_true, acc = self.plant.step(self.x, self.u, dt)
+        x_true, acc = self.active_plant.step(self.x, self.u, dt)
         
         # get measurements
         y = self.sensor.get_y(x_true)
@@ -118,6 +112,8 @@ class System:
         if new_estimator is not self.active_estimator:
             new_estimator.reset(x_hat)
 
+        # plant and controller change equally
+        self.active_plant = self.plants[ctrl_i]
         self.active_controller = self.controllers[ctrl_i]
         self.active_estimator = new_estimator
         
@@ -135,8 +131,8 @@ class System:
     def reset(self):
         self.active_controller.reset()
         self.active_estimator.reset()
-        if hasattr(self.plant, "reset"):
-            self.plant.reset()
+        if hasattr(self.active_plant, "reset"):
+            self.active_plant.reset()
         if hasattr(self.sensor, "reset"):
             self.sensor.reset()
         self.x = self.random_state()

@@ -13,7 +13,7 @@ SYSTEM_REGISTRY = {
         Params     = SystemParams,
         Presets    = SYSTEM_PRESETS,
         registries = {
-            "plant":       PLANT_REGISTRY,
+            "plants":       PLANT_REGISTRY,
             "controllers": CONTROLLER_REGISTRY,
             "estimators":  ESTIMATOR_REGISTRY,
             "sensor":      SENSOR_REGISTRY,

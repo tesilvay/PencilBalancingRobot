@@ -71,10 +71,10 @@ class DynamicSupervisor(Supervisor):
 
     def _active(self) -> tuple[int, int]:
         # Indices match SYSTEM_PRESETS "dynamic_sim" list order:
-        # controllers: [pole, smooth_pole], estimators: [lpf, kalman]
+        # controllers: [null, smooth_pole], estimators: [lpf, kalman]
         return {
             "ACQUISITION":         (0, 0),
-            "STABILIZATION_READY": (0, 0),
+            "STABILIZATION_READY": (1, 0),
             "STABILIZING":         (1, 1),
             "BALANCED":            (1, 1),
         }[self.state]

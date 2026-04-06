@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from .base import BasePlant
+
 import numpy as np
 
 from src.shared import (
@@ -49,20 +51,17 @@ PLACING_PRESETS = {
 }
 
 
-class PlacingPlant:
+class PlacingPlant(BasePlant):
     """Simulate pencil pose while a human holds it; table command does not move the pencil."""
 
     def __init__(self, params: PlacingParams):
         p = params.plant
         w = params.workspace
+        
+        super().__init__(w, p.max_acc)
 
         self.tau = p.tau
         self.zeta = p.zeta
-        self.max_acc = p.max_acc
-
-        self.x_ref = w.x_ref
-        self.y_ref = w.y_ref
-        self.safe_radius = w.safe_radius
 
         self.tip_omega = params.tip_omega
         self.tip_zeta = params.tip_zeta
@@ -92,14 +91,14 @@ class PlacingPlant:
         # --- Table (command tracking only; not coupled into pencil state) ---
         tvx_dot = (1 / self.tau**2) * (px_cmd - self._tx) - (2 * self.zeta / self.tau) * self._tvx
         tvy_dot = (1 / self.tau**2) * (py_cmd - self._ty) - (2 * self.zeta / self.tau) * self._tvy
-        tvx_dot, tvy_dot = self._clamp_acceleration(tvx_dot, tvy_dot)
+        tvx_dot, tvy_dot = self.clamp_acceleration(tvx_dot, tvy_dot)
 
         self._tvx += tvx_dot * dt
         self._tx += self._tvx * dt
         self._tvy += tvy_dot * dt
         self._ty += self._tvy * dt
 
-        self._tx, self._tvx, self._ty, self._tvy = self._apply_workspace_limits(
+        self._tx, self._tvx, self._ty, self._tvy = self.apply_workspace_limits(
             self._tx, self._tvx, self._ty, self._tvy
         )
 
@@ -147,7 +146,7 @@ class PlacingPlant:
         wy += wy_dot * dt
         ay += wy * dt
 
-        px, vx, py, vy = self._apply_workspace_limits(px, vx, py, vy)
+        px, vx, py, vy = self.apply_workspace_limits(px, vx, py, vy)
 
         ax = float(np.clip(ax, -np.pi / 2, np.pi / 2))
         ay = float(np.clip(ay, -np.pi / 2, np.pi / 2))
@@ -166,40 +165,3 @@ class PlacingPlant:
             TableAccel(x_ddot=tvx_dot, y_ddot=tvy_dot),
         )
 
-    def _clamp_acceleration(self, vx_dot, vy_dot):
-        if self.max_acc is None:
-            return vx_dot, vy_dot
-
-        acc_vec = np.array([vx_dot, vy_dot])
-        norm = np.linalg.norm(acc_vec)
-
-        if norm > self.max_acc and norm > 0:
-            acc_vec = acc_vec * (self.max_acc / norm)
-
-        return float(acc_vec[0]), float(acc_vec[1])
-
-    def _apply_workspace_limits(self, x, vx, y, vy):
-        if self.safe_radius is None:
-            return x, vx, y, vy
-
-        dx = x - self.x_ref
-        dy = y - self.y_ref
-        dist = np.sqrt(dx * dx + dy * dy)
-
-        if dist <= self.safe_radius:
-            return x, vx, y, vy
-
-        scale = self.safe_radius / dist
-        dx *= scale
-        dy *= scale
-        x = self.x_ref + dx
-        y = self.y_ref + dy
-
-        normal = np.array([dx, dy]) / self.safe_radius
-        vel = np.array([vx, vy])
-        v_out = np.dot(vel, normal)
-
-        if v_out > 0:
-            vel = vel - v_out * normal
-
-        return x, vel[0], y, vel[1]
