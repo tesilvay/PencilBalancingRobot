@@ -27,7 +27,7 @@ SIM_ANALYTIC_PRESETS = {
     },
     "noisy": {
         "base": "default",
-        "noise_std":   1e-3,
+        "noise_std":   1e-5,
         "delay_steps": 0,
     },
 }
@@ -36,6 +36,7 @@ SIM_ANALYTIC_PRESETS = {
 class SimVisionModel(VisionModelBase):
 
     def __init__(self, params: SimAnalyticParams):
+        super().__init__(params.cam_params)
         self.xr = params.cam_params.xr
         self.yr = params.cam_params.yr
 

@@ -48,6 +48,10 @@ PLACING_PRESETS = {
         "tip_accel_noise_std": 0.25,
         "angle_accel_noise_std": 8.0,
     },
+    "angle_only": {
+        "tip_accel_noise_std": 0.0,
+        "angle_accel_noise_std": 3.0,
+    },
 }
 
 

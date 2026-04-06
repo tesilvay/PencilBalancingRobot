@@ -14,6 +14,7 @@ from .base import VisionModelBase
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.reader.dvs_camera_reader import (
     DVSReader,
+    discover_devices,
 )
 from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
 
@@ -47,8 +48,31 @@ REAL_DVS_PRESETS = {
 
 
 class RealEventCameraInterface(VisionModelBase):
+    @staticmethod
+    def _resolve_camera_devices(cam1_device: str | None, cam2_device: str | None) -> tuple[str, str]:
+        """
+        Match the legacy camera-loading behavior by resolving two distinct devices
+        before opening either reader.
+        """
+        if cam1_device is not None and cam2_device is not None:
+            if cam1_device == cam2_device:
+                raise ValueError("cam1_device and cam2_device must refer to different cameras.")
+            return cam1_device, cam2_device
+
+        if cam1_device is None and cam2_device is None:
+            devices = discover_devices()
+            if len(devices) < 2:
+                raise RuntimeError(
+                    f"Need at least 2 DVS cameras, but discover_devices() found {len(devices)}: {devices}"
+                )
+            return devices[0], devices[1]
+
+        raise ValueError(
+            "Provide both cam1_device and cam2_device, or leave both unset to auto-discover two cameras."
+        )
 
     def __init__(self, params: RealDVSParams):
+        super().__init__(params.cam_params)
         import copy
         p = params
         
@@ -66,8 +90,7 @@ class RealEventCameraInterface(VisionModelBase):
   
         noise_filter_duration_ms = p.noise_filter_duration_ms
         
-        cam1_device = p.cam1_device
-        cam2_device = p.cam2_device
+        cam1_device, cam2_device = self._resolve_camera_devices(p.cam1_device, p.cam2_device)
         
         self._dvs_mask_line_y_cam1 = int(p.cam_params.y_mask_line_1)
         self._dvs_mask_line_y_cam2 = int(p.cam_params.y_mask_line_2)
@@ -77,6 +100,8 @@ class RealEventCameraInterface(VisionModelBase):
 
         self._latest1: CameraObservation | None = None
         self._latest2: CameraObservation | None = None
+        self._last_valid_cams_camnorm: CameraPair | None = None
+        self._last_valid_y_meas: Measurement | None = None
         
         self._surface1 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
         self._surface2 = np.zeros((self.cam_height_px, self.cam_width_px), dtype=np.float32)
@@ -135,16 +160,29 @@ class RealEventCameraInterface(VisionModelBase):
         return self.get_surfaces()
 
     def get_y(self, state_true=None) -> Measurement:
-        cams_raw = self.get_z()
-        self.last_line_observation = cams_raw
+        cams_camnorm = self.get_z()
+        if cams_camnorm is not None:
+            self._last_valid_cams_camnorm = cams_camnorm
+        elif self._last_valid_cams_camnorm is not None:
+            cams_camnorm = self._last_valid_cams_camnorm
+        elif state_true is not None:
+            # Startup fallback: keep the system stepping until both trackers lock on.
+            cams_camnorm = super().project_state_to_z(state_true)
+        elif self._last_valid_y_meas is not None:
+            return self._last_valid_y_meas
+        else:
+            raise RuntimeError("No DVS observation available yet and no fallback measurement exists.")
 
-        y_meas = self.cams_to_measurement(cams_px=cams_raw)
+        self.last_line_observation = cams_camnorm
+
+        y_meas = self.cams_to_measurement(cams_camnorm=cams_camnorm)
+        self._last_valid_y_meas = y_meas
         
         return y_meas
         
     def get_z(self) -> CameraPair | None:
         """
-        Return latest CameraPair(Pixels) from Hough
+        Return latest CameraPair(camnorm) from Hough
         """
         with self._lock:
             obs1_px = self._latest1
@@ -154,21 +192,32 @@ class RealEventCameraInterface(VisionModelBase):
             print("No observation vision.py line 226")
             return None
 
+        obs1 = self.cam.pixel_to_camnorm(obs1_px)
+        obs2 = self.cam.pixel_to_camnorm(obs2_px)
+
         return CameraPair(
-            CameraObservation(slope=obs1_px.slope, intercept=obs1_px.intercept),
-            CameraObservation(slope=obs2_px.slope, intercept=obs2_px.intercept),
+            CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
+            CameraObservation(slope=obs2.slope, intercept=obs2.intercept),
         )
 
-    def cams_to_measurement(self, cams_px):
-            
+    def cams_to_measurement(self, cams_camnorm):
+        cams_px = CameraPair(
+            cam1=self.cam.camnorm_to_pixel(cams_camnorm.cam1),
+            cam2=self.cam.camnorm_to_pixel(cams_camnorm.cam2),
+        )
+
         y_meas = self.dvs_regression_model.estimate(cams_px)
 
-        if super.is_valid_pose(y_meas):
+        if y_meas is not None and self.is_valid_y_meas(y_meas):
             return y_meas
+
+        return super().cams_to_measurement(cams_camnorm=cams_camnorm)
 
     def reset(self):
         """Reset both Hough algorithms."""
         self.last_line_observation = None
+        self._last_valid_cams_camnorm = None
+        self._last_valid_y_meas = None
         self.cam1_algo.reset()
         self.cam2_algo.reset()
         with self._lock:

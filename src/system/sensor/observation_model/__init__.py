@@ -10,6 +10,6 @@ from .simple_dvs_regression_model import SimpleDVSRegressionModel
 from src.shared  import Spec, NullParams, NULL_PRESETS
 
 REG_MODEL_REGISTRY = {
-    "none":   Spec(NullRegression,                NullParams,                      NULL_PRESETS),
+    "null":   Spec(NullRegression,                NullParams,                      NULL_PRESETS),
     "simple": Spec(SimpleDVSRegressionModelLoader, SimpleDVSRegressionModelParams, SIMPLE_REG_PRESETS),
 }

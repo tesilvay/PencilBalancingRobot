@@ -32,6 +32,7 @@ class DynamicSupervisor(Supervisor):
         self._t_stable = 0.0
         self._t_lost   = 0.0
         self._last_transition: dict | None = None
+        self._offset_latched = False
 
     def update(self, x_est, innovation, dt) -> tuple[int, int]:
         prev_state = self.state
@@ -42,7 +43,21 @@ class DynamicSupervisor(Supervisor):
             "new_state": self.state,
             "left_acquisition": (prev_state == "ACQUISITION" and self.state != "ACQUISITION"),
         }
+        if self._last_transition["left_acquisition"]:
+            self._offset_latched = True
         return self._active()
+
+    @property
+    def active_indices(self) -> tuple[int, int]:
+        return self._active()
+
+    @property
+    def is_offset_latched(self) -> bool:
+        return self._offset_latched
+
+    @property
+    def state_name(self) -> str:
+        return self.state
 
     @property
     def last_transition(self) -> dict | None:
@@ -92,3 +107,11 @@ class DynamicSupervisor(Supervisor):
 
     def _is_stable(self, x_est):   return norm([x_est.px, x_est.py]) < self.params.stable_threshold
     def _is_lost(self, innovation): return innovation is not None and norm(innovation) > self.params.loss_threshold
+
+    def reset(self):
+        self.state = "ACQUISITION"
+        self._t_state = 0.0
+        self._t_stable = 0.0
+        self._t_lost = 0.0
+        self._last_transition = None
+        self._offset_latched = False

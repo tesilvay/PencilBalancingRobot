@@ -25,11 +25,11 @@ class SimDVSParams:
 SIM_DVS_PRESETS = {
     "hough": {
         "algo":       "hough:default",
-        "obs_model":  "none:default",
+        "obs_model":  "simple:default",
     },
     "sam": {
         "algo":       "sam:default",
-        "obs_model":  "none:default",
+        "obs_model":  "null:default",
     },
 }
 
@@ -37,9 +37,12 @@ SIM_DVS_PRESETS = {
 class SimEventCameraInterface(VisionModelBase):
 
     def __init__(self, params: SimDVSParams):
+        super().__init__(params.cam_params)
         import copy
         p = params
         cam = p.cam_params
+        
+        self.obs_model = p.obs_model
         
         self.cam_height_px = p.cam_params.DAVIS346_HEIGHT
         self.cam_width_px = p.cam_params.DAVIS346_WIDTH
@@ -235,33 +238,34 @@ class SimEventCameraInterface(VisionModelBase):
             np.add.at(self._surface2, (events2["y"], events2["x"]), 1.0)
 
         # Run algo with events
-        obs1 = self.cam1_algo.update(events1)
-        obs2 = self.cam2_algo.update(events2)
+        obs1_px = self.cam1_algo.update(events1)
+        obs2_px = self.cam2_algo.update(events2)
 
         # tracker not ready yet (returns (None, None) or CameraObservation)
-        if isinstance(obs1, tuple) or isinstance(obs2, tuple):
+        if isinstance(obs1_px, tuple) or isinstance(obs2_px, tuple):
             return None
+
+        obs1 = self.cam.pixel_to_camnorm(obs1_px)
+        obs2 = self.cam.pixel_to_camnorm(obs2_px)
 
         return CameraPair(
             CameraObservation(slope=obs1.slope, intercept=obs1.intercept),
             CameraObservation(slope=obs2.slope, intercept=obs2.intercept)
         )
         
-    def cams_to_measurement(self, cams_px):
-        
-        if self.dvs_regression_model is not None:
-            y_meas = self.dvs_regression_model.estimate(cams_px)
+    def cams_to_measurement(self, cams_camnorm):
+        cams_px = CameraPair(
+            cam1=self.cam.camnorm_to_pixel(cams_camnorm.cam1),
+            cam2=self.cam.camnorm_to_pixel(cams_camnorm.cam2),
+        )
 
-            if super.is_valid_pose(y_meas):
-                return y_meas
-        
-        else:
-            obs1 = self.cam.pixel_to_camnorm(cams_px.cam1)
-            obs2 = self.cam.pixel_to_camnorm(cams_px.cam2)
+        y_meas = self.obs_model.estimate(cams_px)
 
-            cams = CameraPair(cam1=obs1, cam2=obs2)
-        
-            return super().cams_to_measurement(cams_camnorm=cams)
+        if y_meas is not None and self.is_valid_y_meas(y_meas):
+            return y_meas
+
+        return super().cams_to_measurement(cams_camnorm=cams_camnorm)
+
 
     def get_y(self, state_true: State) -> Measurement:
         
@@ -269,7 +273,7 @@ class SimEventCameraInterface(VisionModelBase):
         cams = self.get_z(state_true)
         self.last_line_observation = cams
 
-        y_meas = self.cams_to_measurement(cams_px=cams)
+        y_meas = self.cams_to_measurement(cams_camnorm=cams)
         
         return y_meas
 

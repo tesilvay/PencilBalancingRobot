@@ -9,14 +9,14 @@ from .base import Actuator
 @dataclass
 class ServoParams:
     mechanism:  object   # Mechanism — imported at runtime to avoid circular deps
-    port:       str   = "/dev/ttyUSB1"
-    baud:       int   = 115200
-    frequency:  float = 250.0
+    port:       str
+    baud:       int
+    frequency:  float
 
 SERVO_PRESETS = {
     "default": {
         "mechanism": "five_bar:default",
-        "port":      "/dev/ttyUSB1",
+        "port":      "/dev/ttyUSB0",
         "baud":      115200,
         "frequency": 250.0,
     }
@@ -52,6 +52,10 @@ class ServoActuator(Actuator):
 
     def reset(self) -> None:
         self.last_send = 0.0
+
+    def set_workspace_offset(self, dx: float, dy: float) -> None:
+        if hasattr(self.mechanism, "set_workspace_offset"):
+            self.mechanism.set_workspace_offset(dx, dy)
 
     def _send_raw(self, cmd: str) -> None:
         self._serial.write((cmd.strip() + "\r\n").encode("utf-8"))

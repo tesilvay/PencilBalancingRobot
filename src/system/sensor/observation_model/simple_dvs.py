@@ -15,7 +15,7 @@ SimpleRegressionParams = SimpleDVSRegressionModelParams
 
 SIMPLE_REG_PRESETS = {
     "default": {
-        "calibration_path": "hardware/calibration_files/dvs_affine_calibration.json",
+        "calibration_path": "src/system/sensor/calibration_dataset/simple_dvs_regression.json",
     }
 }
 

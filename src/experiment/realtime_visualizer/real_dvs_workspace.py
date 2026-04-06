@@ -80,7 +80,8 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):
             return VizResult(quit=True, toggle_pause=False)
-        key = cv2.waitKey(1) & 0xFF
-        quit_requested = key in (ord("q"), ord("Q"), 27)
-        toggle_pause = key == ord(" ")
-        return VizResult(quit=quit_requested, toggle_pause=toggle_pause)
+        key = cv2.waitKeyEx(1)
+        key_low = key & 0xFF if key != -1 else -1
+        quit_requested = key_low in (ord("q"), ord("Q"), 27)
+        toggle_pause = key_low == ord(" ")
+        return VizResult(quit=quit_requested, toggle_pause=toggle_pause, key=None if key == -1 else key)

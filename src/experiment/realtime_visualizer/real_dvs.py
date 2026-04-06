@@ -110,5 +110,6 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
         cv2.imshow(self._window_name, composite)
         if _window_closed(self._window_name):
             return VizResult(quit=True)
-        key = cv2.waitKey(1) & 0xFF
-        return VizResult(quit=key in (ord("q"), ord("Q"), 27))
+        key = cv2.waitKeyEx(1)
+        key_low = key & 0xFF if key != -1 else -1
+        return VizResult(quit=key_low in (ord("q"), ord("Q"), 27), key=None if key == -1 else key)

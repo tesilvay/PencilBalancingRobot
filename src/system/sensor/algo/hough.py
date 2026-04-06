@@ -99,13 +99,13 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
         self.cx = self.width  / 2
         self.cy = self.height / 2
         
-        self.mixing_factor    = params.mixing_factor,
-        self.inlier_stddev_px = params.inlier_stddev_px,
-        self.min_determinant  = params.min_determinant,
+        self.mixing_factor    = params.mixing_factor
+        self.inlier_stddev_px = params.inlier_stddev_px
+        self.min_determinant  = params.min_determinant
         
         self.max_events = params.max_events
 
-        sigma = self.params.inlier_stddev_px
+        sigma = self.inlier_stddev_px
         self._inv_2sigma2 = 1.0 / (2.0 * sigma * sigma)
 
         self.state = params.state
@@ -117,7 +117,7 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
             4.0 * self.state.quadratic_m2 * self.state.quadratic_b2
             - self.state.cross_mb * self.state.cross_mb
         )
-        if abs(determinant) < self.params.min_determinant:
+        if abs(determinant) < self.min_determinant:
             return None
 
         centered_intercept = (
@@ -171,8 +171,8 @@ class PaperHoughLineAlgorithm(DVSLineAlgorithm):
             xs_centered, ys_centered,
             s.quadratic_m2, s.cross_mb, s.quadratic_b2,
             s.linear_m, s.linear_b,
-            self.params.mixing_factor, self._inv_2sigma2,
-            self.params.min_determinant,
+            self.mixing_factor, self._inv_2sigma2,
+            self.min_determinant,
         )
         return self._current_pixel_observation()
 

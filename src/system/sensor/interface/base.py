@@ -11,7 +11,8 @@ from src.shared import (
 class VisionModelBase:
 
     def __init__(self, camera_params: CameraParams):
-        raise NotImplementedError
+        self.xr = camera_params.xr
+        self.yr = camera_params.yr
 
     def get_y(self, state_true: State) -> Measurement:
         # get z (raw sensor measurement)

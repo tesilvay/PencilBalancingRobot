@@ -31,3 +31,7 @@ class MockServoActuator(Actuator):
 
     def reset(self) -> None:
         pass
+
+    def set_workspace_offset(self, dx: float, dy: float) -> None:
+        if hasattr(self.mechanism, "set_workspace_offset"):
+            self.mechanism.set_workspace_offset(dx, dy)

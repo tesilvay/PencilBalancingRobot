@@ -33,17 +33,17 @@ class SystemParams:
 SYSTEM_PRESETS = {
     "simple_sim": {
         "plants":       ["sim:default"],
-        "controllers": ["smooth_pole:default"],
-        "estimators":  ["lpf:default"],
-        "sensor":      "sim_analytic:default",
+        "controllers": ["smooth_pole:smoother"],
+        "estimators":  ["lpf:test"],
+        "sensor":      "sim_analytic:noisy",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
     },
     "placing_only": {
-        "plants":       ["placing:steady_hands"],
-        "controllers": ["null:default"],
-        "estimators":  ["lpf:default"],
-        "sensor":      "sim_analytic:default",
+        "plants":       ["sim:default"],#["placing:angle_only"],
+        "controllers": ["smooth_pole:default"],
+        "estimators":  ["kalman:default"],
+        "sensor":      "sim_dvs:hough",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
     },
@@ -55,10 +55,29 @@ SYSTEM_PRESETS = {
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
     },
-    "real": {
-        "base": "dynamic_sim",
+    "real_vision": {
+        "base": "simple_sim",
+        "estimators":  ["lpf:test"],
         "sensor":   "real_dvs:hough",
+    },
+    "real": {
+        "base": "real_vision",
         "actuator": "servo:default",
+    },
+    "real_supervised": {
+        "base": "real_vision",
+        "plants": ["sim:default", "sim:default"],
+        "controllers": ["null:default", "smooth_pole:smoother"],
+        "actuator": "servo:default",
+        "supervisor": "real:default",
+    },
+    "real_dynamic_supervised": {
+        "base": "real_vision",
+        "plants": ["sim:default", "sim:default"],
+        "controllers": ["null:default", "smooth_pole:smoother"],
+        "estimators": ["lpf:test", "kalman:default"],
+        "actuator": "servo:default",
+        "supervisor": "real_dynamic:default",
     },
 }
 
@@ -85,13 +104,24 @@ class System:
         self.u = None
         self.last_y_meas = None
         self._offset_xy = np.zeros(2, dtype=float)
-        self._offset_latched = False
+        self._offset_latched_fallback = False
+        if hasattr(self.supervisor, "attach_runtime"):
+            self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
 
     def _offset_from_state(self, x_true: State) -> np.ndarray:
         return np.array(
             [
                 float(x_true.px - self.workspace.x_ref),
                 float(x_true.py - self.workspace.y_ref),
+            ],
+            dtype=float,
+        )
+    
+    def _offset_from_meas(self, y: Measurement) -> np.ndarray:
+        return np.array(
+            [
+                float(y.px - self.workspace.x_ref),
+                float(y.py - self.workspace.y_ref),
             ],
             dtype=float,
         )
@@ -109,32 +139,21 @@ class System:
         self.active_controller.set_applied_command(u_applied)
         return u_applied
 
-    def step(self, dt):
+    def _supervisor_active_indices(self) -> tuple[int, int]:
+        try:
+            active_indices = self.supervisor.active_indices
+        except (AttributeError, NotImplementedError):
+            ctrl_i = self.controllers.index(self.active_controller)
+            est_i = self.estimators.index(self.active_estimator)
+            return ctrl_i, est_i
+        return active_indices
 
-        x_true, acc = self.active_plant.step(self.x, self.u, dt)
-        if not self._offset_latched:
-            self._offset_xy = self._offset_from_state(x_true)
+    def _is_offset_latched(self) -> bool:
+        if hasattr(self.supervisor, "is_offset_latched"):
+            return bool(self.supervisor.is_offset_latched)
+        return self._offset_latched_fallback
 
-        # get measurements
-        y = self.sensor.get_y(x_true)
-        self.last_y_meas = y
-        y_corr = self._measurement_with_offset(y, self._offset_xy)
-
-        # every estimator calculates innovation too
-        x_hat, innovation = self.active_estimator.estimate(y_meas=y_corr, dt=dt, u_cmd=self.u)
-        u_raw = self.active_controller.compute(x_hat)
-        u_cmd = self.finalize_command(u_raw)
-
-        mech_joints = self.actuator.apply(u_cmd)
-
-        # 2. supervisor decides what should be active next step
-        ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)
-        transition = getattr(self.supervisor, "last_transition", None)
-        if transition and transition.get("left_acquisition", False):
-            self._offset_xy = self._offset_from_state(x_true)
-            self._offset_latched = True
-
-        # 3. system owns the swap — including warm-start on switches
+    def _sync_active_components(self, ctrl_i: int, est_i: int, x_hat: State | None = None) -> None:
         new_estimator = self.estimators[est_i]
         if new_estimator is not self.active_estimator:
             new_estimator.reset(x_hat)
@@ -143,10 +162,43 @@ class System:
         if new_controller is not self.active_controller:
             new_controller.reset(x_hat)
 
-        # plant and controller change equally
         self.active_plant = self.plants[ctrl_i]
         self.active_controller = new_controller
         self.active_estimator = new_estimator
+
+    def step(self, dt):
+        self._sync_active_components(*self._supervisor_active_indices())
+
+        x_true, acc = self.active_plant.step(self.x, self.u, dt)
+
+        # get measurements
+        y = self.sensor.get_y(x_true)
+        self.last_y_meas = y
+        
+        # no latch, keep updating offset
+        if not self._is_offset_latched():
+            self._offset_xy = self._offset_from_meas(y)
+        y = self._measurement_with_offset(y, self._offset_xy)
+
+        # every estimator calculates innovation too
+        x_hat, innovation = self.active_estimator.estimate(y_meas=y, dt=dt, u_cmd=self.u)
+        u_raw = self.active_controller.compute(x_hat)
+        u_override = getattr(self.supervisor, "command_override", None)
+        if u_override is not None:
+            u_raw = u_override
+        u_cmd = self.finalize_command(u_raw)
+
+        mech_joints = self.actuator.apply(u_cmd)
+
+        # 2. supervisor decides what should be active next step
+        ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)
+        transition = getattr(self.supervisor, "last_transition", None)
+        if transition and transition.get("left_acquisition", False) and not hasattr(self.supervisor, "is_offset_latched"):
+            self._offset_xy = self._offset_from_meas(self.last_y_meas)
+            self._offset_latched_fallback = True
+
+        # 3. system owns the swap — including warm-start on switches
+        self._sync_active_components(ctrl_i, est_i, x_hat=x_hat)
 
         self.x = x_true
         self.u = u_cmd
@@ -158,7 +210,7 @@ class System:
             innovation=innovation,
             mech_joints=mech_joints,
             offset_xy=self._offset_xy.copy(),
-            offset_latched=bool(self._offset_latched),
+            offset_latched=self._is_offset_latched(),
         )
 
     def reset(self):
@@ -166,6 +218,11 @@ class System:
         self.active_controller = self.controllers[0]
         self.active_estimator = self.estimators[0]
 
+        if hasattr(self.supervisor, "attach_runtime"):
+            self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
+        if hasattr(self.supervisor, "reset"):
+            self.supervisor.reset()
+        self._sync_active_components(*self._supervisor_active_indices())
         self.active_controller.reset()
         self.active_estimator.reset()
         for plant in self.plants:
@@ -176,7 +233,7 @@ class System:
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
         self.last_y_meas = None
-        self._offset_latched = False
+        self._offset_latched_fallback = False
         self._offset_xy = self._offset_from_state(self.x)
 
         mj0 = self.actuator.mech_joint_snapshot(self.u)
@@ -187,7 +244,7 @@ class System:
             innovation=np.zeros(4),
             mech_joints=mj0,
             offset_xy=self._offset_xy.copy(),
-            offset_latched=False,
+            offset_latched=self._is_offset_latched(),
         )
     
     

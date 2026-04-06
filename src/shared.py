@@ -48,11 +48,12 @@ def default_workspace() -> WorkspaceParams:
 
 @dataclass
 class TimingParams:
-    total_time: float = 5.0
-    dt:         float = 1e-3
+    total_time: float
+    dt:         float
 
 TIMING_PRESETS = {
     "default": {"total_time": 5.0, "dt": 4e-3},
+    "ideal": {"total_time": 5.0, "dt": 1e-3},
     "long":    {"total_time": 30.0, "dt": 4e-3},
 }
 
@@ -96,7 +97,7 @@ INIT_CONDITIONS_SPREAD_PRESETS = {
 }
 
 def default_spread() -> InitConditionsSpread:
-    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["real"])
+    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["easy"])
     
 # ── Null ──────────────────────────────────────────────────────────────────────
 
@@ -237,7 +238,7 @@ class CameraParams:
 CAMERA_PRESETS = {
     "default": {
         "xr": 170,
-        "yr": 360,
+        "yr": 176,
         "y_mask_line_1":   160,
         "y_mask_line_2":   190,
         "DAVIS346_WIDTH":  346,

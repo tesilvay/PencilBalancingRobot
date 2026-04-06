@@ -8,12 +8,18 @@ EXPERIMENT_PRESETS = {
         "system":              "default:simple_sim",
         "logger":              "default:default",
         "stop_condition":      "max_steps:default",
-        "realtime_visualizer": "null:default",
+        "realtime_visualizer": "sim_ws:default",
         "offline_visualizer":  "3d:default",
         "progress":            "default:default",
         "pacing":              "null:default",
         "scheduler":           "realtime:default",
         "n_trials":            1,
+    },
+    "test_sim_dvs": {
+        "base": "sim",
+        "system":"default:placing_only",
+        "realtime_visualizer": "real_ws:default",
+        "offline_visualizer":  "3d:default",
     },
     "placing": {
         "base": "sim",
@@ -22,7 +28,7 @@ EXPERIMENT_PRESETS = {
     "dynamic_sim": {
         "base": "sim",
         "system":"default:dynamic_sim",
-        "offline_visualizer":  "3d:save_video",
+        "offline_visualizer":  "3d:default",
     },
     "realtime_sim": {
         "base": "sim",
@@ -30,12 +36,25 @@ EXPERIMENT_PRESETS = {
         "offline_visualizer":  "null:default",
         "pacing":              "realtime:default",
     },
-    "real": {
+    "real_vision": {
         "base": "sim",
-        "system":              "default:real",
-        "realtime_visualizer": "real:default",
+        "system":              "default:real_vision",
+        "stop_condition":      "infinite:default",
+        "realtime_visualizer": "real_ws:default",
         "offline_visualizer":  "null:default",
         "pacing":              "realtime:default",
+    },
+    "real": {
+        "base":   "real_vision",
+        "system": "default:real",
+    },
+    "real_supervised": {
+        "base":   "real_vision",
+        "system": "default:real_supervised",
+    },
+    "real_dynamic": {
+        "base":   "real_vision",
+        "system": "default:real_dynamic_supervised",
     },
 }
 
@@ -77,6 +96,18 @@ class Experiment:
                     self.system.sensor.get_event_accumulator_frames
                 )
 
+    def _supervisor_title(self) -> str | None:
+        state_name = getattr(self.system.supervisor, "state_name", None)
+        if state_name == "SERVO_CENTERING":
+            return "Servo Centering | Arrows/WASD: move | Enter: accept | R: reset | Q: quit"
+        if state_name == "ACQUISITION":
+            return "Acquisition | Hold pencil upright to start motion | Q: quit"
+        if state_name == "STABILIZING":
+            return "Stabilizing | Running controller, waiting to switch estimator | Q: quit"
+        if state_name == "BALANCED":
+            return "Balanced | Closed-loop controller active | Q: quit"
+        return None
+
     def run_trial(self):
         self.reset()
         i = 0
@@ -91,7 +122,10 @@ class Experiment:
                     command=self.system.u,
                     y_meas=self.system.last_y_meas,
                     paused=False,
+                    title=self._supervisor_title(),
                 )
+                if vr.key is not None and hasattr(self.system.supervisor, "handle_key"):
+                    self.system.supervisor.handle_key(vr.key)
                 if vr.quit:
                     break
             self.pacing.pace()
