@@ -61,6 +61,9 @@ class Supervisor:
     def note_applied_command(self, command: ControlInput) -> None:
         del command
 
+    def notify_fall_detected(self) -> None:
+        pass
+
 
 @dataclass(kw_only=True)
 class RealStartupParams:
@@ -251,6 +254,10 @@ class RealServoSupervisorBase(Supervisor):
         self._reacquire_elapsed_s = 0.0
         self._reacquire_active = self.params.reacquire_ramp_s > 0.0
         self._on_reset_to_acquisition()
+
+    def notify_fall_detected(self) -> None:
+        if self.state in {"STABILIZING", "BALANCED"}:
+            self._reset_to_acquisition_state()
 
     def _is_upright(self, x_est) -> bool:
         px = float(x_est.px - self.workspace.x_ref)

@@ -76,15 +76,19 @@ def _interp1d(xq: float, xp: np.ndarray, fp: np.ndarray) -> float:
     return float(np.interp(float(xq), xp, fp))
 
 
-# Post-estimate limits: tilts ±10°, XY kept inside disk (see _clamp_measurement).
+# Post-estimate limits: tilts configurable, XY kept inside disk (see _clamp_measurement).
 _SIMPLEDVS_MAX_TILT_RAD = float(np.deg2rad(10.0))
 _DEFAULT_WORKSPACE_SAFE_RADIUS_M = 0.068
 
 
-def _clamp_measurement(p: Measurement, metadata: Dict[str, Any] | None) -> Measurement:
-    """Clip tilts to ±10°; project (X, Y) onto disk around ref with safe radius from metadata."""
-    ax = float(np.clip(p.ax, -_SIMPLEDVS_MAX_TILT_RAD, _SIMPLEDVS_MAX_TILT_RAD))
-    ay = float(np.clip(p.ay, -_SIMPLEDVS_MAX_TILT_RAD, _SIMPLEDVS_MAX_TILT_RAD))
+def _clamp_measurement(
+    p: Measurement,
+    metadata: Dict[str, Any] | None,
+    max_tilt_rad: float,
+) -> Measurement:
+    """Clip tilts to configured bounds; project (X, Y) onto disk around ref with safe radius from metadata."""
+    ax = float(np.clip(p.ax, -max_tilt_rad, max_tilt_rad))
+    ay = float(np.clip(p.ay, -max_tilt_rad, max_tilt_rad))
     meta = dict(metadata or {})
     raw_r = meta.get("workspace_radius_m", meta.get("safe_radius_m", _DEFAULT_WORKSPACE_SAFE_RADIUS_M))
     safe_r = float(raw_r)
@@ -115,6 +119,7 @@ class SimpleDVSRegressionModel:
     mask_y_cam1: int
     mask_y_cam2: int
     metadata: Dict[str, Any] | None = None
+    max_tilt_rad: float = _SIMPLEDVS_MAX_TILT_RAD
 
     # Affine mode (legacy v1)
     cam1: SimpleDVSCameraCalibration | None = None
@@ -144,7 +149,7 @@ class SimpleDVSRegressionModel:
             X, alpha_x = self.cam1.estimate_axis(obs1_px, mask_y=int(self.mask_y_cam1))
             Y, alpha_y = self.cam2.estimate_axis(obs2_px, mask_y=int(self.mask_y_cam2))
             raw = Measurement(px=float(X), py=float(Y), ax=float(alpha_x), ay=float(alpha_y))
-            return _clamp_measurement(raw, self.metadata)
+            return _clamp_measurement(raw, self.metadata, self.max_tilt_rad)
 
         x1 = float(line_x_at_pixel_y(obs1_px, float(self.mask_y_cam1)))
         x2 = float(line_x_at_pixel_y(obs2_px, float(self.mask_y_cam2)))
@@ -161,7 +166,7 @@ class SimpleDVSRegressionModel:
         alpha_x = _interp1d(s1, xp_ax, fp_ax)
         alpha_y = _interp1d(s2, xp_ay, fp_ay)
         raw = Measurement(px=X, py=Y, ax=alpha_x, ay=alpha_y)
-        return _clamp_measurement(raw, self.metadata)
+        return _clamp_measurement(raw, self.metadata, self.max_tilt_rad)
 
     # ------------------------------------------------------------
     # Serialization (affine only)
@@ -195,10 +200,20 @@ class SimpleDVSRegressionModel:
             json.dump(self.to_dict(), f, indent=2)
 
     @classmethod
-    def load(cls, path: str | Path) -> "SimpleDVSRegressionModel":
+    def load(
+        cls,
+        path: str | Path,
+        max_tilt_deg: float | None = None,
+    ) -> "SimpleDVSRegressionModel":
         path = Path(path)
         with path.open("r") as f:
             data = json.load(f)
+
+        max_tilt_rad = (
+            _SIMPLEDVS_MAX_TILT_RAD
+            if max_tilt_deg is None
+            else float(np.deg2rad(max_tilt_deg))
+        )
 
         if data.get("model_type") == "simple_dvs_regression_v1":
             cam1 = data["cam1"]
@@ -207,6 +222,7 @@ class SimpleDVSRegressionModel:
                 mask_y_cam1=int(data["mask_y_cam1"]),
                 mask_y_cam2=int(data["mask_y_cam2"]),
                 metadata=data.get("metadata") or {},
+                max_tilt_rad=max_tilt_rad,
                 cam1=SimpleDVSCameraCalibration(
                     k_pos=float(cam1["k_pos"]),
                     b_pos=float(cam1["b_pos"]),
@@ -222,7 +238,7 @@ class SimpleDVSRegressionModel:
             )
 
         if "stages" in data and all(k in data for k in ("b1", "b2", "s1", "s2")):
-            return cls._from_calibration_dataset_dict(data)
+            return cls._from_calibration_dataset_dict(data, max_tilt_rad=max_tilt_rad)
 
         raise ValueError(
             f"Unrecognized JSON in {path}: expected simple_dvs_regression_v1 or "
@@ -230,7 +246,11 @@ class SimpleDVSRegressionModel:
         )
 
     @classmethod
-    def _from_calibration_dataset_dict(cls, data: Dict[str, Any]) -> "SimpleDVSRegressionModel":
+    def _from_calibration_dataset_dict(
+        cls,
+        data: Dict[str, Any],
+        max_tilt_rad: float = _SIMPLEDVS_MAX_TILT_RAD,
+    ) -> "SimpleDVSRegressionModel":
         b1 = data["b1"]
         b2 = data["b2"]
         s1 = data["s1"]
@@ -266,6 +286,7 @@ class SimpleDVSRegressionModel:
             mask_y_cam1=mask_y_cam1,
             mask_y_cam2=mask_y_cam2,
             metadata=meta,
+            max_tilt_rad=max_tilt_rad,
             interp_X=interp_X,
             interp_Y=interp_Y,
             interp_alpha_x=interp_alpha_x,
@@ -333,4 +354,3 @@ def save_affine_v1_calibration(
         cam2=SimpleDVSCameraCalibration(k_pos=k2p, b_pos=b2p, k_alpha=k2a, b_alpha=b2a),
     )
     model.save(path)
-

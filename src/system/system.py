@@ -28,6 +28,8 @@ class SystemParams:
     supervisor:  object
     init_spread: InitConditionsSpread = field(default_factory=default_spread)
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
+    fall_angle_deg: float            = 20.0
+    fall_hold_s: float               = 0.03
 
 
 SYSTEM_PRESETS = {
@@ -106,6 +108,10 @@ class System:
         self.last_y_meas = None
         self._offset_xy = np.zeros(2, dtype=float)
         self._offset_latched_fallback = False
+        self.fall_angle_rad = float(np.deg2rad(params.fall_angle_deg))
+        self.fall_hold_s = float(params.fall_hold_s)
+        self._fall_detected = False
+        self._fall_timer_s = 0.0
         if hasattr(self.supervisor, "attach_runtime"):
             self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
 
@@ -167,7 +173,48 @@ class System:
         self.active_controller = new_controller
         self.active_estimator = new_estimator
 
+    @property
+    def fall_detected(self) -> bool:
+        return self._fall_detected
+
+    def _reset_fall_detection(self) -> None:
+        self._fall_detected = False
+        self._fall_timer_s = 0.0
+
+    def _update_fall_detection(self, y_meas: Measurement, dt: float) -> bool:
+        if getattr(self.supervisor, "is_prestart_state", False):
+            self._reset_fall_detection()
+            return False
+
+        angle_norm = float(np.linalg.norm([y_meas.ax, y_meas.ay]))
+        if angle_norm >= self.fall_angle_rad:
+            self._fall_timer_s += dt
+        else:
+            self._fall_timer_s = 0.0
+            self._fall_detected = False
+
+        prev_fall_detected = self._fall_detected
+        if self._fall_timer_s >= self.fall_hold_s:
+            self._fall_detected = True
+
+        return (not prev_fall_detected) and self._fall_detected
+
+    def _print_fall_diagnostic(self, y_meas: Measurement) -> None:
+        angle_norm_deg = float(np.rad2deg(np.linalg.norm([y_meas.ax, y_meas.ay])))
+        threshold_deg = float(np.rad2deg(self.fall_angle_rad))
+        hold_progress = 1.0 if self.fall_hold_s <= 0.0 else min(self._fall_timer_s / self.fall_hold_s, 1.0)
+
+        print(
+            "fall: "
+            f"|a|={angle_norm_deg:6.2f} deg, "
+            f"thresh={threshold_deg:5.2f} deg | "
+            f"hold={self._fall_timer_s:5.3f}/{self.fall_hold_s:5.3f} s "
+            f"({hold_progress * 100:5.1f}%) | "
+            f"latched={self._fall_detected}"
+        )
+
     def step(self, dt):
+        prev_supervisor_state = getattr(self.supervisor, "state_name", None)
         self._sync_active_components(*self._supervisor_active_indices())
 
         x_true, acc = self.active_plant.step(self.x, self.u, dt)
@@ -190,11 +237,15 @@ class System:
         u_cmd = self.finalize_command(u_raw)
 
         mech_joints = self.actuator.apply(u_cmd)
-        
-        #print(innovation)
+        if self._update_fall_detection(y, dt):
+            self.supervisor.notify_fall_detected()
+        self._print_fall_diagnostic(y)
 
         # 2. supervisor decides what should be active next step
         ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)
+        new_supervisor_state = getattr(self.supervisor, "state_name", None)
+        if prev_supervisor_state == "ACQUISITION" and new_supervisor_state != "ACQUISITION":
+            self._reset_fall_detection()
         transition = getattr(self.supervisor, "last_transition", None)
         if transition and transition.get("left_acquisition", False) and not hasattr(self.supervisor, "is_offset_latched"):
             self._offset_xy = self._offset_from_meas(self.last_y_meas)
@@ -242,6 +293,7 @@ class System:
         self.last_y_meas = None
         self._offset_latched_fallback = False
         self._offset_xy = self._offset_from_state(self.x)
+        self._reset_fall_detection()
 
         mj0 = self.actuator.mech_joint_snapshot(self.u)
         self.step_data = StepData(
