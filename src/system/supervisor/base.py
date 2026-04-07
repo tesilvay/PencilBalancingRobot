@@ -11,13 +11,20 @@ from src.shared import ControlInput, WorkspaceParams, clamp_control_input_to_wor
 class Supervisor:
     """Base class for supervisors."""
 
-    def update(self, x_est, innovation, dt) -> tuple[int, int]:
-        """Return (controller_index, estimator_index) into System's ordered lists."""
+    def update(
+        self,
+        x_hat_0,
+        innovation_0,
+        x_hat_1,
+        innovation_1,
+        dt,
+    ) -> tuple[int, float]:
+        """Return (controller_index, est_k) where est_k blends estimator 0 -> 1."""
         raise NotImplementedError
 
     @property
-    def active_indices(self) -> tuple[int, int]:
-        """Return the currently desired (controller_index, estimator_index)."""
+    def active_output(self) -> tuple[int, float]:
+        """Return the currently desired (controller_index, est_k)."""
         raise NotImplementedError
 
     @property

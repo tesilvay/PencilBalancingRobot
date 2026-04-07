@@ -23,13 +23,17 @@ class StaticSupervisor(Supervisor):
         self._last_transition: dict | None = None
         self._offset_latched = True
 
-    def update(self, x_est, innovation, dt) -> tuple[int, int]:
+    def _est_k(self) -> float:
+        return 0.0 if int(self.params.estimator_index) <= 0 else 1.0
+
+    def update(self, x_hat_0, innovation_0, x_hat_1, innovation_1, dt) -> tuple[int, float]:
+        del x_hat_0, innovation_0, x_hat_1, innovation_1, dt
         self._last_transition = None
-        return self.params.controller_index, self.params.estimator_index
+        return self.params.controller_index, self._est_k()
 
     @property
-    def active_indices(self) -> tuple[int, int]:
-        return self.params.controller_index, self.params.estimator_index
+    def active_output(self) -> tuple[int, float]:
+        return self.params.controller_index, self._est_k()
 
     @property
     def is_offset_latched(self) -> bool:

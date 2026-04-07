@@ -31,18 +31,19 @@ class RealSupervisor(RealServoSupervisorBase):
         super().__init__(params)
 
     @property
-    def active_indices(self) -> tuple[int, int]:
+    def active_output(self) -> tuple[int, float]:
         controller_index = self.params.centering_controller_index
         if self.state == "BALANCED":
             controller_index = self.params.run_controller_index
-        return controller_index, self.params.estimator_index
+        est_k = 0.0 if int(self.params.estimator_index) <= 0 else 1.0
+        return controller_index, est_k
 
-    def update(self, x_est, innovation, dt) -> tuple[int, int]:
-        del innovation
+    def update(self, x_hat_0, innovation_0, x_hat_1, innovation_1, dt) -> tuple[int, float]:
+        del innovation_0, x_hat_1, innovation_1
         prev_state = self.state
-        self._update_startup(x_est, dt)
+        self._update_startup(x_hat_0, dt)
         self._finish_update(prev_state)
-        return self.active_indices
+        return self.active_output
 
     def _measurement_offset_latched(self) -> bool:
         return self.state == "BALANCED"

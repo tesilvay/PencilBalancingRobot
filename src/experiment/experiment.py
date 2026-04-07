@@ -52,7 +52,7 @@ EXPERIMENT_PRESETS = {
         "base":   "real_vision",
         "system": "default:real_supervised",
     },
-    "real_dynamic": {
+    "real_supervised_dynamic": {
         "base":   "real_vision",
         "system": "default:real_dynamic_supervised",
     },
@@ -103,9 +103,9 @@ class Experiment:
         if state_name == "ACQUISITION":
             return "Acquisition | Hold pencil upright to start motion | Space: reacquire | Q: quit"
         if state_name == "STABILIZING":
-            return "Stabilizing | cont active, est 1 | Space: reset | Q: quit"
+            return "Stabilizing | blending estimators | Space: reset | Q: quit"
         if state_name == "BALANCED":
-            return "Balanced | cont active | Space: reset | Q: quit"
+            return "Balanced | Kalman fully blended | Space: reset | Q: quit"
         return None
 
     def run_trial(self):
