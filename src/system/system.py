@@ -69,8 +69,8 @@ SYSTEM_PRESETS = {
     "real_supervised": {
         "base": "real_vision",
         "plants": ["sim:default", "sim:default"],
-        "controllers": ["null:default", "smooth_pole:smoother"],
-        "estimators":  ["lpf:smoother"],
+        "controllers": ["null:default", "smooth_pole:test1"],
+        "estimators":  ["lpf:test2"],
         "actuator": "servo:default",
         "supervisor": "real:default",
     },
@@ -239,7 +239,6 @@ class System:
         mech_joints = self.actuator.apply(u_cmd)
         if self._update_fall_detection(y, dt):
             self.supervisor.notify_fall_detected()
-        self._print_fall_diagnostic(y)
 
         # 2. supervisor decides what should be active next step
         ctrl_i, est_i = self.supervisor.update(x_hat, innovation, dt)

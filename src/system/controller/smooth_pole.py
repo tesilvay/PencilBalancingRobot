@@ -35,7 +35,11 @@ SMOOTH_POLE_PRESETS = {
     "smoother":{
         "base": "default",
         "slew_poles": 0.99,
-    }
+    },
+    "test1": {
+        "s_poles":    [-12, -14, -16, -18] * 2,
+        "slew_poles": 0.99,
+    },
 }
 
 

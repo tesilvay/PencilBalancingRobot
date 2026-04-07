@@ -18,7 +18,7 @@ SERVO_PRESETS = {
         "mechanism": "five_bar:default",
         "port":      "/dev/ttyUSB0",
         "baud":      115200,
-        "frequency": 250.0,
+        "frequency": 333.0,
     }
 }
 

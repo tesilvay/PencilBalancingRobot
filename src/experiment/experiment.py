@@ -99,13 +99,13 @@ class Experiment:
     def _supervisor_title(self) -> str | None:
         state_name = getattr(self.system.supervisor, "state_name", None)
         if state_name == "SERVO_CENTERING":
-            return "Servo Centering | Arrows/WASD: move | Enter: accept | R: reset | Q: quit"
+            return "Centering | Arrows/WASD: move | Enter: accept | R: reset | Q: quit"
         if state_name == "ACQUISITION":
             return "Acquisition | Hold pencil upright to start motion | Space: reacquire | Q: quit"
         if state_name == "STABILIZING":
-            return "Stabilizing | Running controller, waiting to switch estimator | Space: reacquire | Q: quit"
+            return "Stabilizing | cont active, est 1 | Space: reset | Q: quit"
         if state_name == "BALANCED":
-            return "Balanced | Closed-loop controller active | Space: reacquire | Q: quit"
+            return "Balanced | cont active | Space: reset | Q: quit"
         return None
 
     def run_trial(self):
