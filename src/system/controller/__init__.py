@@ -1,4 +1,5 @@
 from .base        import BaseController
+from .accel_pole  import AccelPolePlacementController,  AccelPoleParams,  ACCEL_POLE_PRESETS
 from .pole        import PolePlacementController,       PoleParams,       POLE_PRESETS
 from .lqr         import LQRController,                 LQRParams,        LQR_PRESETS
 from .smooth_pole import SmoothPolePlacementController, SmoothPoleParams, SMOOTH_POLE_PRESETS
@@ -7,6 +8,7 @@ from .null        import NullController
 from src.shared   import Spec, NullParams, NULL_PRESETS
 
 CONTROLLER_REGISTRY = {
+    "accel_pole":  Spec(AccelPolePlacementController,  AccelPoleParams,  ACCEL_POLE_PRESETS),
     "pole":        Spec(PolePlacementController,       PoleParams,       POLE_PRESETS),
     "lqr":         Spec(LQRController,                 LQRParams,        LQR_PRESETS),
     "smooth_pole": Spec(SmoothPolePlacementController, SmoothPoleParams, SMOOTH_POLE_PRESETS),

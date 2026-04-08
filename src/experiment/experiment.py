@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from src.experiment.logger import TerminalInfo
 from src.shared import TimingParams, default_timing
 
 
@@ -14,6 +15,21 @@ EXPERIMENT_PRESETS = {
         "pacing":              "null:default",
         "scheduler":           "realtime:default",
         "n_trials":            1,
+    },
+    "new_sim": {
+        "base": "sim",
+        "system":"default:new_sim",
+        "stop_condition":  "max_steps:default",
+        "realtime_visualizer": "real_ws:default",
+        "offline_visualizer":  "3d:default",
+    },
+    "montecarlo": {
+        "base": "sim",
+        "system":"default:new_sim",
+        "stop_condition":  "any:early_stop",
+        "realtime_visualizer": "null:default",
+        "offline_visualizer":  "null:default",
+        "n_trials":            10,
     },
     "test_sim_dvs": {
         "base": "sim",
@@ -132,6 +148,10 @@ class Experiment:
             i += 1
 
         result = self.logger.get_result()
+        result.terminal = TerminalInfo(
+            stabilized=self.stop_condition.is_stabilized(),
+            settling_time=self.stop_condition.settling_time(),
+        )
         self.offline_visualizer.finalize(result, dt=self.dt)
         return result
 

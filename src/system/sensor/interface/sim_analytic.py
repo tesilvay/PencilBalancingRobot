@@ -30,6 +30,11 @@ SIM_ANALYTIC_PRESETS = {
         "noise_std":   1e-5,
         "delay_steps": 0,
     },
+    "noisiest": {
+        "base": "default",
+        "noise_std":   1e-2,
+        "delay_steps": 0,
+    },
 }
 
 

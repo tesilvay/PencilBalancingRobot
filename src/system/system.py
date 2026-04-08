@@ -79,6 +79,12 @@ SYSTEM_PRESETS = {
         "base": "real_supervised",
         "supervisor": "real_dynamic:default",
     },
+    "new_sim": {
+        "base": "simple_sim",
+        "sensor":      "sim_dvs:hough",
+        "plants": ["accel_sim:default"],
+        "controllers": ["accel_pole:default"],
+    },
 }
 
 
@@ -292,7 +298,11 @@ class System:
         self.last_estimates, self.last_innovations = self._run_estimators(y, dt)
         x_used = self._blend_state_estimates(est_k)
         innovation_used = self._blend_innovations(est_k)
-        self._print_estimator_estimates(est_k)
+        
+        
+        #self._print_estimator_estimates(est_k)
+        
+        
         u_raw = self.active_controller.compute(x_used)
         u_override = getattr(self.supervisor, "command_override", None)
         if u_override is not None:
