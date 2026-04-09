@@ -1,5 +1,6 @@
 from .base        import BaseController
 from .accel_pole  import AccelPolePlacementController,  AccelPoleParams,  ACCEL_POLE_PRESETS
+from .accel_lqr   import AccelLQRController,            AccelLQRParams,   ACCEL_LQR_PRESETS
 from .accel_lag_pole import AccelLagPolePlacementController, AccelLagPoleParams, ACCEL_LAG_POLE_PRESETS
 from .pole        import PolePlacementController,       PoleParams,       POLE_PRESETS
 from .lqr         import LQRController,                 LQRParams,        LQR_PRESETS
@@ -10,6 +11,7 @@ from src.shared   import Spec, NullParams, NULL_PRESETS
 
 CONTROLLER_REGISTRY = {
     "accel_pole":  Spec(AccelPolePlacementController,  AccelPoleParams,  ACCEL_POLE_PRESETS),
+    "accel_lqr":   Spec(AccelLQRController,            AccelLQRParams,   ACCEL_LQR_PRESETS),
     "accel_lag_pole": Spec(AccelLagPolePlacementController, AccelLagPoleParams, ACCEL_LAG_POLE_PRESETS),
     "pole":        Spec(PolePlacementController,       PoleParams,       POLE_PRESETS),
     "lqr":         Spec(LQRController,                 LQRParams,        LQR_PRESETS),

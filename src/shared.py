@@ -98,7 +98,7 @@ INIT_CONDITIONS_SPREAD_PRESETS = {
 }
 
 def default_spread() -> InitConditionsSpread:
-    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["angle"])
+    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["easy"])
     
 # ── Null ──────────────────────────────────────────────────────────────────────
 

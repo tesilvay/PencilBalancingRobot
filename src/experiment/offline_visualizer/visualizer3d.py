@@ -65,9 +65,10 @@ class Visualizer3D(OfflineVisualizerBase):
             self.total_sim_time = 0.0
 
         self.mech = params.mech
-        self.mech_history = params.mech_history
-        # Logged actuator geometry (IK at commanded setpoint); kept for debugging only.
-        self.mech_history_cmd: np.ndarray | None = None
+        # Rendered mechanism geometry is always reconstructed from ``history``.
+        self.mech_history: np.ndarray | None = None
+        # Logged actuator geometry (often command-based); kept for debugging only.
+        self.mech_history_cmd: np.ndarray | None = params.mech_history
         self.cmd_history = params.cmd_history
         self.add_trail = params.add_trail
 
@@ -157,11 +158,12 @@ class Visualizer3D(OfflineVisualizerBase):
             link.set_3d_properties([])
 
     def _build_mech_history_from_state(self) -> None:
-        """Fill ``mech_history`` with IK at true table pose (px, py) per frame.
+        """Fill ``mech_history`` from the pencil state history used by the 3D render.
 
-        Uses the same workspace frame as :meth:`Mechanism.command_geometry` so the
-        five-bar matches the pencil base. Logged ``mech_history_cmd`` remains the
-        command-based geometry for debugging.
+        This is intentionally separate from any recorded actuator ``mech_history``.
+        The recorded history remains available in ``mech_history_cmd`` for analysis,
+        while the on-screen five-bar is rebuilt from the same state trajectory that
+        defines the rendered pencil base.
         """
         if self.mech is None or self.history is None or self.history.size == 0:
             self.mech_history = None
@@ -174,16 +176,14 @@ class Visualizer3D(OfflineVisualizerBase):
                 continue
             px, py = float(row[0]), float(row[4])
             try:
-                joints, _ = self.mech.command_geometry(
-                    ControlInput(px_cmd=px, py_cmd=py)
-                )
+                joints, _ = self.mech.state_geometry(px, py)
                 out[i, :, :] = np.asarray(joints, dtype=float).reshape(3, 2)
             except (ValueError, TypeError):
                 pass
         self.mech_history = out
 
     def _ensure_mech_history_aligned(self) -> None:
-        """Precompute mechanism joints if ``render_video`` runs without ``finalize``."""
+        """Precompute render-only mechanism joints if ``render_video`` runs without ``finalize``."""
         if self.mech is None or self.history is None or self.history.size == 0:
             return
         n = int(self.history.shape[0])

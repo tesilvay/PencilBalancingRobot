@@ -11,7 +11,7 @@ EXPERIMENT_PRESETS = {
         "system":              "default:simple_sim",
         "logger":              "default:default",
         "stop_condition":      "max_steps:default",
-        "realtime_visualizer": "sim_ws:default",
+        "realtime_visualizer": "null:default",
         "offline_visualizer":  "3d:default",
         "progress":            "default:default",
         "pacing":              "null:default",
@@ -22,7 +22,7 @@ EXPERIMENT_PRESETS = {
         "base": "sim",
         "system":"default:new_sim",
         "stop_condition":  "max_steps:default",
-        "realtime_visualizer": "real_ws:default",
+        "realtime_visualizer": "null:default",
         "offline_visualizer":  "3d:default",
     },
     "real_new_sim": {

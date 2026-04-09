@@ -77,6 +77,20 @@ class SmoothPolePlacementController(BaseController):
         self.u_ref  = (-np.linalg.pinv(B_c) @ (A_c @ self.x_ref)).ravel()
         self.xi_ref = np.concatenate([self.x_ref, self.u_ref])
         self._u_prev = self.u_ref.copy()
+        
+        
+        
+        p_aug_ol = np.linalg.eigvals(A_aug)
+        p_aug_cl = np.linalg.eigvals(A_aug - B_aug @ self.K)
+
+        print("Augmented open-loop poles:")
+        print(p_aug_ol)
+        print("Magnitudes:", np.abs(p_aug_ol))
+
+        print("\nAugmented closed-loop poles:")
+        print(p_aug_cl)
+        print("Magnitudes:", np.abs(p_aug_cl))
+
 
     def compute(self, state: State) -> ControlInput:
         x   = state.as_vector()

@@ -175,6 +175,28 @@ class Mechanism:
     def _apply_calibration(self, desired_xy_m: np.ndarray) -> np.ndarray:
         return self._affine_matrix @ desired_xy_m + self._affine_offset
 
+    def state_geometry(
+        self, px_m: float, py_m: float
+    ) -> tuple[np.ndarray, tuple[float, float]]:
+        """
+        IK+FK solve for a workspace state point without command-side corrections.
+
+        This uses the state position directly in the mechanism global frame:
+        no workspace offset and no calibration affine are applied.
+        """
+        target_mm = np.array([float(px_m), float(py_m)], dtype=float) * 1000.0
+        theta1, theta4, A_g, C_g, P_g = self._mech.solve(target_mm)
+        joints = np.stack(
+            [
+                np.asarray(A_g, dtype=float).reshape(-1)[:2],
+                np.asarray(C_g, dtype=float).reshape(-1)[:2],
+                np.asarray(P_g, dtype=float).reshape(-1)[:2],
+            ],
+            axis=0,
+        )
+        theta_deg = (float(np.rad2deg(theta1)), float(np.rad2deg(theta4)))
+        return joints, theta_deg
+
     def command_geometry(
         self, command
     ) -> tuple[np.ndarray, tuple[float, float]]:
