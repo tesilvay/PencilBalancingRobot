@@ -29,17 +29,18 @@ class SmoothPoleParams:
 
 SMOOTH_POLE_PRESETS = {
     "default": {
-        "s_poles":    [-14, -16, -18, -20] * 2,
-        "slew_poles": 0.97,
+        "s_poles":    [-12, -14, -16, -18] * 2,
+        "slew_poles": 0.99,
     },
     "smoother":{
         "base": "default",
         "slew_poles": 0.99,
     },
     "test1": {
-        "s_poles":    [-12, -14, -16, -18] * 2,
+        "s_poles":    [-12,-13,-14,-15] * 2,
         "slew_poles": 0.99,
     },
+    
 }
 
 

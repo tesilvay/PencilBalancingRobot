@@ -1,0 +1,29 @@
+{
+  "model_type": "simple_dvs_regression_v1",
+  "mask_y_cam1": 160,
+  "mask_y_cam2": 190,
+  "cam1": {
+    "k_pos": -0.0012755270545494553,
+    "b_pos": 0.2246889965321734,
+    "k_alpha": 1.0691847116471571,
+    "b_alpha": 0.0010691847116471405
+  },
+  "cam2": {
+    "k_pos": 0.0005911081819149061,
+    "b_pos": -0.09203099693813617,
+    "k_alpha": -1.1542322735804518,
+    "b_alpha": 0.025393110018769947
+  },
+  "metadata": {
+    "workspace_radius_m": 0.068,
+    "x_step_m": 0.01,
+    "tilt_grid_deg": [
+      -10.0,
+      -5.0,
+      0.0,
+      5.0,
+      10.0
+    ],
+    "source": "simple_dvs_regression_calibrator"
+  }
+}

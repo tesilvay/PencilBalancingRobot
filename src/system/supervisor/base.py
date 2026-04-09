@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+from pathlib import Path
 
+import numpy as np
 from numpy import deg2rad
 from numpy.linalg import norm
 
@@ -47,6 +50,11 @@ class Supervisor:
         return None
 
     @property
+    def measurement_angle_offset(self) -> tuple[float, float]:
+        """Optional measurement-space trim applied to (ax, ay), radians."""
+        return 0.0, 0.0
+
+    @property
     def state_name(self) -> str:
         return self.__class__.__name__
 
@@ -82,6 +90,8 @@ class RealStartupParams:
     manual_step_m: float
     workspace: WorkspaceParams
     reacquire_ramp_s: float = 0.25
+    tilt_trim_step_deg: float = 0.1
+    tilt_trim_file: str = "src/system/supervisor/real_tilt_trim.json"
 
 
 class RealServoSupervisorBase(Supervisor):
@@ -105,6 +115,8 @@ class RealServoSupervisorBase(Supervisor):
         self._reacquire_active = False
         self._t_stable = 0.0
         self._last_transition: dict | None = None
+        self._tilt_trim_rad = np.zeros(2, dtype=float)
+        self._load_tilt_trim()
 
     @property
     def is_offset_latched(self) -> bool:
@@ -121,6 +133,10 @@ class RealServoSupervisorBase(Supervisor):
         if self.state == "ACQUISITION":
             return self._acquisition_command()
         return None
+
+    @property
+    def measurement_angle_offset(self) -> tuple[float, float]:
+        return float(self._tilt_trim_rad[0]), float(self._tilt_trim_rad[1])
 
     @property
     def state_name(self) -> str:
@@ -153,6 +169,18 @@ class RealServoSupervisorBase(Supervisor):
             return False
 
         if self.state != "SERVO_CENTERING":
+            if key in self._UP_KEYS or key_low in self._UP_KEYS:
+                self._nudge_tilt_trim(0.0, self.params.tilt_trim_step_deg)
+                return True
+            if key in self._DOWN_KEYS or key_low in self._DOWN_KEYS:
+                self._nudge_tilt_trim(0.0, -self.params.tilt_trim_step_deg)
+                return True
+            if key in self._LEFT_KEYS or key_low in self._LEFT_KEYS:
+                self._nudge_tilt_trim(-self.params.tilt_trim_step_deg, 0.0)
+                return True
+            if key in self._RIGHT_KEYS or key_low in self._RIGHT_KEYS:
+                self._nudge_tilt_trim(self.params.tilt_trim_step_deg, 0.0)
+                return True
             return False
 
         if key in self._UP_KEYS or key_low in self._UP_KEYS:
@@ -253,6 +281,46 @@ class RealServoSupervisorBase(Supervisor):
         actuator = self.actuator
         if actuator is not None and hasattr(actuator, "set_workspace_offset"):
             actuator.set_workspace_offset(dx, dy)
+
+    def _nudge_tilt_trim(self, dax_deg: float, day_deg: float) -> None:
+        delta_rad = np.deg2rad(np.array([dax_deg, day_deg], dtype=float))
+        self._tilt_trim_rad = self._tilt_trim_rad + delta_rad
+        self._save_tilt_trim()
+        ax_deg, ay_deg = np.rad2deg(self._tilt_trim_rad)
+        print(f"tilt trim -> ax={ax_deg:+.3f} deg, ay={ay_deg:+.3f} deg")
+
+    def _tilt_trim_path(self) -> Path:
+        path = Path(self.params.tilt_trim_file)
+        if not path.is_absolute():
+            path = Path.cwd() / path
+        return path
+
+    def _load_tilt_trim(self) -> None:
+        path = self._tilt_trim_path()
+        if not path.exists():
+            self._tilt_trim_rad = np.zeros(2, dtype=float)
+            return
+
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            ax_deg = float(data.get("ax_trim_deg", 0.0))
+            ay_deg = float(data.get("ay_trim_deg", 0.0))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            print(f"warning: failed to load tilt trim from {path}: {exc}")
+            self._tilt_trim_rad = np.zeros(2, dtype=float)
+            return
+
+        self._tilt_trim_rad = np.deg2rad(np.array([ax_deg, ay_deg], dtype=float))
+
+    def _save_tilt_trim(self) -> None:
+        path = self._tilt_trim_path()
+        payload = {
+            "version": 1,
+            "ax_trim_deg": float(np.rad2deg(self._tilt_trim_rad[0])),
+            "ay_trim_deg": float(np.rad2deg(self._tilt_trim_rad[1])),
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
     def _reset_to_acquisition_state(self) -> None:
         self.state = "ACQUISITION"

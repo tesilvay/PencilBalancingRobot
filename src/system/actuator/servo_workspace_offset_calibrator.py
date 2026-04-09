@@ -1,61 +1,34 @@
 """
-Real-servo pre-run calibration: compute a workspace translation offset.
+Interactive 5-point real-servo calibration.
 
-Workflow:
-1. Drive the mechanism to the configured workspace "center" (x_ref, y_ref).
-2. Let the user adjust commanded workspace (x_cmd, y_cmd) via terminal arrow keys.
-3. When the user confirms (Enter), compute:
-     x_offset = x_cmd - workspace.x_ref
-     y_offset = y_cmd - workspace.y_ref
-4. The offset is applied inside `hardware/Servo_System.py` before IK for every command.
+Each run walks the user through center + four cardinal points. For every point:
+1. Move to the saved servo-space seed if one exists, otherwise the nominal point.
+2. Let the user nudge the raw servo-space command with WASD / arrow keys.
+3. Save the final raw servo-space command for that named point.
+
+After all five points are accepted, an affine desired->servo map is fitted and
+written to the mechanism calibration file.
 """
 
 from __future__ import annotations
 
 import curses
 import time
-from typing import Tuple
+
+import numpy as np
 
 from src.shared import ControlInput, WorkspaceParams, Measurement
 
 
-def _clamp_to_workspace(x_des: float, y_des: float, workspace: WorkspaceParams) -> tuple[float, float]:
-    """Clamp (x_des,y_des) onto the workspace circle if a safe_radius is configured."""
-    if workspace.safe_radius is None:
-        return x_des, y_des
-
-    x_ref = workspace.x_ref
-    y_ref = workspace.y_ref
-    safe_radius = workspace.safe_radius
-
-    dx = x_des - x_ref
-    dy = y_des - y_ref
-    dist = (dx * dx + dy * dy) ** 0.5
-    if dist > safe_radius and dist > 0:
-        scale = safe_radius / dist
-        dx *= scale
-        dy *= scale
-        x_des = x_ref + dx
-        y_des = y_ref + dy
-    return x_des, y_des
-
-
 def _read_y_meas_from_vision(vision) -> Measurement | None:
-    """
-    Best-effort: return Measurement from the most recent DVS observation.
-
-    Real DVS vision ignores the state_true argument and uses background threads.
-    """
     if vision is None:
         return None
     try:
         measurement = vision.get_observation(None)
         if measurement is None:
             return None
-        y_meas = vision.reconstruct(measurement)
-        return y_meas
+        return vision.reconstruct(measurement)
     except Exception:
-        # Calibration UI should not crash the process if camera momentarily fails.
         return None
 
 
@@ -63,9 +36,46 @@ def _draw_line(stdscr, row: int, text: str) -> None:
     height, width = stdscr.getmaxyx()
     if row >= height:
         return
-    # Avoid curses.error on narrow terminals.
-    text = text[: max(0, width - 1)]
-    stdscr.addstr(row, 0, text)
+    stdscr.addstr(row, 0, text[: max(0, width - 1)])
+
+
+def _point_banner(name: str, idx: int, total: int, desired_xy: np.ndarray) -> str:
+    return (
+        f"Point {idx + 1}/{total}: {name.upper()} | "
+        f"desired physical target=({desired_xy[0]:+.4f}, {desired_xy[1]:+.4f}) m"
+    )
+
+
+def _send_raw_workspace_command(actuator, servo_xy: np.ndarray) -> None:
+    actuator.send(ControlInput(px_cmd=float(servo_xy[0]), py_cmd=float(servo_xy[1])))
+
+
+def _move_raw_workspace_command_smooth(
+    actuator,
+    start_xy: np.ndarray,
+    end_xy: np.ndarray,
+    *,
+    duration_s: float = 0.35,
+) -> np.ndarray:
+    start_xy = np.asarray(start_xy, dtype=float).reshape(2)
+    end_xy = np.asarray(end_xy, dtype=float).reshape(2)
+
+    if duration_s <= 0.0 or np.allclose(start_xy, end_xy):
+        _send_raw_workspace_command(actuator, end_xy)
+        return end_xy.copy()
+
+    period_s = float(getattr(actuator, "period", 0.02))
+    step_s = min(max(period_s, 0.01), 0.05)
+    n_steps = max(int(np.ceil(duration_s / step_s)), 1)
+
+    for i in range(1, n_steps + 1):
+        alpha = i / n_steps
+        servo_xy = (1.0 - alpha) * start_xy + alpha * end_xy
+        _send_raw_workspace_command(actuator, servo_xy)
+        if i < n_steps:
+            time.sleep(step_s)
+
+    return end_xy.copy()
 
 
 def _curses_calibration_loop(
@@ -74,8 +84,10 @@ def _curses_calibration_loop(
     system,
     actuator,
     workspace: WorkspaceParams,
-    step_m: float,
-) -> Tuple[float, float]:
+    nudge_step_m: float,
+    cardinal_delta_m: float,
+    move_duration_s: float,
+) -> dict[str, dict[str, np.ndarray]]:
     vision = None
     try:
         perception = getattr(system, "perception", None)
@@ -83,115 +95,135 @@ def _curses_calibration_loop(
     except Exception:
         vision = None
 
-    # Ensure calibration starts with no translation applied.
+    mechanism = getattr(actuator, "mechanism", None)
+    if mechanism is None or not hasattr(mechanism, "calibration_targets"):
+        raise TypeError("actuator.mechanism must support persisted 5-point calibration")
+
     if hasattr(actuator, "set_workspace_offset"):
         actuator.set_workspace_offset(0.0, 0.0)
+    if hasattr(actuator, "set_calibration_enabled"):
+        actuator.set_calibration_enabled(False)
 
-    x_cmd = float(workspace.x_ref)
-    y_cmd = float(workspace.y_ref)
-
-    actuator.send(ControlInput(px_cmd=x_cmd, py_cmd=y_cmd))
+    points = mechanism.calibration_targets(
+        x_ref=float(workspace.x_ref),
+        y_ref=float(workspace.y_ref),
+        cardinal_delta_m=float(cardinal_delta_m),
+        safe_radius=workspace.safe_radius,
+    )
 
     stdscr.clear()
     curses.curs_set(0)
     stdscr.keypad(True)
-    stdscr.timeout(50)  # ms
+    stdscr.timeout(50)
 
+    accepted: dict[str, dict[str, np.ndarray]] = {}
     last_y_meas: Measurement | None = None
     last_y_meas_t = 0.0
-    last_send_t = time.time()
-    last_action = "Centered at origin and sent initial command."
-    last_delta = (0.0, 0.0)
+    last_send_t = 0.0
+    last_action = "Starting calibration."
+    current_servo_xy = np.array([float(workspace.x_ref), float(workspace.y_ref)], dtype=float)
 
-    def send_command() -> None:
-        nonlocal last_send_t
-        actuator.send(ControlInput(px_cmd=x_cmd, py_cmd=y_cmd))
+    total = len(points)
+    for idx, point in enumerate(points):
+        name = str(point["name"])
+        desired_xy = np.asarray(point["desired_xy_m"], dtype=float).reshape(2)
+        servo_xy = np.asarray(point["seed_servo_xy_m"], dtype=float).reshape(2).copy()
+        saved_before = bool(mechanism.calibration_points().get(name))
+
+        current_servo_xy = _move_raw_workspace_command_smooth(
+            actuator,
+            current_servo_xy,
+            servo_xy,
+            duration_s=move_duration_s,
+        )
         last_send_t = time.time()
+        last_action = "Moved to saved point." if saved_before else "Moved to nominal point."
 
-    while True:
-        now = time.time()
+        while True:
+            now = time.time()
+            if now - last_y_meas_t > 0.08:
+                y_meas = _read_y_meas_from_vision(vision)
+                if y_meas is not None:
+                    last_y_meas = y_meas
+                last_y_meas_t = now
 
-        # Read y_meas at a modest rate; avoids burning CPU in the calibration loop.
-        if now - last_y_meas_t > 0.08:
-            y_meas = _read_y_meas_from_vision(vision)
-            if y_meas is not None:
-                last_y_meas = y_meas
-            last_y_meas_t = now
+            key = stdscr.getch()
+            if key != -1:
+                dx = 0.0
+                dy = 0.0
+                if key in (ord("w"), ord("W"), curses.KEY_UP):
+                    dy = +nudge_step_m
+                    last_action = "Nudged UP"
+                elif key in (ord("s"), ord("S"), curses.KEY_DOWN):
+                    dy = -nudge_step_m
+                    last_action = "Nudged DOWN"
+                elif key in (ord("a"), ord("A"), curses.KEY_LEFT):
+                    dx = -nudge_step_m
+                    last_action = "Nudged LEFT"
+                elif key in (ord("d"), ord("D"), curses.KEY_RIGHT):
+                    dx = +nudge_step_m
+                    last_action = "Nudged RIGHT"
+                elif key in (ord("r"), ord("R")):
+                    servo_xy = np.asarray(point["seed_servo_xy_m"], dtype=float).reshape(2).copy()
+                    current_servo_xy = _move_raw_workspace_command_smooth(
+                        actuator,
+                        current_servo_xy,
+                        servo_xy,
+                        duration_s=move_duration_s,
+                    )
+                    last_send_t = now
+                    last_action = "Reset to saved seed." if saved_before else "Reset to nominal seed."
+                elif key in (10, 13, curses.KEY_ENTER):
+                    accepted[name] = {
+                        "desired_xy_m": desired_xy.copy(),
+                        "servo_xy_m": servo_xy.copy(),
+                    }
+                    last_action = "Accepted point."
+                    break
+                elif key in (ord("q"), ord("Q")):
+                    raise RuntimeError("5-point servo calibration aborted by user (q).")
 
-        key = stdscr.getch()
-        if key != -1:
-            # Arrow keys: nudge commanded workspace.
-            if key == curses.KEY_UP:
-                y_cmd += step_m
-                x_cmd, y_cmd = _clamp_to_workspace(x_cmd, y_cmd, workspace)
-                last_action = "Command sent: moved UP"
-                last_delta = (0.0, +step_m)
-                send_command()
-            elif key == curses.KEY_DOWN:
-                y_cmd -= step_m
-                x_cmd, y_cmd = _clamp_to_workspace(x_cmd, y_cmd, workspace)
-                last_action = "Command sent: moved DOWN"
-                last_delta = (0.0, -step_m)
-                send_command()
-            elif key == curses.KEY_LEFT:
-                x_cmd -= step_m
-                x_cmd, y_cmd = _clamp_to_workspace(x_cmd, y_cmd, workspace)
-                last_action = "Command sent: moved LEFT"
-                last_delta = (-step_m, 0.0)
-                send_command()
-            elif key == curses.KEY_RIGHT:
-                x_cmd += step_m
-                x_cmd, y_cmd = _clamp_to_workspace(x_cmd, y_cmd, workspace)
-                last_action = "Command sent: moved RIGHT"
-                last_delta = (+step_m, 0.0)
-                send_command()
-            elif key in (10, 13, curses.KEY_ENTER):
-                # Confirm current command as the visual origin.
-                break
-            elif key in (ord("r"), ord("R")):
-                x_cmd = float(workspace.x_ref)
-                y_cmd = float(workspace.y_ref)
-                last_action = "Command sent: RESET to origin"
-                last_delta = (0.0, 0.0)
-                send_command()
-            elif key in (ord("q"), ord("Q")):
-                raise RuntimeError("Workspace offset calibration aborted by user (q).")
+                if dx != 0.0 or dy != 0.0:
+                    servo_xy += np.array([dx, dy], dtype=float)
+                    _send_raw_workspace_command(actuator, servo_xy)
+                    current_servo_xy = servo_xy.copy()
+                    last_send_t = now
 
-        _draw_line(stdscr, 0, "Pre-run workspace offset calibration")
-        _draw_line(stdscr, 1, "Arrows: move command | Enter: accept origin | r: reset | q: abort")
-        _draw_line(stdscr, 2, f"Step: {step_m:.4f} m")
-        _draw_line(stdscr, 3, f"{last_action} | Δ=({last_delta[0]:+.4f}, {last_delta[1]:+.4f}) m")
-
-        x_offset_now = x_cmd - float(workspace.x_ref)
-        y_offset_now = y_cmd - float(workspace.y_ref)
-        _draw_line(stdscr, 4, f"Command (x_cmd, y_cmd) = ({x_cmd:+.4f}, {y_cmd:+.4f}) m")
-        _draw_line(stdscr, 5, f"Current offset (x_offset, y_offset) = ({x_offset_now:+.4f}, {y_offset_now:+.4f}) m")
-
-        if last_y_meas is None:
-            _draw_line(stdscr, 7, "Measured y_meas: waiting for vision...")
-        else:
-            err_x = last_y_meas.px - workspace.x_ref
-            err_y = last_y_meas.py - workspace.y_ref
+            _draw_line(stdscr, 0, "Pre-run 5-point servo calibration")
+            _draw_line(stdscr, 1, "WASD/arrows: nudge raw servo command | Enter: accept | R: reset | Q: abort")
+            _draw_line(stdscr, 2, f"Nudge step: {nudge_step_m:.4f} m | Cardinal delta: {cardinal_delta_m:.4f} m")
+            _draw_line(stdscr, 4, _point_banner(name, idx, total, desired_xy))
             _draw_line(
                 stdscr,
-                7,
-                (
-                    "Measured y_meas: "
-                    f"({last_y_meas.px:+.4f}, {last_y_meas.py:+.4f}) m | "
-                    f"error vs origin ({err_x:+.4f}, {err_y:+.4f}) m"
-                ),
+                5,
+                f"Seed source: {'saved calibration' if saved_before else 'nominal target'}",
             )
+            _draw_line(stdscr, 6, f"Current raw servo command=({servo_xy[0]:+.4f}, {servo_xy[1]:+.4f}) m")
+            _draw_line(stdscr, 7, f"Last action: {last_action}")
 
-        _draw_line(stdscr, 9, "Use the measured y_meas/error (or your visual cue) to align the origin.")
+            if last_y_meas is None:
+                _draw_line(stdscr, 9, "Measured y_meas: waiting for vision...")
+            else:
+                err_xy = np.array([last_y_meas.px, last_y_meas.py], dtype=float) - desired_xy
+                _draw_line(
+                    stdscr,
+                    9,
+                    (
+                        "Measured y_meas="
+                        f"({last_y_meas.px:+.4f}, {last_y_meas.py:+.4f}) m | "
+                        f"error vs target=({err_xy[0]:+.4f}, {err_xy[1]:+.4f}) m"
+                    ),
+                )
 
-        # Small footer to show we are still alive.
-        _draw_line(stdscr, 11, f"Last command sent {now - last_send_t:+.2f}s ago")
+            _draw_line(
+                stdscr,
+                11,
+                "Adjust until the end effector sits on the named physical point, then press Enter.",
+            )
+            _draw_line(stdscr, 13, f"Last command sent {now - last_send_t:+.2f}s ago")
+            stdscr.refresh()
 
-        stdscr.refresh()
-
-    x_offset = x_cmd - float(workspace.x_ref)
-    y_offset = y_cmd - float(workspace.y_ref)
-    return x_offset, y_offset
+    return accepted
 
 
 def calibrate_servo_workspace_offset(
@@ -199,32 +231,48 @@ def calibrate_servo_workspace_offset(
     system,
     actuator,
     workspace: WorkspaceParams,
-    step_m: float = 0.002,
+    step_m: float = 0.001,
+    cardinal_delta_m: float = 0.015,
+    move_duration_s: float = 0.35,
 ) -> tuple[float, float]:
     """
-    Run a blocking terminal calibration to compute (x_offset, y_offset).
+    Backward-compatible wrapper around the new 5-point calibration flow.
 
-    Pass system=None when no perception stack is available (e.g. workspace picker);
-    measured y_meas lines in the UI stay idle. With a real system, vision readouts are best-effort.
+    Returns the center-point translation for older callers, but also persists the
+    full five-point calibration directly into the mechanism.
     """
     if not hasattr(actuator, "send"):
-        raise TypeError("actuator must provide a send(ControlInput) method")
+        raise TypeError("actuator must provide send(ControlInput)")
+
+    mechanism = getattr(actuator, "mechanism", None)
+    if mechanism is None or not hasattr(mechanism, "save_calibration"):
+        raise TypeError("actuator.mechanism must support save_calibration")
 
     try:
-        x_offset, y_offset = curses.wrapper(
+        accepted = curses.wrapper(
             lambda stdscr: _curses_calibration_loop(
                 stdscr,
                 system=system,
                 actuator=actuator,
                 workspace=workspace,
-                step_m=step_m,
+                nudge_step_m=step_m,
+                cardinal_delta_m=cardinal_delta_m,
+                move_duration_s=move_duration_s,
             )
         )
-        # curses.wrapper returns control to the normal terminal; safe to print.
-        print(f"Calibration accepted: x_offset={x_offset:+.6f} m, y_offset={y_offset:+.6f} m")
-        return x_offset, y_offset
     except curses.error as exc:
         raise RuntimeError(
             f"Curses UI failed (terminal may be too small or unsupported): {exc}"
         ) from exc
+    finally:
+        if hasattr(actuator, "set_calibration_enabled"):
+            actuator.set_calibration_enabled(True)
 
+    mechanism.save_calibration(accepted)
+    center = accepted["center"]
+    center_delta = np.asarray(center["servo_xy_m"], dtype=float) - np.asarray(center["desired_xy_m"], dtype=float)
+    print(
+        "Calibration accepted and saved: "
+        f"{len(accepted)} points -> {getattr(mechanism, 'calibration_path', 'configured file')}"
+    )
+    return float(center_delta[0]), float(center_delta[1])

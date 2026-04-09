@@ -29,9 +29,9 @@ REAL_DYNAMIC_SUPERVISOR_PRESETS = {
         "stable_hold_s": 1.0,
         
         "match_pos_threshold": 6e-3,
-        "match_vel_threshold": 100e-3,
+        "match_vel_threshold": 200e-3,
         "match_ang_threshold": np.deg2rad(1.5),
-        "match_w_threshold": np.deg2rad(25.0),
+        "match_w_threshold": np.deg2rad(35.0),
         "match_hold_s": 0.35,
         "blend_ramp_s": 2.0,
         
@@ -100,11 +100,11 @@ class RealDynamicSupervisor(RealServoSupervisorBase):
         self._blend_active = False
 
     def _update_blend(self, x_hat_0, x_hat_1, dt: float) -> None:
-        if not self._estimators_match(x_hat_0, x_hat_1):
-            self._reset_blend_progress()
-            return
-
         if not self._blend_active:
+            if not self._estimators_match(x_hat_0, x_hat_1):
+                self._reset_blend_progress()
+                return
+
             self._t_match += dt
             if self._t_match < self.params.match_hold_s:
                 self._est_k = 0.0

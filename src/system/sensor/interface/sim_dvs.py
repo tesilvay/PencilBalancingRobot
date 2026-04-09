@@ -25,7 +25,7 @@ class SimDVSParams:
 SIM_DVS_PRESETS = {
     "hough": {
         "algo":       "hough:default",
-        "obs_model":  "simple:default",
+        "obs_model":  "null:default",
     },
     "sam": {
         "algo":       "sam:default",

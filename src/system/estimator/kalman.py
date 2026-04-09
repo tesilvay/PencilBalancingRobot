@@ -44,6 +44,14 @@ KALMAN_PRESETS = {
         "q_vel_ang": 1e-2,
         "r_y_meas_pos": 1e-3,
         "r_y_meas_ang": 1e-3,
+    },
+    "test1":{
+        "q_y_meas_pos": 1e-4,
+        "q_y_meas_ang": 1e-4,
+        "q_vel_pos": 1e-1,
+        "q_vel_ang": 1e-1,
+        "r_y_meas_pos": 1e-3,
+        "r_y_meas_ang": 1e-3,
     }
 }
 

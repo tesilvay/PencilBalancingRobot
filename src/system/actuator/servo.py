@@ -57,6 +57,10 @@ class ServoActuator(Actuator):
         if hasattr(self.mechanism, "set_workspace_offset"):
             self.mechanism.set_workspace_offset(dx, dy)
 
+    def set_calibration_enabled(self, enabled: bool) -> None:
+        if hasattr(self.mechanism, "set_calibration_enabled"):
+            self.mechanism.set_calibration_enabled(enabled)
+
     def _send_raw(self, cmd: str) -> None:
         self._serial.write((cmd.strip() + "\r\n").encode("utf-8"))
         self._serial.flush()

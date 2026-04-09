@@ -2,6 +2,7 @@ import numpy as np
 from src.shared import PlantParams
 import control as ct
 
+
 def BuildAccModel(param: PlantParams):
     """
     Build the acceleration-input inverted-pendulum model for one axis and 2D.
@@ -119,6 +120,90 @@ def BuildAccModel(param: PlantParams):
         "B_ctrl": B_ctrl,
         "A_aug": A_aug,
         "B_aug": B_aug,
+    }
+
+
+def BuildAccModelWithLag(param: PlantParams):
+    """
+    Build a lag-aware position-command model for one axis and 2D.
+
+    One-axis physical state:
+      z = [x, x_dot, alpha, alpha_dot]^T
+      u = x_cmd
+
+    with
+      x_ddot = (1/tau^2) * (u - x) - (2*zeta/tau) * x_dot
+      alpha_ddot = (g/l) * alpha - (1/l) * x_ddot
+
+    The controller-coordinate state keeps the same interpretation as the
+    ideal acceleration-input controller family:
+      xc = [x - l*alpha, x_dot - l*alpha_dot, -g*alpha, -g*alpha_dot]^T
+    """
+    p = param
+    g = p.g
+    l = p.com_length
+    tau = p.tau
+    zeta = p.zeta
+
+    A_axis = np.array([
+        [0.0, 1.0, 0.0, 0.0],
+        [-1.0 / tau**2, -2.0 * zeta / tau, 0.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+        [1.0 / (l * tau**2), 2.0 * zeta / (l * tau), g / l, 0.0],
+    ])
+    B_axis = np.array([
+        [0.0],
+        [1.0 / tau**2],
+        [0.0],
+        [-1.0 / (l * tau**2)],
+    ])
+
+    T_axis = np.array([
+        [1.0, 0.0, -l, 0.0],
+        [0.0, 1.0, 0.0, -l],
+        [0.0, 0.0, -g, 0.0],
+        [0.0, 0.0, 0.0, -g],
+    ])
+
+    T_axis_inv = np.linalg.inv(T_axis)
+    A_ctrl_axis = T_axis @ A_axis @ T_axis_inv
+    B_ctrl_axis = T_axis @ B_axis
+
+    Z4 = np.zeros((4, 4))
+    Z4x1 = np.zeros((4, 1))
+    A = np.block([
+        [A_axis, Z4],
+        [Z4, A_axis],
+    ])
+    B = np.block([
+        [B_axis, Z4x1],
+        [Z4x1, B_axis],
+    ])
+
+    T = np.block([
+        [T_axis, Z4],
+        [Z4, T_axis],
+    ])
+    A_ctrl = np.block([
+        [A_ctrl_axis, Z4],
+        [Z4, A_ctrl_axis],
+    ])
+    B_ctrl = np.block([
+        [B_ctrl_axis, Z4x1],
+        [Z4x1, B_ctrl_axis],
+    ])
+
+    return {
+        "A_axis": A_axis,
+        "B_axis": B_axis,
+        "T_axis": T_axis,
+        "A_ctrl_axis": A_ctrl_axis,
+        "B_ctrl_axis": B_ctrl_axis,
+        "A": A,
+        "B": B,
+        "T": T,
+        "A_ctrl": A_ctrl,
+        "B_ctrl": B_ctrl,
     }
 
 def BuildLinearModel(param: PlantParams):

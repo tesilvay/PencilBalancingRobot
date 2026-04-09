@@ -4,6 +4,7 @@ import time
 import numpy as np
 
 from src.system.estimator.kalman import KalmanEstimator
+from src.system.actuator.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from src.shared import (
     State,
     Measurement,
@@ -27,10 +28,13 @@ class SystemParams:
     sensor:      object
     actuator:    object
     supervisor:  object
+    gain_schedule: object
     init_spread: InitConditionsSpread = field(default_factory=default_spread)
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
     fall_angle_deg: float            = 20.0
     fall_hold_s: float               = 0.03
+
+
 
 
 SYSTEM_PRESETS = {
@@ -41,6 +45,7 @@ SYSTEM_PRESETS = {
         "sensor":      "sim_analytic:noisy",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
+        "gain_schedule": "null:default",
     },
     "placing_only": {
         "plants":       ["sim:default"],#["placing:angle_only"],
@@ -49,6 +54,7 @@ SYSTEM_PRESETS = {
         "sensor":      "sim_dvs:hough",
         "actuator":    "mock:default",
         "supervisor":  "static:default",
+        "gain_schedule": "null:default",
     },
     "dynamic_sim": {
         "plants":       ["placing:steady_hands", "sim:default"],
@@ -57,35 +63,18 @@ SYSTEM_PRESETS = {
         "sensor":      "sim_analytic:default",
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
-    },
-    "real_vision": {
-        "base": "simple_sim",
-        "estimators":  ["lpf:test"],
-        "sensor":   "real_dvs:hough",
-    },
-    "real": {
-        "base": "real_vision",
-        "actuator": "servo:default",
-    },
-    "real_supervised": {
-        "base": "real_vision",
-        "plants": ["sim:default", "sim:default"],
-        "controllers": ["null:default", "smooth_pole:test1"],
-        "estimators":  ["lpf:test2", "kalman:test"],
-        "actuator": "servo:default",
-        "supervisor": "real:default",
-    },
-    "real_dynamic_supervised": {
-        "base": "real_supervised",
-        "supervisor": "real_dynamic:default",
+        "gain_schedule": "null:default",
     },
     "new_sim": {
         "base": "simple_sim",
         "sensor":      "sim_dvs:hough",
+        "estimators":  ["lpf:test"],
         "plants": ["accel_sim:default"],
         "controllers": ["accel_pole:default"],
+        "gain_schedule": "null:default",
     },
 }
+
 
 
 
@@ -97,6 +86,10 @@ class System:
         self.sensor      = params.sensor
         self.actuator    = params.actuator
         self.supervisor  = params.supervisor
+        self.gain_schedule = params.gain_schedule
+        
+        #self.gain_schedule.plot_angle_shape()
+        
         self.init_spread = params.init_spread
         self.workspace   = params.workspace
         
@@ -110,6 +103,7 @@ class System:
         self.x = None
         self.u = None
         self.last_y_meas = None
+        self.last_y_raw = None
         
         self.last_estimates: list[State] = []
         self.last_innovations: list[np.ndarray] = []
@@ -124,8 +118,26 @@ class System:
         self.fall_hold_s = float(params.fall_hold_s)
         self._fall_detected = False
         self._fall_timer_s = 0.0
+        self._startup_calibration_done = False
         if hasattr(self.supervisor, "attach_runtime"):
             self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
+
+    def _maybe_run_startup_calibration(self) -> None:
+        if self._startup_calibration_done:
+            return
+
+        mechanism = getattr(self.actuator, "mechanism", None)
+        serial_handle = getattr(self.actuator, "_serial", None)
+        if mechanism is None or serial_handle is None:
+            self._startup_calibration_done = True
+            return
+
+        calibrate_servo_workspace_offset(
+            system=self,
+            actuator=self.actuator,
+            workspace=self.workspace,
+        )
+        self._startup_calibration_done = True
 
     def _offset_from_state(self, x_true: State) -> np.ndarray:
         return np.array(
@@ -145,12 +157,21 @@ class System:
             dtype=float,
         )
 
-    def _measurement_with_offset(self, y: Measurement, offset_xy: np.ndarray) -> Measurement:
+    def _angle_offset_from_supervisor(self) -> np.ndarray:
+        angle_offset = getattr(self.supervisor, "measurement_angle_offset", (0.0, 0.0))
+        return np.asarray(angle_offset, dtype=float).reshape(2)
+
+    def _measurement_with_offset(
+        self,
+        y: Measurement,
+        offset_xy: np.ndarray,
+        angle_offset: np.ndarray,
+    ) -> Measurement:
         return Measurement(
             px=float(y.px - offset_xy[0]),
             py=float(y.py - offset_xy[1]),
-            ax=float(y.ax),
-            ay=float(y.ay),
+            ax=float(y.ax - angle_offset[0]),
+            ay=float(y.ay - angle_offset[1]),
         )
 
     def finalize_command(self, u_raw: ControlInput) -> ControlInput:
@@ -286,13 +307,19 @@ class System:
         x_true, acc = self.active_plant.step(self.x, self.u, dt)
 
         # get measurements
-        y = self.sensor.get_y(x_true)
-        self.last_y_meas = y
+        y_raw = self.sensor.get_y(x_true)
+        y_shaped = self.gain_schedule.apply(y_raw)
+        self.last_y_raw = y_shaped
         
         # no latch, keep updating offset
         if not self._is_offset_latched():
-            self._offset_xy = self._offset_from_meas(y)
-        y = self._measurement_with_offset(y, self._offset_xy)
+            self._offset_xy = self._offset_from_meas(y_shaped)
+        y = self._measurement_with_offset(
+            y_shaped,
+            self._offset_xy,
+            self._angle_offset_from_supervisor(),
+        )
+        self.last_y_meas = y
 
         # Keep every estimator warm, then build the controller-facing blended estimate.
         self.last_estimates, self.last_innovations = self._run_estimators(y, dt)
@@ -325,7 +352,8 @@ class System:
             self._reset_kalman_estimators(x_hat_0)
         transition = getattr(self.supervisor, "last_transition", None)
         if transition and transition.get("left_acquisition", False) and not hasattr(self.supervisor, "is_offset_latched"):
-            self._offset_xy = self._offset_from_meas(self.last_y_meas)
+            source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
+            self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
 
         # 3. system owns the controller swap while estimator usage is blended.
@@ -347,6 +375,7 @@ class System:
         )
 
     def reset(self):
+        self._maybe_run_startup_calibration()
         self.active_plant = self.plants[0]
         self.active_controller = self.controllers[0]
         self.active_estimator = self.estimators[0]
@@ -364,11 +393,14 @@ class System:
                 plant.reset()
         if hasattr(self.sensor, "reset"):
             self.sensor.reset()
+        if hasattr(self.gain_schedule, "reset"):
+            self.gain_schedule.reset()
         self.x = self.random_state()
         self.u = ControlInput(px_cmd=0, py_cmd=0)
         if hasattr(self.supervisor, "note_applied_command"):
             self.supervisor.note_applied_command(self.u)
         self.last_y_meas = None
+        self.last_y_raw = None
         self.last_estimates = []
         self.last_innovations = []
         self._last_estimator_print_t = 0.0

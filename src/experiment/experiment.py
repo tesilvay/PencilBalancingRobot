@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from src.experiment.logger import TerminalInfo
 from src.shared import TimingParams, default_timing
 
@@ -22,6 +24,13 @@ EXPERIMENT_PRESETS = {
         "stop_condition":  "max_steps:default",
         "realtime_visualizer": "real_ws:default",
         "offline_visualizer":  "3d:default",
+    },
+    "real_new_sim": {
+        "base": "sim",
+        "system":"real:real_new_sim",
+        "stop_condition":  "infinite:default",
+        "realtime_visualizer": "real_ws:default",
+        "offline_visualizer":  "null:default",
     },
     "montecarlo": {
         "base": "sim",
@@ -54,7 +63,7 @@ EXPERIMENT_PRESETS = {
     },
     "real_vision": {
         "base": "sim",
-        "system":              "default:real_vision",
+        "system":              "real:real_vision",
         "stop_condition":      "infinite:default",
         "realtime_visualizer": "real_ws:default",
         "offline_visualizer":  "null:default",
@@ -62,15 +71,15 @@ EXPERIMENT_PRESETS = {
     },
     "real": {
         "base":   "real_vision",
-        "system": "default:real",
+        "system": "real:real",
     },
     "real_supervised": {
         "base":   "real_vision",
-        "system": "default:real_supervised",
+        "system": "real:real_supervised",
     },
     "real_supervised_dynamic": {
         "base":   "real_vision",
-        "system": "default:real_dynamic_supervised",
+        "system": "real:real_dynamic_supervised",
     },
 }
 
@@ -117,12 +126,26 @@ class Experiment:
         if state_name == "SERVO_CENTERING":
             return "Centering | Arrows/WASD: move | Enter: accept | R: reset | Q: quit"
         if state_name == "ACQUISITION":
-            return "Acquisition | Hold pencil upright to start motion | Space: reacquire | Q: quit"
+            return (
+                "Acquisition | Hold pencil upright to start motion | "
+                f"WASD: tilt trim {self._tilt_trim_text()} | Space: reacquire | Q: quit"
+            )
         if state_name == "STABILIZING":
-            return "Stabilizing | blending estimators | Space: reset | Q: quit"
+            return (
+                "Stabilizing | blending estimators | "
+                f"WASD: tilt trim {self._tilt_trim_text()} | Space: reset | Q: quit"
+            )
         if state_name == "BALANCED":
-            return "Balanced | Kalman fully blended | Space: reset | Q: quit"
+            return (
+                "Balanced | Kalman fully blended | "
+                f"WASD: tilt trim {self._tilt_trim_text()} | Space: reset | Q: quit"
+            )
         return None
+
+    def _tilt_trim_text(self) -> str:
+        angle_offset = getattr(self.system.supervisor, "measurement_angle_offset", (0.0, 0.0))
+        ax_deg, ay_deg = np.rad2deg(np.asarray(angle_offset, dtype=float).reshape(2))
+        return f"ax={ax_deg:+.1f} ay={ay_deg:+.1f} deg"
 
     def run_trial(self):
         self.reset()

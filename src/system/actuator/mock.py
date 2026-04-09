@@ -35,3 +35,7 @@ class MockServoActuator(Actuator):
     def set_workspace_offset(self, dx: float, dy: float) -> None:
         if hasattr(self.mechanism, "set_workspace_offset"):
             self.mechanism.set_workspace_offset(dx, dy)
+
+    def set_calibration_enabled(self, enabled: bool) -> None:
+        if hasattr(self.mechanism, "set_calibration_enabled"):
+            self.mechanism.set_calibration_enabled(enabled)

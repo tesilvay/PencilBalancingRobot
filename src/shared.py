@@ -1,5 +1,6 @@
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass, field, fields, is_dataclass
+from types import UnionType
+from typing import Sequence, get_args, get_origin
 import numpy as np
 from numpy import rad2deg, deg2rad
 
@@ -19,7 +20,7 @@ class PlantParams:
 PLANT_PRESETS = {
     "default": {
         "g": 9.81, "com_length": 0.15, "tau": 0.03, "zeta": 0.8,
-        "max_acc": 9.81 * 10, "num_states": 8,
+        "max_acc": 9.81 * 5, "num_states": 8,
     }
 }
 
@@ -97,7 +98,7 @@ INIT_CONDITIONS_SPREAD_PRESETS = {
 }
 
 def default_spread() -> InitConditionsSpread:
-    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["easy"])
+    return InitConditionsSpread(**INIT_CONDITIONS_SPREAD_PRESETS["angle"])
     
 # ── Null ──────────────────────────────────────────────────────────────────────
 
@@ -315,6 +316,48 @@ def resolve_preset(presets, name):
     return p
 
 
+def _dataclass_type(tp):
+    """Return the concrete dataclass type hidden inside ``tp``, if any."""
+    if tp is None:
+        return None
+    if isinstance(tp, type) and is_dataclass(tp):
+        return tp
+
+    origin = get_origin(tp)
+    if origin in (None,):
+        return None
+    if origin in (UnionType,):
+        for arg in get_args(tp):
+            dc = _dataclass_type(arg)
+            if dc is not None:
+                return dc
+        return None
+
+    if str(origin) == "typing.Union":
+        for arg in get_args(tp):
+            dc = _dataclass_type(arg)
+            if dc is not None:
+                return dc
+    return None
+
+
+def _build_dataclass_value(params_cls, raw):
+    """Recursively instantiate nested dataclasses from plain dicts."""
+    if not isinstance(raw, dict):
+        return raw
+
+    resolved = {}
+    field_map = {f.name: f for f in fields(params_cls)}
+    for key, value in raw.items():
+        field_info = field_map.get(key)
+        nested_cls = None if field_info is None else _dataclass_type(field_info.type)
+        if nested_cls is not None and isinstance(value, dict):
+            resolved[key] = _build_dataclass_value(nested_cls, value)
+        else:
+            resolved[key] = value
+    return params_cls(**resolved)
+
+
 def build_from_registry(registry, spec_string):
     type_, preset = spec_string.split(":")
     try:
@@ -325,6 +368,7 @@ def build_from_registry(registry, spec_string):
     raw = resolve_preset(spec.Presets, preset)
 
     resolved = {}
+    param_fields = {f.name: f for f in fields(spec.Params)}
     for k, v in raw.items():
         sub_registry = (spec.registries or {}).get(k)
         if isinstance(v, str) and ":" in v:
@@ -333,6 +377,13 @@ def build_from_registry(registry, spec_string):
             # Homogeneous collaborators (e.g. controllers): order is part of the
             # contract — supervisors pick active instances by index.
             resolved[k] = [build_from_registry(sub_registry, s) for s in v]
+        elif isinstance(v, dict):
+            field_info = param_fields.get(k)
+            nested_cls = None if field_info is None else _dataclass_type(field_info.type)
+            if nested_cls is not None:
+                resolved[k] = _build_dataclass_value(nested_cls, v)
+            else:
+                resolved[k] = v
         else:
             resolved[k] = v
 

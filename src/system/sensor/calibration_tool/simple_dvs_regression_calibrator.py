@@ -9,13 +9,19 @@ from typing import Any
 import cv2
 import numpy as np
 from src.shared import WorkspaceParams, CameraObservation, CameraPair
-from perception.camera_model import CameraModel
-from perception.dvs_algorithms import mask_events_below_line
-from perception.dvs_camera_reader import DAVIS346_HEIGHT, DAVIS346_WIDTH, DVSReader, discover_devices
-from perception.simple_dvs_regression_model import default_affine_calibration_path, save_affine_v1_calibration
-
-
-from visualization.realtime_visualizer import OneDvsVisualizer, OneDvsVisualizerParams
+from src.system.sensor.observation_model.camera_model import CameraModel
+from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
+from src.system.sensor.reader.dvs_camera_reader import (
+    DAVIS346_HEIGHT,
+    DAVIS346_WIDTH,
+    DVSReader,
+    discover_devices,
+)
+from src.system.sensor.observation_model.simple_dvs_regression_model import (
+    default_affine_calibration_path,
+    save_affine_v1_calibration,
+)
+from src.experiment.realtime_visualizer import OneDvsVisualizer, OneDvsVisualizerParams
 
 
 
