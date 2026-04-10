@@ -30,6 +30,7 @@ EXPERIMENT_PRESETS = {
         "system":"real:real_new_sim",
         "stop_condition":  "infinite:default",
         "realtime_visualizer": "real_ws:default",
+        "pacing":              "realtime:default",
         "offline_visualizer":  "null:default",
     },
     "montecarlo": {
@@ -123,16 +124,14 @@ class Experiment:
 
     def _supervisor_title(self) -> str | None:
         state_name = getattr(self.system.supervisor, "state_name", None)
-        if state_name == "SERVO_CENTERING":
-            return "Centering | Arrows/WASD: move | Enter: accept | R: reset | Q: quit"
-        if state_name == "ACQUISITION":
+        if state_name in {"ACQUISITION", "stabilization_ready"}:
             return (
-                "Acquisition | Hold pencil upright to start motion | "
+                "Stabilization Ready | fingertip still constraining the pencil | "
                 f"WASD: tilt trim {self._tilt_trim_text()} | Space: reacquire | Q: quit"
             )
-        if state_name == "STABILIZING":
+        if state_name in {"STABILIZING", "stabilizing"}:
             return (
-                "Stabilizing | blending estimators | "
+                "Stabilizing | released into the balancer plant | "
                 f"WASD: tilt trim {self._tilt_trim_text()} | Space: reset | Q: quit"
             )
         if state_name == "BALANCED":
@@ -170,6 +169,8 @@ class Experiment:
             self.pacing.pace()
             i += 1
 
+        if hasattr(self.logger, "flush_pending_chunks"):
+            self.logger.flush_pending_chunks()
         result = self.logger.get_result()
         result.terminal = TerminalInfo(
             stabilized=self.stop_condition.is_stabilized(),

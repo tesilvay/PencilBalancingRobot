@@ -3,12 +3,15 @@ from dataclasses import dataclass
 
 import cv2
 import numpy as np
-from src.shared import CameraObservation, Measurement, ControlInput
+from src.shared import CameraObservation, Measurement, ControlInput, default_camera_params
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
 from .multi_panel_layout import build_composite
 
 from .base import RealtimeVisualizerBase, EventFramesFn, VizResult, _window_closed
+
+
+_DEFAULT_CAMERA_PARAMS = default_camera_params()
 
 
 @dataclass
@@ -22,10 +25,10 @@ class RealDvsVisualizerParams:
 
 REAL_DVS_VISUALIZER_PRESETS = {
     "default": {
-        "width":       346,
-        "height":      260,
-        "mask_y_cam1": 160,
-        "mask_y_cam2": 190,
+        "width":       int(_DEFAULT_CAMERA_PARAMS.DAVIS346_WIDTH),
+        "height":      int(_DEFAULT_CAMERA_PARAMS.DAVIS346_HEIGHT),
+        "mask_y_cam1": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
+        "mask_y_cam2": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
     }
 }
 

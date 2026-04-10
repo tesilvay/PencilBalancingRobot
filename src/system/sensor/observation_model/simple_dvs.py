@@ -16,7 +16,7 @@ SimpleRegressionParams = SimpleDVSRegressionModelParams
 
 SIMPLE_REG_PRESETS = {
     "default": {
-        "calibration_path": "src/system/sensor/calibration_dataset/simple_dvs_regression.json",
+        "calibration_path": "src/system/sensor/observation_model/calibration_files/simple_dvs_regression.json",
         "max_tilt_deg": 30.0,
     }
 }

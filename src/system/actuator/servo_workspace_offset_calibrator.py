@@ -50,6 +50,34 @@ def _send_raw_workspace_command(actuator, servo_xy: np.ndarray) -> None:
     actuator.send(ControlInput(px_cmd=float(servo_xy[0]), py_cmd=float(servo_xy[1])))
 
 
+def _current_raw_workspace_command(system, actuator, workspace: WorkspaceParams) -> np.ndarray:
+    center_xy = np.array([float(workspace.x_ref), float(workspace.y_ref)], dtype=float)
+    command = getattr(system, "u", None)
+    if command is None:
+        return center_xy
+
+    try:
+        desired_xy = np.array(
+            [float(command.px_cmd), float(command.py_cmd)],
+            dtype=float,
+        )
+    except (AttributeError, TypeError, ValueError):
+        return center_xy
+
+    mechanism = getattr(actuator, "mechanism", None)
+    if mechanism is None:
+        return desired_xy
+
+    workspace_offset = np.asarray(
+        getattr(mechanism, "workspace_offset", (0.0, 0.0)),
+        dtype=float,
+    ).reshape(2)
+    raw_xy = desired_xy + workspace_offset
+    if bool(getattr(mechanism, "calibration_enabled", False)) and hasattr(mechanism, "_apply_calibration"):
+        raw_xy = np.asarray(mechanism._apply_calibration(raw_xy), dtype=float).reshape(2)
+    return raw_xy
+
+
 def _move_raw_workspace_command_smooth(
     actuator,
     start_xy: np.ndarray,
@@ -99,6 +127,7 @@ def _curses_calibration_loop(
     if mechanism is None or not hasattr(mechanism, "calibration_targets"):
         raise TypeError("actuator.mechanism must support persisted 5-point calibration")
 
+    current_servo_xy = _current_raw_workspace_command(system, actuator, workspace)
     if hasattr(actuator, "set_workspace_offset"):
         actuator.set_workspace_offset(0.0, 0.0)
     if hasattr(actuator, "set_calibration_enabled"):
@@ -121,7 +150,6 @@ def _curses_calibration_loop(
     last_y_meas_t = 0.0
     last_send_t = 0.0
     last_action = "Starting calibration."
-    current_servo_xy = np.array([float(workspace.x_ref), float(workspace.y_ref)], dtype=float)
 
     total = len(points)
     for idx, point in enumerate(points):

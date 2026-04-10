@@ -17,12 +17,15 @@ from src.shared import (
 
 @dataclass
 class BalancerParams:
+    disturbance_cart_force_x: float
     plant:      PlantParams     = field(default_factory=default_plant)
     workspace:  WorkspaceParams = field(default_factory=default_workspace)
 
 
 BALANCER_PRESETS = {
-    "default": {},
+    "default": {
+        "disturbance_cart_force_x": 5,
+    },
 }
 
 
@@ -32,6 +35,7 @@ class BalancerPlant(BasePlant):
         
         p = params.plant
         w = params.workspace
+        self.disturbance_cart_force_x = params.disturbance_cart_force_x
         
         super().__init__(w, p.max_acc)
 
@@ -61,6 +65,9 @@ class BalancerPlant(BasePlant):
         # table dynamics
         vx_dot = (1 / self.tau**2) * (px_cmd - px) - (2 * self.zeta / self.tau) * vx
         vy_dot = (1 / self.tau**2) * (py_cmd - py) - (2 * self.zeta / self.tau) * vy
+        
+        vx_dot += self.disturbance_cart_force_x
+        
         vx_dot, vy_dot = self.clamp_acceleration(vx_dot, vy_dot)
         
         # pencil dynamics

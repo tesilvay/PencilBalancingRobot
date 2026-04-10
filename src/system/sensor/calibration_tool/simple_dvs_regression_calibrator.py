@@ -8,7 +8,7 @@ from typing import Any
 
 import cv2
 import numpy as np
-from src.shared import WorkspaceParams, CameraObservation, CameraPair
+from src.shared import WorkspaceParams, CameraObservation, CameraPair, default_camera_params
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
 from src.system.sensor.reader.dvs_camera_reader import (
@@ -41,6 +41,7 @@ def x_positions_from_safe_radius(safe_radius_m: float, step_m: float = 0.01) -> 
 DEFAULT_TILT_CALIB_DEGS: tuple[float, ...] = (-10.0, -5.0, 0.0, 5.0, 10.0)
 
 DEFAULT_WORKSPACE = WorkspaceParams(x_ref=0.0, y_ref=0.0, safe_radius=0.068)
+DEFAULT_CAMERA_PARAMS = default_camera_params()
 
 
 def tilt_degs_to_rads(degs: list[float] | tuple[float, ...]) -> list[float]:
@@ -543,8 +544,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--cam1", help="Camera 1 serial/device (omit for discovery)")
     p.add_argument("--cam2", help="Camera 2 serial/device (omit for discovery)")
     p.add_argument("--noise-filter-duration", type=float, default=30.0, metavar="MS", help="Noise filter ms")
-    p.add_argument("--mask-y-cam1", type=int, default=160, metavar="Y", help="Mask line y for cam1")
-    p.add_argument("--mask-y-cam2", type=int, default=190, metavar="Y", help="Mask line y for cam2")
+    p.add_argument("--mask-y-cam1", type=int, default=int(DEFAULT_CAMERA_PARAMS.y_mask_line_1), metavar="Y", help="Mask line y for cam1")
+    p.add_argument("--mask-y-cam2", type=int, default=int(DEFAULT_CAMERA_PARAMS.y_mask_line_2), metavar="Y", help="Mask line y for cam2")
     p.add_argument("--decay-display", type=float, default=0.5, help="Event surface decay")
     p.add_argument("--surface-intensity-gain", type=float, default=50.0, help="Surface brightness (matches OneDvsVisualizer)")
     p.add_argument("--display-fps", type=float, default=30.0, help="GUI refresh rate")

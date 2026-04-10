@@ -18,9 +18,9 @@ REAL_SUPERVISOR_PRESETS = {
         "centering_controller_index": 0,
         "run_controller_index": 1,
         "estimator_index": 0,
-        "stable_threshold_deg": 4.0,
+        "stable_threshold_deg": 5.0,
         "stable_threshold_m": 20e-3,
-        "stable_hold_s": 1.0,
+        "stable_hold_s": 0.5,
         "manual_step_m": 0.002,
     }
 }

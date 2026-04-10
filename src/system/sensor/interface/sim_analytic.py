@@ -17,23 +17,43 @@ from .base import VisionModelBase
 class SimAnalyticParams:
     noise_std:   float | None
     delay_steps: int
+    bias_ang: float
+    bias_pos: float
+    noise_ang: float | None
+    noise_pos: float | None
     cam_params: CameraParams = field(default_factory=default_camera_params)
+    
 
 
 SIM_ANALYTIC_PRESETS = {
     "default": {
         "noise_std":   None,
+        "noise_ang":   0,
+        "noise_pos":   None,
         "delay_steps": 0,
+        # Add small bias to model how the real cam might add bias
+        "bias_ang": 0.3,
+        "bias_pos": 3,
+        
     },
     "noisy": {
         "base": "default",
         "noise_std":   1e-5,
         "delay_steps": 0,
+        
+        "bias_ang": 0.1,
+        "bias_pos": 3,
+        "noise_ang": 0.3,
+        "noise_pos": 3e-3,
+        
+        
     },
     "noisiest": {
         "base": "default",
         "noise_std":   1e-2,
         "delay_steps": 0,
+        "noise_ang": 0.4,
+        "noise_pos": 0.1,
     },
 }
 
@@ -44,8 +64,13 @@ class SimVisionModel(VisionModelBase):
         super().__init__(params.cam_params)
         self.xr = params.cam_params.xr
         self.yr = params.cam_params.yr
+        
+        self.bias_ang = np.deg2rad(params.bias_ang)
+        self.bias_pos = params.bias_pos
 
         self.noise_std   = params.noise_std
+        self.noise_ang = np.deg2rad(params.noise_ang)
+        self.noise_pos = params.noise_pos
         self.delay_steps = params.delay_steps
         self.buffer = deque(maxlen=params.delay_steps + 1)
         self.last_line_observation = None
@@ -60,12 +85,14 @@ class SimVisionModel(VisionModelBase):
         cams_raw = self.get_z(state_true)
         
         # add noise and delay to simulate realism
-        cams_noisy = self._add_noise(cams_raw)
-        cams = self._add_delay(cams_noisy)
+        #cams_noisy = self._add_noise(cams_raw)
+        #cams = self._add_delay(cams_noisy)
         
         # turns camnorm cams into a y_meas with the analytic equations
-        self.last_line_observation = cams
-        y_meas = self.cams_to_measurement(cams_camnorm=cams)
+        self.last_line_observation = cams_raw
+        y_meas_raw = self.cams_to_measurement(cams_camnorm=cams_raw)
+        
+        y_meas = self._add_noise_y(y_meas_raw)
         
         return y_meas
     
@@ -90,6 +117,17 @@ class SimVisionModel(VisionModelBase):
             cams.cam2.intercept += np.random.normal(0, self.noise_std)
         
         return cams
+    
+    def _add_noise_y(self, y_raw:Measurement) -> Measurement:
+        
+        if self.noise_pos is not None:
+            y_raw.px+=np.random.normal(0, self.noise_pos) + self.bias_pos
+            y_raw.py+=np.random.normal(0, self.noise_pos)
+            y_raw.ax+=np.random.normal(0, self.noise_ang) + self.bias_ang
+            y_raw.ay+=np.random.normal(0, self.noise_ang)
+            
+        
+        return y_raw
     
     def get_z(self, state_true: State) -> CameraPair:
 

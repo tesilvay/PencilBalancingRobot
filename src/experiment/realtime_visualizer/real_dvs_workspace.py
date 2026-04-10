@@ -3,11 +3,14 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from src.shared import Measurement, ControlInput, WorkspaceParams, default_workspace
+from src.shared import Measurement, ControlInput, WorkspaceParams, default_workspace, default_camera_params
 from .multi_panel_layout import build_composite
 
 from .base import WorkspacePanelRenderer, EventFramesFn, VizResult, _window_closed
 from .real_dvs import RealDvsVisualizer, RealDvsVisualizerParams
+
+
+_DEFAULT_CAMERA_PARAMS = default_camera_params()
 
 
 @dataclass
@@ -22,10 +25,10 @@ class RealDvsWorkspaceVisualizerParams:
 
 REAL_DVS_WORKSPACE_VISUALIZER_PRESETS = {
     "default": {
-        "width":       346,
-        "height":      260,
-        "mask_y_cam1": 160,
-        "mask_y_cam2": 190,
+        "width":       int(_DEFAULT_CAMERA_PARAMS.DAVIS346_WIDTH),
+        "height":      int(_DEFAULT_CAMERA_PARAMS.DAVIS346_HEIGHT),
+        "mask_y_cam1": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
+        "mask_y_cam2": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
     }
 }
 

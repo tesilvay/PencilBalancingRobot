@@ -19,7 +19,8 @@ from .base import BaseController
 
 @dataclass
 class AccelPoleParams:
-    poles: list[float] | None = None
+    max_pole: float
+    pole_step: float
     plant: PlantParams = field(default_factory=default_plant)
     timing: TimingParams = field(default_factory=default_timing)
     workspace: WorkspaceParams = field(default_factory=default_workspace)
@@ -33,9 +34,11 @@ class AccelPoleParams:
 
 ACCEL_POLE_PRESETS = {
     "default": {
-        "poles": [-3.0, -4.0, -5.0, -6.0] * 2,
+        "max_pole": -4.0,
+        "pole_step": 1,
+        
         "max_acc_cmd": 9.81*5,
-        "max_vel_cmd": 0.35,
+        "max_vel_cmd": 0.50,
         "pos_correction_gain": 0.1,
         "vel_correction_gain": 0.001,
         "discrete_time": True,
@@ -55,7 +58,7 @@ ACCEL_POLE_PRESETS = {
     },
     "test1": {
         "base": "default",
-        "poles": [-0.5, -1.0, -2.0, -3.0] * 2,
+        "poles": [0.94, 0.95, 0.96, 0.97] * 2,
     },
     "test2": {
         "base": "default",
@@ -111,10 +114,14 @@ class AccelPolePlacementController(BaseController):
             A_used = A
             B_used = B
 
-        if params.poles is None:
+        if params.max_pole is None:
             self.K = np.zeros((m, n), dtype=float)
         else:
-            poles = np.asarray(params.poles, dtype=complex)
+            poles_list = [
+                params.max_pole - i * params.pole_step
+                for i in range(n // 2)
+            ] * 2
+            poles = np.asarray(poles_list, dtype=complex)
             if poles.size != n:
                 raise ValueError(
                     f"expected {n} poles for acceleration controller, got {poles.size}"

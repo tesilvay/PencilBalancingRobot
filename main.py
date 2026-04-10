@@ -17,7 +17,7 @@ from dataclasses import asdict, fields, is_dataclass, MISSING
 from types import UnionType
 from typing import get_args, get_origin
 
-from src.shared import build_from_registry, resolve_preset
+from src.shared import build_from_registry, plot_logger_chunk, resolve_preset
 from src.experiment import EXPERIMENT_REGISTRY, EXPERIMENT_PRESETS
 from src.experiment.metrics import Metrics
 from src.system import SYSTEM_REGISTRY, SystemParams
@@ -81,6 +81,12 @@ def parse_args() -> argparse.Namespace:
         "--list", "-l",
         action="store_true",
         help="list available presets and exit",
+    )
+
+    parser.add_argument(
+        "--graph",
+        metavar="PATH",
+        help="load a saved logger chunk pickle and plot it",
     )
 
     return parser.parse_args()
@@ -395,6 +401,10 @@ def main() -> int:
 
     if args.list:
         list_presets()
+        return 0
+
+    if args.graph:
+        plot_logger_chunk(args.graph)
         return 0
 
     spec_string = resolve_spec_string(args.preset, {})

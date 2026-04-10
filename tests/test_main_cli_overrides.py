@@ -73,6 +73,7 @@ def _args(**updates):
         "supervisor": None,
         "set": [],
         "list": False,
+        "graph": None,
     }
     base.update(updates)
     return Namespace(**base)

@@ -40,7 +40,7 @@ class SystemParams:
 SYSTEM_PRESETS = {
     "simple_sim": {
         "plants":       ["sim:default"],
-        "controllers": ["smooth_pole:smoother"],
+        "controllers": ["smooth_pole:default"],
         "estimators":  ["lpf:test"],
         "sensor":      "sim_analytic:noisy",
         "actuator":    "mock:default",
@@ -58,8 +58,8 @@ SYSTEM_PRESETS = {
     },
     "dynamic_sim": {
         "plants":       ["placing:steady_hands", "sim:default"],
-        "controllers": ["null:default", "smooth_pole:default"],
-        "estimators":  ["lpf:default", "kalman:default"],
+        "controllers": ["smooth_pole:default"],
+        "estimators":  ["lpf:default", "lpf:default"],
         "sensor":      "sim_analytic:default",
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
@@ -67,8 +67,8 @@ SYSTEM_PRESETS = {
     },
     "new_sim": {
         "base": "simple_sim",
-        "sensor":      "sim_dvs:hough",
-        "estimators":  ["lpf:test"],
+        "estimators":  ["lpf:lead"],
+        "sensor":      "sim_analytic:noisy",
         "plants": ["accel_sim:default"],
         "controllers": ["accel_pole:default"],
         "gain_schedule": "null:default",
@@ -198,11 +198,19 @@ class System:
         return 0 if est_k < 0.5 else 1
 
     def _sync_active_components(self, ctrl_i: int, est_k: float, x_hat: State | None = None) -> None:
+        if not self.controllers:
+            raise RuntimeError("System requires at least one controller.")
+        if not self.plants:
+            raise RuntimeError("System requires at least one plant.")
+
+        if len(self.controllers) == 1:
+            ctrl_i = 0
         new_controller = self.controllers[ctrl_i]
         if new_controller is not self.active_controller:
             new_controller.reset(x_hat)
 
-        self.active_plant = self.plants[ctrl_i]
+        plant_i = min(self._dominant_estimator_index(est_k), len(self.plants) - 1)
+        self.active_plant = self.plants[plant_i]
         self.active_controller = new_controller
         self.active_estimator = self.estimators[self._dominant_estimator_index(est_k)]
         self.active_est_k = float(np.clip(est_k, 0.0, 1.0))
@@ -300,7 +308,7 @@ class System:
                 estimator.reset(x_hat)
 
     def step(self, dt):
-        prev_supervisor_state = getattr(self.supervisor, "state_name", None)
+        prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
         ctrl_i, est_k = self._supervisor_active_output()
         self._sync_active_components(ctrl_i, est_k)
 
@@ -346,12 +354,11 @@ class System:
         x_hat_1 = self.last_estimates[1] if len(self.last_estimates) > 1 else x_hat_0
         innovation_1 = self.last_innovations[1] if len(self.last_innovations) > 1 else innovation_0
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
-        new_supervisor_state = getattr(self.supervisor, "state_name", None)
-        if prev_supervisor_state == "ACQUISITION" and new_supervisor_state != "ACQUISITION":
+        if prev_prestart and not bool(getattr(self.supervisor, "is_prestart_state", False)):
             self._reset_fall_detection()
             self._reset_kalman_estimators(x_hat_0)
         transition = getattr(self.supervisor, "last_transition", None)
-        if transition and transition.get("left_acquisition", False) and not hasattr(self.supervisor, "is_offset_latched"):
+        if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
             source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
             self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
@@ -368,10 +375,12 @@ class System:
             x=x_true,
             u=u_cmd,
             acc=acc,
+            x_hat=x_used,
             innovation=innovation_used,
             mech_joints=mech_joints,
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
+            supervisor_state=getattr(self.supervisor, "state_name", None),
         )
 
     def reset(self):
@@ -413,10 +422,12 @@ class System:
             x=self.x,
             u=self.u,
             acc=TableAccel(x_ddot=0.0, y_ddot=0.0),
+            x_hat=self.x,
             innovation=np.zeros(4),
             mech_joints=mj0,
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
+            supervisor_state=getattr(self.supervisor, "state_name", None),
         )
     
     

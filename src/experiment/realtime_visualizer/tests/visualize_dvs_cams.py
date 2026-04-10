@@ -35,12 +35,15 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from src.shared import CameraPair, HoughTrackerParams
+from src.shared import CameraPair, HoughTrackerParams, default_camera_params
 from .multi_panel_layout import build_composite, get_default_window_size
 from perception.camera_model import CameraModel
 from perception.dvs_camera_reader import DVSReader, discover_devices, DAVIS346_WIDTH, DAVIS346_HEIGHT
 from perception.dvs_algorithms import PaperHoughLineAlgorithm, SamLineAlgorithm, mask_events_below_line, line_x_at_pixel_y
 from perception.simple_dvs_regression_model import SimpleDVSRegressionModel, default_affine_calibration_path
+
+
+DEFAULT_CAMERA_PARAMS = default_camera_params()
 
 
 def _window_closed(window_name: str) -> bool:
@@ -88,14 +91,14 @@ def main():
     parser.add_argument(
         "--mask-y-cam1",
         type=int,
-        default=160,
+        default=int(DEFAULT_CAMERA_PARAMS.y_mask_line_1),
         metavar="Y",
         help="ROI mask line y for cam1. Events with y >= Y are ignored (keeps y < Y).",
     )
     parser.add_argument(
         "--mask-y-cam2",
         type=int,
-        default=190,
+        default=int(DEFAULT_CAMERA_PARAMS.y_mask_line_2),
         metavar="Y",
         help="ROI mask line y for cam2. Events with y >= Y are ignored (keeps y < Y).",
     )

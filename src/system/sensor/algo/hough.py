@@ -44,6 +44,11 @@ class HoughLineParams:
 
 HOUGH_PRESETS = {
     "default": {
+        "mixing_factor":    0.01,
+        "inlier_stddev_px": 3.5,
+        "min_determinant":  1e-6,
+    },
+    "legacy": {
         "mixing_factor":    0.02,
         "inlier_stddev_px": 4.0,
         "min_determinant":  1e-6,

@@ -52,15 +52,24 @@ REAL_SYSTEM_PRESETS = {
         "actuator": "servo:default",
         "gain_schedule": "null:default",
     },
-    "real_supervised": {
-        "base": "real_vision",
+    "real_supervised_best": {
         "plants": ["sim:default", "sim:default"],
+        "sensor":      "real_dvs:hough",
         "controllers": ["null:default", "smooth_pole:test1"],
-        "estimators":  ["lpf:test2", "kalman:test1"],
+        "estimators":  ["lpf:default", "kalman:test1"],
         "actuator": "servo:default",
         "supervisor": "real:default",
         
         "gain_schedule": "null:default", #or power
+    },
+    "real_supervised": {
+        "base": "real_supervised_best",
+        "controllers": ["null:default", "smooth_pole:lead"],
+        "estimators":  ["lpf:lead"],
+    },
+    "real_cmd_state": {
+        "base": "real_supervised_best",
+        "controllers": ["null:default", "smooth_pole_cmd_state:default"],
     },
     "real_dynamic_supervised": {
         "base": "real_supervised",
@@ -69,11 +78,10 @@ REAL_SYSTEM_PRESETS = {
         "gain_schedule": "null:default",
     },
     "real_new_sim": {
-        "base": "real_supervised",
-        "estimators":  ["lpf:test2"],
+        "base": "real_supervised_best",
+        "estimators":  ["lpf:lead"],
         "plants": ["accel_sim:default", "accel_sim:default"],
-        "controllers": ["null:default", "accel_pole:test0"],
-        "gain_schedule": "power:default",
+        "controllers": ["null:default", "accel_pole:default"],
     },
 }
 
@@ -84,7 +92,7 @@ REAL_SYSTEM_PRESETS = {
 
 class RealSystem(System):
     def step(self, dt):
-        prev_supervisor_state = getattr(self.supervisor, "state_name", None)
+        prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
         ctrl_i, est_k = self._supervisor_active_output()
         self._sync_active_components(ctrl_i, est_k)
 
@@ -107,7 +115,7 @@ class RealSystem(System):
         x_used = self._blend_state_estimates(est_k)
         innovation_used = self._blend_innovations(est_k)
 
-        self._print_estimator_estimates(est_k)
+        #self._print_estimator_estimates(est_k)
         
         u_raw = self.active_controller.compute(x_used)
         u_override = getattr(self.supervisor, "command_override", None)
@@ -125,12 +133,11 @@ class RealSystem(System):
         x_hat_1 = self.last_estimates[1] if len(self.last_estimates) > 1 else x_hat_0
         innovation_1 = self.last_innovations[1] if len(self.last_innovations) > 1 else innovation_0
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
-        new_supervisor_state = getattr(self.supervisor, "state_name", None)
-        if prev_supervisor_state == "ACQUISITION" and new_supervisor_state != "ACQUISITION":
+        if prev_prestart and not bool(getattr(self.supervisor, "is_prestart_state", False)):
             self._reset_fall_detection()
             self._reset_kalman_estimators(x_hat_0)
         transition = getattr(self.supervisor, "last_transition", None)
-        if transition and transition.get("left_acquisition", False) and not hasattr(self.supervisor, "is_offset_latched"):
+        if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
             source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
             self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
@@ -146,10 +153,12 @@ class RealSystem(System):
             x=x_true,
             u=u_cmd,
             acc=acc,
+            x_hat=x_used,
             innovation=innovation_used,
             mech_joints=mech_joints,
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
+            supervisor_state=getattr(self.supervisor, "state_name", None),
         )
 
     def reset(self):
@@ -193,8 +202,10 @@ class RealSystem(System):
             x=self.x,
             u=self.u,
             acc=TableAccel(x_ddot=0.0, y_ddot=0.0),
+            x_hat=self.x,
             innovation=np.zeros(4),
             mech_joints=mj0,
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
+            supervisor_state=getattr(self.supervisor, "state_name", None),
         )

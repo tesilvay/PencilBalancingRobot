@@ -5,7 +5,7 @@ import numpy as np
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from src.shared import CameraObservation, Measurement, ControlInput, WorkspaceParams
+from src.shared import CameraObservation, Measurement, ControlInput, WorkspaceParams, default_camera_params
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
 from .multi_panel_layout import build_composite, build_one_dvs_composite, get_default_window_size
@@ -16,6 +16,7 @@ EventFramesFn = Callable[[], tuple[np.ndarray, np.ndarray] | None]
 _TILT_ARROW_CAP_RAD = float(np.deg2rad(15.0))
 # Pixel length at that cap (tune here or pass ``tilt_arrow_max_length_px=`` to WorkspacePanelRenderer).
 DEFAULT_TILT_ARROW_MAX_LENGTH_PX = 40.0
+_DEFAULT_CAMERA_PARAMS = default_camera_params()
 
 
 def _window_closed(window_name: str) -> bool:
@@ -314,10 +315,10 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
     def __init__(
         self,
         event_frames_fn: EventFramesFn | None,
-        width: int = 346,
-        height: int = 260,
-        mask_y_cam1: int = 160,
-        mask_y_cam2: int = 190,
+        width: int = int(_DEFAULT_CAMERA_PARAMS.DAVIS346_WIDTH),
+        height: int = int(_DEFAULT_CAMERA_PARAMS.DAVIS346_HEIGHT),
+        mask_y_cam1: int = int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
+        mask_y_cam2: int = int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
     ):
         self._event_frames_fn = event_frames_fn
         self.width = width
@@ -406,10 +407,10 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
         self,
         workspace: WorkspaceParams,
         event_frames_fn: EventFramesFn | None,
-        width: int = 346,
-        height: int = 260,
-        mask_y_cam1: int = 160,
-        mask_y_cam2: int = 190,
+        width: int = int(_DEFAULT_CAMERA_PARAMS.DAVIS346_WIDTH),
+        height: int = int(_DEFAULT_CAMERA_PARAMS.DAVIS346_HEIGHT),
+        mask_y_cam1: int = int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
+        mask_y_cam2: int = int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
     ):
         super().__init__(event_frames_fn, width=width, height=height, mask_y_cam1=mask_y_cam1, mask_y_cam2=mask_y_cam2)
         self._ws = WorkspacePanelRenderer(workspace)
@@ -646,8 +647,8 @@ class DVSWorkspaceVisualizer:
         width: int = 346,
         height: int = 260,
         show_workspace: bool = True,
-        mask_y_cam1: int = 160,
-        mask_y_cam2: int = 190,
+        mask_y_cam1: int = int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
+        mask_y_cam2: int = int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
         event_frames_fn: EventFramesFn | None = None,
     ):
         from .real_dvs import RealDvsVisualizerParams as _RealP

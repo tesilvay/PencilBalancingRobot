@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field, fields, is_dataclass
 from types import UnionType
 from typing import Sequence, get_args, get_origin
+from pathlib import Path
+import pickle
 import numpy as np
 from numpy import rad2deg, deg2rad
 
@@ -38,7 +40,7 @@ class WorkspaceParams:
     safe_radius: float | None = None
 
 WORKSPACE_PRESETS = {
-    "default": {"x_ref": 0.0, "y_ref": 0.0, "safe_radius": 6.8e-2}
+    "default": {"x_ref": 0.0, "y_ref": 0.0, "safe_radius": 7.0e-2}
 }
 
 def default_workspace() -> WorkspaceParams:
@@ -53,7 +55,7 @@ class TimingParams:
     dt:         float
 
 TIMING_PRESETS = {
-    "default": {"total_time": 5.0, "dt": 3e-3},
+    "default": {"total_time": 10.0, "dt": 3e-3},
     "ideal": {"total_time": 5.0, "dt": 1e-3},
     "long":    {"total_time": 30.0, "dt": 4e-3},
 }
@@ -213,6 +215,9 @@ class StepData:
     x:     State
     u:     ControlInput
     acc:   TableAccel
+    # Controller-facing estimated state for this sample (typically blended x_hat).
+    # Falls back to ``x`` when an estimate is unavailable.
+    x_hat: State | None = None
     # Measurement-space residual [px, ax, py, ay]; estimators return ndarray (1d or column).
     # None when unavailable (e.g. some hardware paths).
     innovation: np.ndarray | None = None
@@ -223,6 +228,66 @@ class StepData:
     offset_xy: np.ndarray | None = None
     # True when the offset has been frozen after acquisition exit.
     offset_latched: bool = False
+    # Supervisor state associated with this sample.
+    supervisor_state: str | None = None
+
+
+def plot_logger_chunk(path: str | Path) -> None:
+    import matplotlib.pyplot as plt
+
+    chunk_path = Path(path)
+    with chunk_path.open("rb") as fh:
+        payload = pickle.load(fh)
+
+    result = payload.get("result", payload)
+    estimate_history = getattr(result, "estimate_history", None)
+    state_history = np.asarray(
+        estimate_history if estimate_history is not None else result.state_history,
+        dtype=float,
+    )
+    cmd_history = np.asarray(result.cmd_history, dtype=float)
+    if state_history.ndim != 2 or state_history.shape[1] < 7:
+        raise ValueError(f"Invalid state_history in {chunk_path}")
+    if cmd_history.ndim != 2 or cmd_history.shape[1] < 2:
+        raise ValueError(f"Invalid cmd_history in {chunk_path}")
+
+    sample_idx = np.arange(state_history.shape[0], dtype=float)
+    ax_deg = np.rad2deg(state_history[:, 2])
+    ay_deg = np.rad2deg(state_history[:, 6])
+    cmd_x_mm = 1000.0 * cmd_history[:, 0]
+    cmd_y_mm = 1000.0 * cmd_history[:, 1]
+    
+
+    for i in range(-450,0,1):
+        print(f"step:{i} | alpha_x: {ax_deg[i]:.2f} | cmd_x: {cmd_x_mm[i]:.1f}")
+    
+    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(11, 7))
+    fig.suptitle(f"Logger Chunk: {chunk_path.name}")
+
+    axis_specs = [
+        (axes[0], ax_deg, cmd_x_mm, "X Axis", "Tilt ax (deg)", "Cmd x (mm)"),
+        (axes[1], ay_deg, cmd_y_mm, "Y Axis", "Tilt ay (deg)", "Cmd y (mm)"),
+    ]
+
+    for ax_plot, tilt_deg, cmd_mm, title, tilt_label, cmd_label in axis_specs:
+        cmd_ax = ax_plot.twinx()
+        tilt_line = ax_plot.plot(sample_idx, tilt_deg, color="tab:blue", label=tilt_label)
+        cmd_line = cmd_ax.plot(sample_idx, cmd_mm, color="tab:orange", label=cmd_label)
+
+        ax_plot.set_title(title)
+        ax_plot.set_ylabel("Angle (deg)", color="tab:blue")
+        cmd_ax.set_ylabel("Command (mm)", color="tab:orange")
+        ax_plot.set_ylim(-15.0, 15.0)
+        cmd_ax.set_ylim(-70.0, 70.0)
+        ax_plot.grid(True, alpha=0.3)
+
+        lines = tilt_line + cmd_line
+        labels = [line.get_label() for line in lines]
+        ax_plot.legend(lines, labels, loc="upper right")
+
+    axes[-1].set_xlabel("Sample")
+    fig.tight_layout()
+    plt.show()
 
 
 # ── Camera / vision types ─────────────────────────────────────────────────────
@@ -238,10 +303,10 @@ class CameraParams:
 
 CAMERA_PRESETS = {
     "default": {
-        "xr": 170,
-        "yr": 176,
+        "xr": -100,
+        "yr": -100,
         "y_mask_line_1":   160,
-        "y_mask_line_2":   190,
+        "y_mask_line_2":   150,
         "DAVIS346_WIDTH":  346,
         "DAVIS346_HEIGHT": 260,
     },

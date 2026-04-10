@@ -5,7 +5,8 @@ from src.shared import TimingParams, default_timing
 
 SCHEDULER_PRESETS = {
     "default": {
-        "actuator_frequency": 250,
+        "dt": 0.5,
+        "actuator_frequency": 333,
         "render_frequency":   30,
     }
 }
@@ -13,6 +14,7 @@ SCHEDULER_PRESETS = {
 
 @dataclass
 class SchedulerParams:
+    dt:                 int
     actuator_frequency: int
     render_frequency:   int
     timing:             TimingParams = field(default_factory=default_timing)

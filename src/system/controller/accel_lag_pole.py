@@ -19,7 +19,9 @@ from .base import BaseController
 
 @dataclass
 class AccelLagPoleParams:
-    poles: list[float] | None = None
+    max_pole: float
+    pole_step: float
+    
     plant: PlantParams = field(default_factory=default_plant)
     timing: TimingParams = field(default_factory=default_timing)
     workspace: WorkspaceParams = field(default_factory=default_workspace)
@@ -32,7 +34,8 @@ class AccelLagPoleParams:
 
 ACCEL_LAG_POLE_PRESETS = {
     "default": {
-        "poles": [0.97, 0.975, 0.98, 0.985] * 2,
+        "max_pole": 0.9999,
+        "pole_step": 0.005,
         "max_acc_cmd": 9.81 * 5,
         "max_vel_cmd": 0.25,
         "pos_correction_gain": 0.001,
@@ -83,10 +86,14 @@ class AccelLagPolePlacementController(BaseController):
             A_used = A
             B_used = B
 
-        if params.poles is None:
+        if params.max_pole is None:
             self.K = np.zeros((m, n), dtype=float)
         else:
-            poles = np.asarray(params.poles, dtype=complex)
+            poles_list = [
+                params.max_pole - i * params.pole_step
+                for i in range(n // 2)
+            ] * 2
+            poles = np.asarray(poles_list, dtype=complex)
             if poles.size != n:
                 raise ValueError(
                     f"expected {n} poles for lag-aware acceleration controller, got {poles.size}"
@@ -105,19 +112,15 @@ class AccelLagPolePlacementController(BaseController):
         self.g = params.plant.g
         self.l = params.plant.com_length
         self.dt = float(params.timing.dt)
-        self.max_acc_cmd = params.max_acc_cmd
-        self.max_vel_cmd = params.max_vel_cmd
-
         self.x_ref = float(params.workspace.x_ref)
         self.y_ref = float(params.workspace.y_ref)
         self.safe_radius = params.workspace.safe_radius
-
-        self.pos_correction_gain = float(params.pos_correction_gain)
-        self.vel_correction_gain = float(params.vel_correction_gain)
-
-        self._cmd_pos = np.array([self.x_ref, self.y_ref], dtype=float)
-        self._cmd_vel = np.zeros(2, dtype=float)
-        self._anti_windup_active = False
+        self.x_ctrl_ref = np.array([
+            self.x_ref, 0.0, 0.0, 0.0,
+            self.y_ref, 0.0, 0.0, 0.0,
+        ], dtype=float)
+        self.u_ref = (-np.linalg.pinv(B) @ (A @ self.x_ctrl_ref)).ravel()
+        self._u_prev = self.u_ref.copy()
 
     def _controller_axis_state(self, pos: float, vel: float, angle: float, angle_vel: float):
         return np.array([
@@ -141,20 +144,6 @@ class AccelLagPolePlacementController(BaseController):
             y_ctrl[3],
         ], dtype=float)
 
-    def clamp_acc(self, acc_cmd: np.ndarray) -> np.ndarray:
-        acc_norm = float(np.linalg.norm(acc_cmd))
-        if self.max_acc_cmd is not None and acc_norm > self.max_acc_cmd and acc_norm > 0.0:
-            self._anti_windup_active = True
-            acc_cmd = acc_cmd * (self.max_acc_cmd / acc_norm)
-        return acc_cmd
-
-    def clamp_vel(self, vel_cmd: np.ndarray) -> np.ndarray:
-        vel_norm = float(np.linalg.norm(vel_cmd))
-        if self.max_vel_cmd is not None and vel_norm > self.max_vel_cmd and vel_norm > 0.0:
-            self._anti_windup_active = True
-            vel_cmd = vel_cmd * (self.max_vel_cmd / vel_norm)
-        return vel_cmd
-
     def clamp_pos(self, pos_cmd: np.ndarray) -> np.ndarray:
         if self.safe_radius is None:
             return pos_cmd
@@ -164,7 +153,6 @@ class AccelLagPolePlacementController(BaseController):
         dist = float(np.sqrt(dx * dx + dy * dy))
 
         if dist > self.safe_radius and dist > 0.0:
-            self._anti_windup_active = True
             scale = self.safe_radius / dist
             pos_cmd = np.array([
                 self.x_ref + dx * scale,
@@ -172,42 +160,18 @@ class AccelLagPolePlacementController(BaseController):
             ], dtype=float)
         return pos_cmd
 
-    def _apply_drift_correction(self, state: State):
-        self._cmd_pos[0] += self.pos_correction_gain * (state.px - self._cmd_pos[0]) * self.dt
-        self._cmd_pos[1] += self.pos_correction_gain * (state.py - self._cmd_pos[1]) * self.dt
-        self._cmd_vel[0] += self.vel_correction_gain * (state.vx - self._cmd_vel[0]) * self.dt
-        self._cmd_vel[1] += self.vel_correction_gain * (state.vy - self._cmd_vel[1]) * self.dt
-
     def compute(self, state: State) -> ControlInput:
-        self._anti_windup_active = False
         error_vec = self._reference_error_vector(state)
-
-        acc_cmd = -np.asarray(self.K @ error_vec, dtype=float).reshape(-1)
-        acc_cmd = self.clamp_acc(acc_cmd)
-
-        self._cmd_vel += acc_cmd * self.dt
-        self._cmd_vel = self.clamp_vel(self._cmd_vel)
-
-        self._cmd_pos += self._cmd_vel * self.dt
-        self._cmd_pos = self.clamp_pos(self._cmd_pos)
-
-        self._apply_drift_correction(state)
-        self._cmd_vel = self.clamp_vel(self._cmd_vel)
-        self._cmd_pos = self.clamp_pos(self._cmd_pos)
-
-        return ControlInput(px_cmd=float(self._cmd_pos[0]), py_cmd=float(self._cmd_pos[1]))
+        u_cmd = self.u_ref - np.asarray(self.K @ error_vec, dtype=float).reshape(-1)
+        u_cmd = self.clamp_pos(u_cmd)
+        return ControlInput(px_cmd=float(u_cmd[0]), py_cmd=float(u_cmd[1]))
 
     def set_applied_command(self, u: ControlInput) -> None:
-        self._cmd_pos[0] = float(u.px_cmd)
-        self._cmd_pos[1] = float(u.py_cmd)
+        self._u_prev[:] = [float(u.px_cmd), float(u.py_cmd)]
 
     def reset(self, x_hat: State | None = None):
         if x_hat is None:
-            self._cmd_pos[:] = [self.x_ref, self.y_ref]
-            self._cmd_vel[:] = 0.0
-            self._anti_windup_active = False
+            self._u_prev = self.u_ref.copy()
             return
 
-        self._cmd_pos[:] = [float(x_hat.px), float(x_hat.py)]
-        self._cmd_vel[:] = [float(x_hat.vx), float(x_hat.vy)]
-        self._anti_windup_active = False
+        self._u_prev[:] = [float(x_hat.px), float(x_hat.py)]

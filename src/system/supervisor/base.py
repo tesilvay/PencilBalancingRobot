@@ -107,7 +107,7 @@ class RealServoSupervisorBase(Supervisor):
         self.params = params
         self.workspace = params.workspace
         self.actuator = None
-        self.state = "SERVO_CENTERING"
+        self.state = "ACQUISITION"
         self._manual_target = self._workspace_center_command()
         self._last_applied_command = self._workspace_center_command()
         self._reacquire_start_command = self._workspace_center_command()
@@ -204,7 +204,7 @@ class RealServoSupervisorBase(Supervisor):
         return False
 
     def reset(self):
-        self.state = "SERVO_CENTERING"
+        self.state = "ACQUISITION"
         self._t_stable = 0.0
         self._last_transition = None
         self._last_applied_command = self._workspace_center_command()
@@ -232,10 +232,12 @@ class RealServoSupervisorBase(Supervisor):
             self._on_upright_ready()
 
     def _finish_update(self, prev_state: str) -> None:
+        left_acquisition = (prev_state == "ACQUISITION" and self.state != "ACQUISITION")
         self._last_transition = {
             "prev_state": prev_state,
             "new_state": self.state,
-            "left_acquisition": (prev_state == "ACQUISITION" and self.state != "ACQUISITION"),
+            "left_acquisition": left_acquisition,
+            "left_prestart": left_acquisition,
         }
 
     def _workspace_center_command(self) -> ControlInput:

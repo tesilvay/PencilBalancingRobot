@@ -26,7 +26,7 @@ from typing import Any, Dict, Sequence
 
 import numpy as np
 
-from src.shared import CameraObservation, CameraPair, Measurement
+from src.shared import CameraObservation, CameraPair, Measurement, default_camera_params
 from src.system.sensor.observation_model.camera_model import CameraModel
 from src.system.sensor.algo.dvs_algorithms import line_x_at_pixel_y
 
@@ -79,6 +79,7 @@ def _interp1d(xq: float, xp: np.ndarray, fp: np.ndarray) -> float:
 # Post-estimate limits: tilts configurable, XY kept inside disk (see _clamp_measurement).
 _SIMPLEDVS_MAX_TILT_RAD = float(np.deg2rad(10.0))
 _DEFAULT_WORKSPACE_SAFE_RADIUS_M = 0.068
+_DEFAULT_CAMERA_PARAMS = default_camera_params()
 
 
 def _clamp_measurement(
@@ -256,8 +257,12 @@ class SimpleDVSRegressionModel:
         s1 = data["s1"]
         s2 = data["s2"]
 
-        mask_y_cam1 = int(b1.get("mask_y_cam1", data.get("mask_y_cam1", 160)))
-        mask_y_cam2 = int(b2.get("mask_y_cam2", data.get("mask_y_cam2", 190)))
+        mask_y_cam1 = int(
+            b1.get("mask_y_cam1", data.get("mask_y_cam1", _DEFAULT_CAMERA_PARAMS.y_mask_line_1))
+        )
+        mask_y_cam2 = int(
+            b2.get("mask_y_cam2", data.get("mask_y_cam2", _DEFAULT_CAMERA_PARAMS.y_mask_line_2))
+        )
 
         b1_samples = b1["samples"]
         b2_samples = b2["samples"]

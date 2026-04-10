@@ -1,7 +1,7 @@
-from .logger import Logger, TerminalInfo, SimulationResult
-from src.shared import Spec, NullParams, NULL_PRESETS
+from .logger import Logger, LoggerParams, TerminalInfo, SimulationResult
+from src.shared import Spec
 
 
 LOGGER_REGISTRY = {
-    "default": Spec(Logger, NullParams, NULL_PRESETS),
+    "default": Spec(Logger, LoggerParams, {"default": {}}),
 }
