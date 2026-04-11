@@ -25,7 +25,7 @@ DYNAMIC_SUPERVISOR_PRESETS = {
     "default": {
         "stable_threshold": 0.035,
         "stable_hold_s": 0.0,
-        "consistent_hold_s": 1.0,
+        "consistent_hold_s": 3.0,
         "loss_threshold": 0.3,
         "loss_hold_s": 0.5,
         "match_pos_threshold": 8e-3,

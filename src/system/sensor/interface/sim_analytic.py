@@ -32,28 +32,30 @@ SIM_ANALYTIC_PRESETS = {
         "noise_pos":   None,
         "delay_steps": 0,
         # Add small bias to model how the real cam might add bias
-        "bias_ang": 0.3,
-        "bias_pos": 3,
+        "bias_ang": 0,
+        "bias_pos": 0,
         
     },
     "noisy": {
         "base": "default",
-        "noise_std":   1e-5,
         "delay_steps": 0,
         
-        "bias_ang": 0.1,
-        "bias_pos": 3,
-        "noise_ang": 0.3,
-        "noise_pos": 3e-3,
+        "bias_ang": 0.0,
+        "bias_pos": 0,
+        "noise_ang": 0.1,
+        "noise_pos": 0.3e-3,
         
         
     },
     "noisiest": {
         "base": "default",
-        "noise_std":   1e-2,
         "delay_steps": 0,
-        "noise_ang": 0.4,
-        "noise_pos": 0.1,
+        
+        "bias_ang": 0.3,
+        "noise_ang": 0.7,
+        
+        "bias_pos": 2.5,
+        "noise_pos": 6.0e-3,
     },
 }
 

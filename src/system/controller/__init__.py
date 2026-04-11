@@ -10,6 +10,7 @@ from .smooth_pole_cmd_state import (
     SMOOTH_POLE_CMD_STATE_PRESETS,
 )
 from .smooth_pole import SmoothPolePlacementController, SmoothPoleParams, SMOOTH_POLE_PRESETS
+from .smooth_lqr import SmoothLQRController, SmoothLQRParams, SMOOTH_LQR_PRESETS
 from .smooth_pole_integral import (
     SmoothPoleIntegralController,
     SmoothPoleIntegralParams,
@@ -31,6 +32,7 @@ CONTROLLER_REGISTRY = {
         SMOOTH_POLE_CMD_STATE_PRESETS,
     ),
     "smooth_pole": Spec(SmoothPolePlacementController, SmoothPoleParams, SMOOTH_POLE_PRESETS),
+    "smooth_lqr": Spec(SmoothLQRController, SmoothLQRParams, SMOOTH_LQR_PRESETS),
     "smooth_pole_integral": Spec(
         SmoothPoleIntegralController,
         SmoothPoleIntegralParams,

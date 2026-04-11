@@ -24,6 +24,9 @@ class BalancerParams:
 
 BALANCER_PRESETS = {
     "default": {
+        "disturbance_cart_force_x": 0,
+    },
+    "noise": {
         "disturbance_cart_force_x": 5,
     },
 }

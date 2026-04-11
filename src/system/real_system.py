@@ -91,7 +91,11 @@ REAL_SYSTEM_PRESETS = {
 
 
 class RealSystem(System):
-    def step(self, dt):
+    @property
+    def is_simulation(self) -> bool:
+        return False
+
+    def step(self, dt, control_tick: bool = True):
         prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
         ctrl_i, est_k = self._supervisor_active_output()
         self._sync_active_components(ctrl_i, est_k)
@@ -114,16 +118,12 @@ class RealSystem(System):
         self.last_estimates, self.last_innovations = self._run_estimators(y, dt)
         x_used = self._blend_state_estimates(est_k)
         innovation_used = self._blend_innovations(est_k)
+        adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
         #self._print_estimator_estimates(est_k)
-        
-        u_raw = self.active_controller.compute(x_used)
-        u_override = getattr(self.supervisor, "command_override", None)
-        if u_override is not None:
-            u_raw = u_override
-        u_cmd = self.finalize_command(u_raw)
 
-        mech_joints = self.actuator.apply(u_cmd)
+        u_cmd = self._compute_command(x_used) if control_tick else self.u
+        mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
         x_true, acc = self.active_plant.step(self.x, u_cmd, dt)
         if self._update_fall_detection(x_used, dt):
             self.supervisor.notify_fall_detected()
@@ -159,6 +159,7 @@ class RealSystem(System):
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
+            adaptive_lpf_weight=adaptive_lpf_weight_used,
         )
 
     def reset(self):
@@ -208,4 +209,5 @@ class RealSystem(System):
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
+            adaptive_lpf_weight=self._blend_adaptive_lpf_weight(self.active_est_k),
         )

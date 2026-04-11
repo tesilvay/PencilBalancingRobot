@@ -14,6 +14,7 @@ import argparse
 import sys
 from copy import deepcopy
 from dataclasses import asdict, fields, is_dataclass, MISSING
+from pathlib import Path
 from types import UnionType
 from typing import get_args, get_origin
 
@@ -85,8 +86,11 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument(
         "--graph",
-        metavar="PATH",
-        help="load a saved logger chunk pickle and plot it",
+        metavar="PATH_OR_INDEX",
+        help=(
+            "load a saved logger chunk pickle and plot it. "
+            "Pass a path, or pass 1 for the newest log, 2 for the second newest, and so on"
+        ),
     )
 
     return parser.parse_args()
@@ -392,6 +396,44 @@ def list_presets() -> None:
     print()
 
 
+def _sorted_logger_chunk_paths(log_dir: Path) -> list[Path]:
+    return sorted(
+        (path for path in log_dir.glob("*.pkl") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+        reverse=True,
+    )
+
+
+def resolve_graph_target(graph_arg: str) -> Path:
+    candidate = Path(graph_arg).expanduser()
+    if candidate.exists():
+        return candidate
+
+    try:
+        graph_index = int(graph_arg)
+    except ValueError as exc:
+        raise FileNotFoundError(
+            f"--graph expected an existing path or a positive integer, got {graph_arg!r}"
+        ) from exc
+
+    if graph_index <= 0:
+        raise ValueError(f"--graph index must be positive, got {graph_index}")
+
+    log_dir = Path("logs/logger_histories")
+    if not log_dir.exists():
+        raise FileNotFoundError(f"Log directory does not exist: {log_dir}")
+
+    log_paths = _sorted_logger_chunk_paths(log_dir)
+    if not log_paths:
+        raise FileNotFoundError(f"No logger chunk pickle files found in {log_dir}")
+    if graph_index > len(log_paths):
+        raise IndexError(
+            f"Requested log #{graph_index}, but only {len(log_paths)} log files were found in {log_dir}"
+        )
+
+    return log_paths[graph_index - 1]
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -404,7 +446,9 @@ def main() -> int:
         return 0
 
     if args.graph:
-        plot_logger_chunk(args.graph)
+        graph_path = resolve_graph_target(args.graph)
+        print(f"[main] plotting log: {graph_path}")
+        plot_logger_chunk(graph_path)
         return 0
 
     spec_string = resolve_spec_string(args.preset, {})

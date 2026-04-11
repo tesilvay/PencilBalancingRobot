@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import time
 
 import numpy as np
 
@@ -111,8 +112,11 @@ class Experiment:
         self.progress             = p.progress
         self.pacing               = p.pacing
         self.scheduler            = p.scheduler
-        self.dt                   = p.timing.dt
+        self.dt                   = getattr(self.scheduler, "dt", p.timing.dt)
         self.n_trials             = p.n_trials
+
+        if hasattr(self.pacing, "dt"):
+            self.pacing.dt = self.dt
 
         if hasattr(self.realtime_visualizer, "_event_frames_fn"):
             if self.realtime_visualizer._event_frames_fn is None and hasattr(
@@ -150,7 +154,8 @@ class Experiment:
         self.reset()
         i = 0
         while not self.stop_condition.should_stop(i, self.system.x, self.dt):
-            self.system.step(self.dt)
+            control_tick = self.scheduler.should_actuate()
+            self.system.step(self.dt, control_tick=control_tick)
             self.logger.record(self.system.step_data)
             self.scheduler.tick()
             if self.scheduler.should_render():
@@ -170,7 +175,9 @@ class Experiment:
             i += 1
 
         if hasattr(self.logger, "flush_pending_chunks"):
-            self.logger.flush_pending_chunks()
+            self.logger.flush_pending_chunks(
+                force_full_trial=bool(getattr(self.system, "is_simulation", False))
+            )
         result = self.logger.get_result()
         result.terminal = TerminalInfo(
             stabilized=self.stop_condition.is_stabilized(),
@@ -184,6 +191,12 @@ class Experiment:
         self.logger.reset(self.system.step_data)
         self.stop_condition.reset()
         self.scheduler.reset()
+        if hasattr(self.pacing, "dt"):
+            self.pacing.dt = self.dt
+        if hasattr(self.pacing, "reset"):
+            self.pacing.reset()
+        elif hasattr(self.pacing, "next_time"):
+            self.pacing.next_time = time.perf_counter()
 
     def run_experiment(self):
         results = []

@@ -20,6 +20,9 @@ class RealTimePacing(Pacing):
         self.dt = params.timing.dt
         self.next_time = time.perf_counter()
 
+    def reset(self):
+        self.next_time = time.perf_counter()
+
     def pace(self):
         self.next_time += self.dt
         sleep = self.next_time - time.perf_counter()

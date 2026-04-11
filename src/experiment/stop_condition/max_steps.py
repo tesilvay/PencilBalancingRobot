@@ -22,8 +22,8 @@ MAX_STEPS_CONDITION_PRESETS = {
 class MaxStepsCondition(StabilizedCondition):
     def __init__(self, params: MaxStepsConditionParams):
         super().__init__(params.stabilized_params)
-        self.steps = int(params.timing.total_time / params.timing.dt)
+        self.total_time = float(params.timing.total_time)
 
     def should_stop(self, i, state, dt):
         super().should_stop(i, state, dt)
-        return i >= self.steps
+        return (i * dt) >= self.total_time

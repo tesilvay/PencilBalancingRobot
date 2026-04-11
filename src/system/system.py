@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-import time
 
 import numpy as np
 
+from src.system.estimator.adaptive_kalman import AdaptiveKalmanEstimator
 from src.system.estimator.kalman import KalmanEstimator
 from src.system.actuator.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from src.shared import (
@@ -60,7 +60,7 @@ SYSTEM_PRESETS = {
         "plants":       ["placing:steady_hands", "sim:default"],
         "controllers": ["smooth_pole:default"],
         "estimators":  ["lpf:default", "lpf:default"],
-        "sensor":      "sim_analytic:default",
+        "sensor":      "sim_analytic:noisy",
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
         "gain_schedule": "null:default",
@@ -108,9 +108,10 @@ class System:
         self.last_estimates: list[State] = []
         self.last_innovations: list[np.ndarray] = []
         
+        self.i = 0
+        
         # printing stuff hardcoded
-        self.print_hz = 24.0
-        self._last_estimator_print_t = 0.0
+        self.print_every_n_steps = 10
         
         self._offset_xy = np.zeros(2, dtype=float)
         self._offset_latched_fallback = False
@@ -119,8 +120,21 @@ class System:
         self._fall_detected = False
         self._fall_timer_s = 0.0
         self._startup_calibration_done = False
+        self._perf_tip_history: list[np.ndarray] = []
+        self._perf_tip_ref_history: list[np.ndarray] = []
+        self._perf_orientation_history: list[np.ndarray] = []
+        self._perf_control_history: list[np.ndarray] = []
+        self._perf_time_history: list[float] = []
+        self._perf_filtered_tip_history: list[np.ndarray] = []
+        self._perf_lp_tip: np.ndarray | None = None
+        self._perf_noise_tau_s = 0.05
+        self._perf_settling_eps_m = 2e-3
         if hasattr(self.supervisor, "attach_runtime"):
             self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
+
+    @property
+    def is_simulation(self) -> bool:
+        return True
 
     def _maybe_run_startup_calibration(self) -> None:
         if self._startup_calibration_done:
@@ -178,6 +192,18 @@ class System:
         u_applied = clamp_control_input_to_workspace(u_raw, self.workspace)
         self.active_controller.set_applied_command(u_applied)
         return u_applied
+
+    def _compute_command(self, x_used: State) -> ControlInput:
+        u_raw = self.active_controller.compute(x_used)
+        u_override = getattr(self.supervisor, "command_override", None)
+        if u_override is not None:
+            u_raw = u_override
+        return self.finalize_command(u_raw)
+
+    def _apply_or_hold_command(self, u_cmd: ControlInput, control_tick: bool) -> np.ndarray:
+        if control_tick:
+            return self.actuator.apply(u_cmd)
+        return self.actuator.mech_joint_snapshot(u_cmd)
 
     def _supervisor_active_output(self) -> tuple[int, float]:
         try:
@@ -284,30 +310,218 @@ class System:
         k = float(np.clip(est_k, 0.0, 1.0))
         return (1.0 - k) * self.last_innovations[0] + k * self.last_innovations[1]
 
+    @staticmethod
+    def _estimator_adaptive_lpf_weight(estimator: object) -> float | None:
+        value = getattr(estimator, "adaptive_lpf_weight", None)
+        if value is None:
+            return None
+        value = float(value)
+        if not np.isfinite(value):
+            return None
+        return float(np.clip(value, 0.0, 1.0))
+
+    def _blend_adaptive_lpf_weight(self, est_k: float) -> float | None:
+        if not self.estimators:
+            return None
+
+        weights = [
+            self._estimator_adaptive_lpf_weight(estimator)
+            for estimator in self.estimators[:2]
+        ]
+        if not any(weight is not None for weight in weights):
+            return None
+        if len(weights) == 1:
+            return 0.0 if weights[0] is None else weights[0]
+
+        k = float(np.clip(est_k, 0.0, 1.0))
+        w0 = 0.0 if weights[0] is None else weights[0]
+        w1 = 0.0 if weights[1] is None else weights[1]
+        return float((1.0 - k) * w0 + k * w1)
+
     def _print_estimator_estimates(self, est_k: float) -> None:
-        min_period_s = 1.0 / self.print_hz
-        now = time.perf_counter()
-        elapsed = now - self._last_estimator_print_t
-        if elapsed > min_period_s:
-            self._last_estimator_print_t = time.perf_counter()
+        if self.i % self.print_every_n_steps != 0:
+            return
 
-            if len(self.estimators) == 2 and len(self.last_estimates) == 2:
-                k = float(np.clip(est_k, 0.0, 1.0))
-                est1_weight = 1.0 - k
-                est2_weight = k
-                print(f"est 1 [{est1_weight:.2f}] : {self.last_estimates[0].state_str()}")
-                print(f"est 2 [{est2_weight:.2f}] : {self.last_estimates[1].state_str()}")
-                return
+        if len(self.estimators) == 2 and len(self.last_estimates) == 2:
+            k = float(np.clip(est_k, 0.0, 1.0))
+            est1_weight = 1.0 - k
+            est2_weight = k
+            print(f"est 1 [{est1_weight:.2f}] : {self.last_estimates[0].state_str()}")
+            print(f"est 2 [{est2_weight:.2f}] : {self.last_estimates[1].state_str()}")
+            return
 
-            for idx, (estimator, x_hat) in enumerate(zip(self.estimators, self.last_estimates)):
-                print(f"est {idx + 1}: {x_hat.state_str()}")
+        for idx, (estimator, x_hat) in enumerate(zip(self.estimators, self.last_estimates)):
+            print(f"est {idx + 1}: {x_hat.state_str()}")
+    
+    def _print_x_hat_and_true(self, x_true: State, dt: float) -> None:
+        if self.i % self.print_every_n_steps != 0:
+            return
+
+        sim_time = self.i * dt
+        print(f"time: {sim_time:.3f}")
+        print(f"est : {self.last_estimates[0].state_str()}")
+        print(f"true: {x_true.state_str()}")
+
+    def _performance_com_length(self) -> float:
+        for owner in (self.active_plant, self.active_controller, self.active_estimator):
+            length = getattr(owner, "l", None)
+            if length is not None:
+                return float(length)
+            plant = getattr(owner, "_plant", None)
+            if plant is not None and hasattr(plant, "com_length"):
+                return float(plant.com_length)
+        return 0.0
+
+    def _reference_measurement(self) -> Measurement:
+        return Measurement(
+            px=float(self.workspace.x_ref),
+            py=float(self.workspace.y_ref),
+            ax=0.0,
+            ay=0.0,
+        )
+
+    def _tip_from_measurement(self, y: Measurement) -> np.ndarray:
+        l = self._performance_com_length()
+        return np.array(
+            [
+                float(y.px + l * y.ax),
+                float(y.py + l * y.ay),
+                l,
+            ],
+            dtype=float,
+        )
+
+    def _orientation_from_measurement(self, y: Measurement) -> np.ndarray:
+        n = np.array(
+            [
+                np.sin(float(y.ax)),
+                np.sin(float(y.ay)),
+                np.cos(float(y.ax)) * np.cos(float(y.ay)),
+            ],
+            dtype=float,
+        )
+        n_norm = float(np.linalg.norm(n))
+        if n_norm <= 1e-12:
+            return np.array([0.0, 0.0, 1.0], dtype=float)
+        return n / n_norm
+
+    def _update_performance_history(self, y_meas: Measurement, u_cmd: ControlInput, dt: float) -> None:
+        tip = self._tip_from_measurement(y_meas)
+        tip_ref = self._tip_from_measurement(self._reference_measurement())
+        orientation = self._orientation_from_measurement(y_meas)
+        control = np.array([float(u_cmd.px_cmd), float(u_cmd.py_cmd)], dtype=float)
+        sim_time = self.i * dt
+
+        alpha = float(dt / (self._perf_noise_tau_s + dt)) if dt > 0.0 else 1.0
+        if self._perf_lp_tip is None:
+            self._perf_lp_tip = tip.copy()
+        else:
+            self._perf_lp_tip = (1.0 - alpha) * self._perf_lp_tip + alpha * tip
+
+        self._perf_tip_history.append(tip)
+        self._perf_tip_ref_history.append(tip_ref)
+        self._perf_orientation_history.append(orientation)
+        self._perf_control_history.append(control)
+        self._perf_time_history.append(float(sim_time))
+        self._perf_filtered_tip_history.append(self._perf_lp_tip.copy())
+
+    def _compute_delay_indicator(self, dt: float) -> float:
+        if len(self._perf_tip_history) < 2:
+            return float("nan")
+
+        y_hist = np.asarray(self._perf_tip_history, dtype=float)
+        y_ref_hist = np.asarray(self._perf_tip_ref_history, dtype=float)
+        y_centered = y_hist - np.mean(y_hist, axis=0, keepdims=True)
+        y_ref_centered = y_ref_hist - np.mean(y_ref_hist, axis=0, keepdims=True)
+        if float(np.linalg.norm(y_ref_centered)) <= 1e-12:
+            return float("nan")
+
+        corr = None
+        for axis in range(y_centered.shape[1]):
+            axis_corr = np.correlate(y_centered[:, axis], y_ref_centered[:, axis], mode="full")
+            corr = axis_corr if corr is None else corr + axis_corr
+
+        lag_samples = int(np.argmax(corr) - (len(y_hist) - 1))
+        return float(lag_samples * dt)
+
+    def _compute_settling_time(self) -> float:
+        if not self._perf_time_history:
+            return float("nan")
+
+        error_norms = np.linalg.norm(
+            np.asarray(self._perf_tip_history, dtype=float)
+            - np.asarray(self._perf_tip_ref_history, dtype=float),
+            axis=1,
+        )
+        below = error_norms < self._perf_settling_eps_m
+        for idx in range(len(below)):
+            if np.all(below[idx:]):
+                return float(self._perf_time_history[idx])
+        return float("nan")
+
+    def _print_performance_indicators(self, dt: float) -> None:
+        if self.i % self.print_every_n_steps != 0:
+            return
+
+        if not self._perf_tip_history:
+            return
+
+        tip_hist = np.asarray(self._perf_tip_history, dtype=float)
+        tip_ref_hist = np.asarray(self._perf_tip_ref_history, dtype=float)
+        orientation_hist = np.asarray(self._perf_orientation_history, dtype=float)
+        control_hist = np.asarray(self._perf_control_history, dtype=float)
+        filtered_tip_hist = np.asarray(self._perf_filtered_tip_history, dtype=float)
+        err_hist = tip_hist - tip_ref_hist
+        err_norms = np.linalg.norm(err_hist, axis=1)
+        n_d = np.array([0.0, 0.0, 1.0], dtype=float)
+
+        if len(tip_hist) >= 2 and dt > 0.0:
+            vel_hist = np.diff(tip_hist, axis=0) / dt
+            vel_ref_hist = np.diff(tip_ref_hist, axis=0) / dt
+            control_rate_hist = np.diff(control_hist, axis=0) / dt
+            j5 = float(dt * np.sum(np.sum((vel_hist - vel_ref_hist) ** 2, axis=1)))
+            j7 = float(dt * np.sum(np.sum(control_rate_hist ** 2, axis=1)))
+        else:
+            j5 = 0.0
+            j7 = 0.0
+
+        j1 = self._compute_delay_indicator(dt)
+        j2 = float(np.sqrt(np.mean(np.sum(err_hist ** 2, axis=1))))
+        j3 = float(np.max(err_norms))
+        j4 = float(dt * np.sum(np.sum(np.cross(orientation_hist, n_d) ** 2, axis=1)))
+        j6 = float(dt * np.sum(np.sum(control_hist ** 2, axis=1)))
+        j8 = self._compute_settling_time()
+        noise_hist = tip_hist - filtered_tip_hist
+        j9 = float(np.mean(np.sum(noise_hist ** 2, axis=1)))
+
+        def _fmt(value: float, unit: str = "") -> str:
+            if np.isnan(value):
+                return f"{'N/A':>12}"
+            return f"{value:>12.6f}{unit}"
+
+        print("performance:")
+        print("+------+--------------------------+----------------+")
+        print("| ID   | indicador                | valor          |")
+        print("+------+--------------------------+----------------+")
+        print(f"| J1   | desfase temporal         | {_fmt(j1, ' s')} |")
+        print(f"| J2   | error RMS                | {_fmt(j2, ' m')} |")
+        print(f"| J3   | error pico               | {_fmt(j3, ' m')} |")
+        print(f"| J4   | error geometrico         | {_fmt(j4)} |")
+        print(f"| J5   | error velocidad          | {_fmt(j5)} |")
+        print(f"| J6   | esfuerzo control         | {_fmt(j6)} |")
+        print(f"| J7   | variacion control        | {_fmt(j7)} |")
+        print(f"| J8   | tiempo establecimiento   | {_fmt(j8, ' s')} |")
+        print(f"| J9   | indicador ruido          | {_fmt(j9)} |")
+        print("+------+--------------------------+----------------+")
+
+            
 
     def _reset_kalman_estimators(self, x_hat: State | None = None) -> None:
         for estimator in self.estimators:
-            if isinstance(estimator, KalmanEstimator):
+            if isinstance(estimator, (KalmanEstimator, AdaptiveKalmanEstimator)):
                 estimator.reset(x_hat)
 
-    def step(self, dt):
+    def step(self, dt, control_tick: bool = True):
         prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
         ctrl_i, est_k = self._supervisor_active_output()
         self._sync_active_components(ctrl_i, est_k)
@@ -333,18 +547,15 @@ class System:
         self.last_estimates, self.last_innovations = self._run_estimators(y, dt)
         x_used = self._blend_state_estimates(est_k)
         innovation_used = self._blend_innovations(est_k)
-        
-        
-        #self._print_estimator_estimates(est_k)
-        
-        
-        u_raw = self.active_controller.compute(x_used)
-        u_override = getattr(self.supervisor, "command_override", None)
-        if u_override is not None:
-            u_raw = u_override
-        u_cmd = self.finalize_command(u_raw)
+        adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
-        mech_joints = self.actuator.apply(u_cmd)
+        # self._print_estimator_estimates(est_k)
+        self._print_x_hat_and_true(x_true, dt)
+
+        u_cmd = self._compute_command(x_used) if control_tick else self.u
+        mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
+        #self._update_performance_history(y, u_cmd, dt)
+        #self._print_performance_indicators(dt)
         if self._update_fall_detection(x_used, dt):
             self.supervisor.notify_fall_detected()
 
@@ -381,7 +592,9 @@ class System:
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
+            adaptive_lpf_weight=adaptive_lpf_weight_used,
         )
+        self.i += 1
 
     def reset(self):
         self._maybe_run_startup_calibration()
@@ -412,10 +625,17 @@ class System:
         self.last_y_raw = None
         self.last_estimates = []
         self.last_innovations = []
-        self._last_estimator_print_t = 0.0
+        self.i = 0
         self._offset_latched_fallback = False
         self._offset_xy = self._offset_from_state(self.x)
         self._reset_fall_detection()
+        self._perf_tip_history = []
+        self._perf_tip_ref_history = []
+        self._perf_orientation_history = []
+        self._perf_control_history = []
+        self._perf_time_history = []
+        self._perf_filtered_tip_history = []
+        self._perf_lp_tip = None
 
         mj0 = self.actuator.mech_joint_snapshot(self.u)
         self.step_data = StepData(
@@ -428,6 +648,7 @@ class System:
             offset_xy=self._offset_xy.copy(),
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
+            adaptive_lpf_weight=self._blend_adaptive_lpf_weight(self.active_est_k),
         )
     
     

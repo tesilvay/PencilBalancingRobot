@@ -5,8 +5,7 @@ from src.shared import TimingParams, default_timing
 
 SCHEDULER_PRESETS = {
     "default": {
-        "dt": 0.5,
-        "actuator_frequency": 333,
+        "actuator_frequency": 1000,
         "render_frequency":   30,
     }
 }
@@ -14,7 +13,6 @@ SCHEDULER_PRESETS = {
 
 @dataclass
 class SchedulerParams:
-    dt:                 int
     actuator_frequency: int
     render_frequency:   int
     timing:             TimingParams = field(default_factory=default_timing)
@@ -22,28 +20,31 @@ class SchedulerParams:
 
 class Scheduler:
     def __init__(self, params: SchedulerParams):
-        self.dt         = params.timing.dt
-        self.actuator_dt = 1.0 / params.actuator_frequency
+        self.dt = float(params.timing.dt)
+        self.actuator_dt = params.timing.actuator_dt
         self.render_dt  = 1.0 / params.render_frequency if params.render_frequency else None
 
         self.t             = 0.0
         self.next_actuator = 0.0
         self.next_render   = 0.0
+        self._eps = 1e-12
 
     def tick(self):
         self.t += self.dt
 
     def should_actuate(self):
-        if self.t >= self.next_actuator:
-            self.next_actuator += self.actuator_dt
+        if self.t + self._eps >= self.next_actuator:
+            while self.t + self._eps >= self.next_actuator:
+                self.next_actuator += self.actuator_dt
             return True
         return False
 
     def should_render(self):
         if self.render_dt is None:
             return False
-        if self.t >= self.next_render:
-            self.next_render += self.render_dt
+        if self.t + self._eps >= self.next_render:
+            while self.t + self._eps >= self.next_render:
+                self.next_render += self.render_dt
             return True
         return False
 

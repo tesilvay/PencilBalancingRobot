@@ -25,6 +25,7 @@ class SimulationResult:
     state_history: np.ndarray
     acc_history: np.ndarray
     estimate_history: np.ndarray | None = None
+    adaptive_lpf_weight_history: np.ndarray | None = None
     mech_history: np.ndarray | None = None
     innovation_history: np.ndarray | None = None
     cmd_history: np.ndarray | None = None
@@ -68,6 +69,15 @@ def _offset_to_row(offset_xy: np.ndarray | None) -> np.ndarray:
     return a
 
 
+def _adaptive_lpf_weight_to_value(adaptive_lpf_weight: float | None) -> float:
+    if adaptive_lpf_weight is None:
+        return float("nan")
+    value = float(adaptive_lpf_weight)
+    if not np.isfinite(value):
+        return float("nan")
+    return float(np.clip(value, 0.0, 1.0))
+
+
 class Logger:
     def __init__(self, params: LoggerParams):
         self.params = params
@@ -81,6 +91,7 @@ class Logger:
         self._offset = None
         self._offset_latched = None
         self._supervisor_states = None
+        self._adaptive_lpf_weight = None
         self._active_chunk_start_idx: int | None = None
         self._saved_chunks: set[tuple[int, int]] = set()
 
@@ -97,6 +108,9 @@ class Logger:
         self._offset = [_offset_to_row(initial_step_data.offset_xy)]
         self._offset_latched = [bool(initial_step_data.offset_latched)]
         self._supervisor_states = [self._normalize_state_name(initial_step_data.supervisor_state)]
+        self._adaptive_lpf_weight = [
+            _adaptive_lpf_weight_to_value(initial_step_data.adaptive_lpf_weight)
+        ]
         self._active_chunk_start_idx = None
         self._saved_chunks = set()
 
@@ -114,6 +128,9 @@ class Logger:
         self._offset.append(_offset_to_row(step_data.offset_xy))
         self._offset_latched.append(current_offset_latched)
         self._supervisor_states.append(current_state)
+        self._adaptive_lpf_weight.append(
+            _adaptive_lpf_weight_to_value(step_data.adaptive_lpf_weight)
+        )
 
         current_idx = len(self._supervisor_states) - 1
         if (not prev_offset_latched) and current_offset_latched:
@@ -127,8 +144,13 @@ class Logger:
             self._save_chunk(self._active_chunk_start_idx, current_idx, reason="reacquire")
             self._active_chunk_start_idx = None
 
-    def flush_pending_chunks(self) -> None:
+    def flush_pending_chunks(self, *, force_full_trial: bool = False) -> None:
         if self._supervisor_states is None:
+            return
+
+        if force_full_trial:
+            self._save_chunk(0, len(self._states), reason="full_trial")
+            self._active_chunk_start_idx = None
             return
 
         stop_idx = len(self._supervisor_states)
@@ -157,6 +179,12 @@ class Logger:
             self._supervisor_states[start_idx:stop_idx],
             dtype=str,
         )
+        adaptive_lpf_weight_history = np.array(
+            self._adaptive_lpf_weight[start_idx:stop_idx],
+            dtype=float,
+        )
+        if not np.isfinite(adaptive_lpf_weight_history).any():
+            adaptive_lpf_weight_history = None
 
         acc_start = min(start_idx, len(self._acc))
         acc_stop = min(max(stop_idx - 1, acc_start), len(self._acc))
@@ -176,6 +204,7 @@ class Logger:
             state_history=state_history,
             acc_history=acc_history,
             estimate_history=estimate_history,
+            adaptive_lpf_weight_history=adaptive_lpf_weight_history,
             mech_history=mech_history,
             cmd_history=cmd_history,
             innovation_history=innovation_history,
@@ -204,6 +233,9 @@ class Logger:
         chunk_logger._offset = list(self._offset[start_idx:stop_idx])
         chunk_logger._offset_latched = list(self._offset_latched[start_idx:stop_idx])
         chunk_logger._supervisor_states = list(self._supervisor_states[start_idx:stop_idx])
+        chunk_logger._adaptive_lpf_weight = list(
+            self._adaptive_lpf_weight[start_idx:stop_idx]
+        )
 
         acc_start = min(start_idx, len(self._acc))
         acc_stop = min(max(stop_idx - 1, acc_start), len(self._acc))

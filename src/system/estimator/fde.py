@@ -29,11 +29,20 @@ class FiniteDifferenceEstimator(BaseEstimator):
 
     def __init__(self, params: FdeParams):
         super().__init__()
-        self.A, self.B = discretize_AB(params.plant, params.timing)
+        self._plant = params.plant
+        self._disc_dt = float(params.timing.dt)
+        self.A, self.B = discretize_AB(self._plant, self._disc_dt)
         self.H = measurement_H()
 
         self._x_post = np.zeros((8, 1))
         self.prev_y_meas: Measurement | None = None
+
+    def _ensure_discretization(self, dt: float) -> None:
+        dt = float(dt)
+        if np.isclose(dt, self._disc_dt, rtol=0.0, atol=1e-12):
+            return
+        self.A, self.B = discretize_AB(self._plant, dt)
+        self._disc_dt = dt
 
     def estimate(
         self,
@@ -41,6 +50,7 @@ class FiniteDifferenceEstimator(BaseEstimator):
         dt: float,
         u_cmd: ControlInput | None = None,
     ) -> tuple[State, np.ndarray]:
+        self._ensure_discretization(dt)
 
         z = self.measurement_z(y_meas)
         u = self.control_u(u_cmd, y_meas)

@@ -53,9 +53,10 @@ def default_workspace() -> WorkspaceParams:
 class TimingParams:
     total_time: float
     dt:         float
+    actuator_dt: float
 
 TIMING_PRESETS = {
-    "default": {"total_time": 10.0, "dt": 3e-3},
+    "default": {"total_time": 10.0, "dt": 3e-3, "actuator_dt": 3e-3},
     "ideal": {"total_time": 5.0, "dt": 1e-3},
     "long":    {"total_time": 30.0, "dt": 4e-3},
 }
@@ -230,10 +231,57 @@ class StepData:
     offset_latched: bool = False
     # Supervisor state associated with this sample.
     supervisor_state: str | None = None
+    # Adaptive-Kalman LPF fallback weight in [0, 1]: 0 = Kalman-like, 1 = LPF-like.
+    adaptive_lpf_weight: float | None = None
 
 
 def plot_logger_chunk(path: str | Path) -> None:
     import matplotlib.pyplot as plt
+    from matplotlib import colors as mcolors
+    from matplotlib.collections import LineCollection
+    from matplotlib.lines import Line2D
+
+    kalman_color = np.asarray(mcolors.to_rgb("tab:blue"), dtype=float)
+    lpf_color = np.asarray(mcolors.to_rgb("tab:red"), dtype=float)
+
+    def _mix_mode_color(weight: float) -> tuple[float, float, float]:
+        weight = float(np.clip(weight, 0.0, 1.0))
+        return tuple((1.0 - weight) * kalman_color + weight * lpf_color)
+
+    def _plot_tilt_with_mode_color(
+        ax_plot,
+        x_data: np.ndarray,
+        y_data: np.ndarray,
+        mode_weight: np.ndarray | None,
+        tilt_label: str,
+        cmd_line,
+        cmd_label: str,
+    ) -> None:
+        if mode_weight is None or x_data.size < 2:
+            tilt_line = ax_plot.plot(x_data, y_data, color="tab:blue", label=tilt_label)
+            lines = tilt_line + [cmd_line]
+            labels = [line.get_label() for line in lines]
+            ax_plot.legend(lines, labels, loc="upper right")
+            return
+
+        points = np.column_stack((x_data, y_data)).reshape(-1, 1, 2)
+        segments = np.concatenate((points[:-1], points[1:]), axis=1)
+        segment_weights = 0.5 * (mode_weight[:-1] + mode_weight[1:])
+        segment_colors = [_mix_mode_color(weight) for weight in segment_weights]
+        tilt_segments = LineCollection(
+            segments,
+            colors=segment_colors,
+            linewidths=2.0,
+        )
+        ax_plot.add_collection(tilt_segments)
+        ax_plot.autoscale_view(scalex=False, scaley=True)
+
+        legend_handles = [
+            Line2D([0], [0], color=kalman_color, linewidth=2.0, label=f"{tilt_label} Kalman"),
+            Line2D([0], [0], color=lpf_color, linewidth=2.0, label=f"{tilt_label} LPF"),
+            cmd_line,
+        ]
+        ax_plot.legend(legend_handles, [handle.get_label() for handle in legend_handles], loc="upper right")
 
     chunk_path = Path(path)
     with chunk_path.open("rb") as fh:
@@ -246,6 +294,7 @@ def plot_logger_chunk(path: str | Path) -> None:
         dtype=float,
     )
     cmd_history = np.asarray(result.cmd_history, dtype=float)
+    adaptive_lpf_weight_history = getattr(result, "adaptive_lpf_weight_history", None)
     if state_history.ndim != 2 or state_history.shape[1] < 7:
         raise ValueError(f"Invalid state_history in {chunk_path}")
     if cmd_history.ndim != 2 or cmd_history.shape[1] < 2:
@@ -256,9 +305,20 @@ def plot_logger_chunk(path: str | Path) -> None:
     ay_deg = np.rad2deg(state_history[:, 6])
     cmd_x_mm = 1000.0 * cmd_history[:, 0]
     cmd_y_mm = 1000.0 * cmd_history[:, 1]
-    
+    if adaptive_lpf_weight_history is not None:
+        adaptive_lpf_weight_history = np.asarray(adaptive_lpf_weight_history, dtype=float).reshape(-1)
+        if adaptive_lpf_weight_history.shape[0] != state_history.shape[0]:
+            adaptive_lpf_weight_history = None
+        elif not np.isfinite(adaptive_lpf_weight_history).any():
+            adaptive_lpf_weight_history = None
+        else:
+            adaptive_lpf_weight_history = np.clip(
+                np.nan_to_num(adaptive_lpf_weight_history, nan=0.0),
+                0.0,
+                1.0,
+            )
 
-    for i in range(-450,0,1):
+    for i in range(min(450, state_history.shape[0])):
         print(f"step:{i} | alpha_x: {ax_deg[i]:.2f} | cmd_x: {cmd_x_mm[i]:.1f}")
     
     fig, axes = plt.subplots(2, 1, sharex=True, figsize=(11, 7))
@@ -271,8 +331,16 @@ def plot_logger_chunk(path: str | Path) -> None:
 
     for ax_plot, tilt_deg, cmd_mm, title, tilt_label, cmd_label in axis_specs:
         cmd_ax = ax_plot.twinx()
-        tilt_line = ax_plot.plot(sample_idx, tilt_deg, color="tab:blue", label=tilt_label)
-        cmd_line = cmd_ax.plot(sample_idx, cmd_mm, color="tab:orange", label=cmd_label)
+        cmd_line = cmd_ax.plot(sample_idx, cmd_mm, color="tab:orange", label=cmd_label)[0]
+        _plot_tilt_with_mode_color(
+            ax_plot,
+            sample_idx,
+            tilt_deg,
+            adaptive_lpf_weight_history,
+            tilt_label,
+            cmd_line,
+            cmd_label,
+        )
 
         ax_plot.set_title(title)
         ax_plot.set_ylabel("Angle (deg)", color="tab:blue")
@@ -280,10 +348,6 @@ def plot_logger_chunk(path: str | Path) -> None:
         ax_plot.set_ylim(-15.0, 15.0)
         cmd_ax.set_ylim(-70.0, 70.0)
         ax_plot.grid(True, alpha=0.3)
-
-        lines = tilt_line + cmd_line
-        labels = [line.get_label() for line in lines]
-        ax_plot.legend(lines, labels, loc="upper right")
 
     axes[-1].set_xlabel("Sample")
     fig.tight_layout()
