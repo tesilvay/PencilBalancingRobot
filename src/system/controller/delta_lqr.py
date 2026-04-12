@@ -74,15 +74,15 @@ DELTA_LQR_PRESETS = {
         "max_delta_u": 4.0e-2,
         "max_command_radius": 8.0e-2,
         
-        "pos_thresh": 2.5e-2,
-        "angle_thresh": np.deg2rad(2),
+        "pos_thresh": 3.0e-2,
+        "angle_thresh": np.deg2rad(3),
         "rate_thresh": None,
         "ki": 0.5
     },
     "gentle": {
         "base": "default",
         
-        "r_delta_u": 6.0e8,
+        "r_delta_u": 1.0e8,
     },
     "stronger": {
         "base": "default",
@@ -192,14 +192,17 @@ class DeltaLQRController(BaseController):
 
     def _update_integrator(self, state: State):
         
-        pos_ok   = np.hypot(state.px, state.py) < self.pos_thresh
         angle_ok = np.hypot(state.ax, state.ay) < self.angle_thresh
+        rate_ok  = np.hypot(state.wx, state.wy) < self.rate_thresh if self.rate_thresh else True
 
-        if self.rate_thresh:
-            rate_ok = np.hypot(state.wx, state.wy) < self.rate_thresh
-            condition = pos_ok and angle_ok and rate_ok
+        if self._integrator_active:
+            # looser condition to stay active: only angle and rate
+            condition = angle_ok and rate_ok
         else:
-            condition = pos_ok and angle_ok
+            # tighter condition to activate: must also be off-center enough to bother
+            pos_ok = np.hypot(state.px - self._x_ref_true[0],
+                            state.py - self._x_ref_true[4]) > self.pos_thresh
+            condition = pos_ok and angle_ok and rate_ok
         
         if condition:
             self._integrator_active = True
@@ -211,8 +214,8 @@ class DeltaLQRController(BaseController):
             self._x_ref_lqr[4] -= self.ki * pos_err_y * self.actuator_dt
             # must follow x_ref_lqr
             self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
-        else: # freeze, do nothing
-            self._integrator_active = False
+        #else: # freeze, do nothing
+        #    self._integrator_active = False
 
     def compute(self, state: State) -> ControlInput:
         x_err = state.as_vector() - self._x_ref_lqr
