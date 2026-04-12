@@ -159,7 +159,8 @@ class SmoothPoleCommandStateController(BaseController):
 
         return ControlInput(float(u[0]), float(u[1]))
 
-    def set_applied_command(self, u: ControlInput) -> None:
+    def set_applied_command(self, u: ControlInput, state: State) -> None:
+        del state
         next_u = np.array([u.px_cmd, u.py_cmd], dtype=float)
         self._cmd_vel = (next_u - self._u_prev) / self.dt
         self._u_prev_prev = self._u_prev.copy()

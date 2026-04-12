@@ -166,7 +166,8 @@ class AccelLagPolePlacementController(BaseController):
         u_cmd = self.clamp_pos(u_cmd)
         return ControlInput(px_cmd=float(u_cmd[0]), py_cmd=float(u_cmd[1]))
 
-    def set_applied_command(self, u: ControlInput) -> None:
+    def set_applied_command(self, u: ControlInput, state: State) -> None:
+        del state
         self._u_prev[:] = [float(u.px_cmd), float(u.py_cmd)]
 
     def reset(self, x_hat: State | None = None):

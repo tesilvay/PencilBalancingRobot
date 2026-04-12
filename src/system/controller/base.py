@@ -10,6 +10,7 @@ class BaseController:
         del x_hat
         pass
 
-    def set_applied_command(self, u: ControlInput) -> None:
+    def set_applied_command(self, u: ControlInput, state: State) -> None:
         """Sync internal memory to the command actually used after post-processing (e.g. workspace clamp)."""
+        del u, state
         pass

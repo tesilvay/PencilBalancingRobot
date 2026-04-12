@@ -122,7 +122,7 @@ class RealSystem(System):
         self._print_estimator_estimates(est_k)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
-        mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
+        mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
         x_true, acc = self.active_plant.step(self.x, u_cmd, dt)
         if self._update_fall_detection(x_used, dt):
             self.supervisor.notify_fall_detected()

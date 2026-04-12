@@ -30,9 +30,17 @@ class DeltaLQRParams:
     q_tilt: float # tries to set pencil upright
     q_tilt_rate: float # penalty on angular acceleration
     
-    q_command: float # too little q_command: command may wander too freely ?????
+    
+    # penalizing u_err from u_ref_lqr, which itself is moving. 
+    # This is fine and actually helpful
+    # it stops u_prev from wandering away from the shifted reference.
+    q_command: float
     
     r_delta_u: float # penalty on control command
+    
+    angle_thresh: float
+    rate_thresh: float | None
+    ki: float
     
     max_delta_u: float | None = None
     max_command_radius: float | None = None
@@ -53,24 +61,26 @@ DELTA_LQR_PRESETS = {
         "tilt_scale": np.deg2rad(2.0),
         "tilt_rate_scale": np.deg2rad(10), # /s
         
-        "q_pos": 0.5,
-        "q_vel": 1.0e-8,
+        "q_pos": 2.0,
+        "q_vel": 0,
         "q_tilt": 0.001,
-        "q_tilt_rate": 1.0e-8,
+        "q_tilt_rate": 0,
         
         "q_command": 0.05,
         
-        "r_delta_u": 6.0e8,
+        "r_delta_u": 6.0e6,
         
         "max_delta_u": 4.0e-2,
-        "max_command_radius": 8.0e-2
+        "max_command_radius": 8.0e-2,
+        
+        "angle_thresh": np.deg2rad(2),
+        "rate_thresh": None,
+        "ki": 0.5
     },
     "gentle": {
         "base": "default",
-        "q_pos": 5.0,
-        "q_tilt": 15.0,
-        "r_delta_u": 5.0e5,
-        "max_delta_u": 5.0e-4,
+        
+        "r_delta_u": 6.0e8,
     },
     "stronger": {
         "base": "default",
@@ -127,15 +137,26 @@ class DeltaLQRController(BaseController):
         self.K, _, _ = ct.dlqr(A_aug, B_aug, Q, R)
         self.K = np.asarray(self.K, dtype=float)
 
-        self.x_ref = x_ref.as_vector()
-        self.u_ref = (-np.linalg.pinv(B_c) @ (A_c @ self.x_ref)).ravel()
-        self._u_prev = self.u_ref.copy()
+        
+        self._x_ref_true = x_ref.as_vector()  # never changes
+        self._x_ref_lqr = x_ref.as_vector().copy()  # drifts with integrator
+        self._u_ref_true = -np.linalg.pinv(B_c) @ A_c  # [m x n], computed once
+        self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
+        
+        self._u_prev = self.u_ref_lqr.copy()
         self.max_delta_u = params.max_delta_u
         self.max_command_radius = params.max_command_radius
         self.workspace_ref = np.array(
             [float(params.workspace.x_ref), float(params.workspace.y_ref)],
             dtype=float,
         )
+        
+        # Integrator: shifting reference
+        self._integrator_active = False
+        self.angle_thresh = params.angle_thresh
+        self.rate_thresh = params.rate_thresh
+        self.ki = params.ki
+        self.actuator_dt = params.timing.actuator_dt
 
     def _limit_delta_u(self, delta_u: np.ndarray) -> np.ndarray:
         if self.max_delta_u is None:
@@ -166,9 +187,37 @@ class DeltaLQRController(BaseController):
 
         return self.workspace_ref + radial * (max_radius / radius)
 
+    def _update_integrator(self, state: State):
+        
+        if self.rate_thresh:
+            condition = (
+                abs(state.ax) < self.angle_thresh and
+                abs(state.ay) < self.angle_thresh and
+                abs(state.wx) < self.rate_thresh and
+                abs(state.wy) < self.rate_thresh
+            )
+        else:
+            condition = (
+                abs(state.ax) < self.angle_thresh and
+                abs(state.ay) < self.angle_thresh
+            )
+        
+        if condition:
+            self._integrator_active = True
+            pos_err_x = state.px - self._x_ref_true[0]  # true center error
+            pos_err_y = state.py - self._x_ref_true[4]
+            # shift reference AWAY from current position
+            # so LQR sees a bigger error and pushes harder toward true center
+            self._x_ref_lqr[0] -= self.ki * pos_err_x * self.actuator_dt
+            self._x_ref_lqr[4] -= self.ki * pos_err_y * self.actuator_dt
+            # must follow x_ref_lqr
+            self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
+        else: # freeze, do nothing
+            self._integrator_active = False
+
     def compute(self, state: State) -> ControlInput:
-        x_err = state.as_vector() - self.x_ref
-        u_err = self._u_prev - self.u_ref
+        x_err = state.as_vector() - self._x_ref_lqr
+        u_err = self._u_prev - self.u_ref_lqr
         xi_err = np.concatenate([x_err, u_err])
 
         delta_u = -(self.K @ xi_err).ravel()
@@ -178,14 +227,20 @@ class DeltaLQRController(BaseController):
 
         return ControlInput(float(u[0]), float(u[1]))
 
-    def set_applied_command(self, u: ControlInput) -> None:
+    def set_applied_command(self, u: ControlInput, state: State) -> None:
         self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
-
+        self._update_integrator(state)
+        
     def reset(self, x_hat: State | None = None):
-        if x_hat is None:
-            self._u_prev = self.u_ref.copy()
-            return
+        # reset integrator
+        self._x_ref_lqr = self._x_ref_true.copy()
+        self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
+        self._integrator_active = False
+        
+        self._u_prev = self.u_ref_lqr.copy()
+        if x_hat is not None:
+            u = self.compute(x_hat)
+            self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
 
-        self._u_prev = self.u_ref.copy()
-        u = self.compute(x_hat)
-        self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
+
+        

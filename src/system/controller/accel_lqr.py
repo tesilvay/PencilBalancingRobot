@@ -186,7 +186,8 @@ class AccelLQRController(BaseController):
 
         return ControlInput(px_cmd=float(self._cmd_pos[0]), py_cmd=float(self._cmd_pos[1]))
 
-    def set_applied_command(self, u: ControlInput) -> None:
+    def set_applied_command(self, u: ControlInput, state: State) -> None:
+        del state
         self._cmd_pos[0] = float(u.px_cmd)
         self._cmd_pos[1] = float(u.py_cmd)
 

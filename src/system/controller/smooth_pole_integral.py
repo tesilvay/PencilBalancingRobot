@@ -170,7 +170,8 @@ class SmoothPoleIntegralController(BaseController):
         u = self._u_prev + v
         return ControlInput(float(u[0]), float(u[1]))
 
-    def set_applied_command(self, u: ControlInput) -> None:
+    def set_applied_command(self, u: ControlInput, state: State) -> None:
+        del state
         self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
 
     def reset(self, x_hat: State | None = None):

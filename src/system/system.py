@@ -187,6 +187,8 @@ class System:
             ax=float(y.ax - angle_offset[0]),
             ay=float(y.ay - angle_offset[1]),
         )
+    
+    
 
     def finalize_command(self, u_raw: ControlInput) -> ControlInput:
         u_applied = clamp_control_input_to_workspace(u_raw, self.workspace)
@@ -200,9 +202,9 @@ class System:
             u_raw = u_override
         return self.finalize_command(u_raw)
 
-    def _apply_or_hold_command(self, u_cmd: ControlInput, control_tick: bool) -> np.ndarray:
+    def _apply_or_hold_command(self, u_cmd: ControlInput, control_tick: bool, state: State) -> np.ndarray:
         if control_tick:
-            self.active_controller.set_applied_command(u_cmd)
+            self.active_controller.set_applied_command(u_cmd, state)
             return self.actuator.apply(u_cmd)
         return self.actuator.mech_joint_snapshot(u_cmd)
 
@@ -572,12 +574,15 @@ class System:
         # no latch, keep updating offset
         if not self._is_offset_latched():
             self._offset_xy = self._offset_from_meas(y_shaped)
+            
+        # NOT USING THIS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
         y = self._measurement_with_offset(
             y_shaped,
             self._offset_xy,
             self._angle_offset_from_supervisor(),
         )
-        self.last_y_meas = y
+        
+        self.last_y_meas = y_shaped
 
         # Keep every estimator warm, then build the controller-facing blended estimate.
         self.last_estimates, self.last_innovations = self._run_estimators(y, dt)
@@ -590,7 +595,7 @@ class System:
         self._print_x_hat_and_true(x_true, dt)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
-        mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
+        mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
         #self._update_performance_history(y, u_cmd, dt)
         #self._print_performance_indicators(dt)
         if self._update_fall_detection(x_used, dt):
