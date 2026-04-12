@@ -47,15 +47,15 @@ SIM_ANALYTIC_PRESETS = {
         
         
     },
-    "noisiest": {
+    "real": {
         "base": "default",
         "delay_steps": 0,
         
         "bias_ang": 0.3,
-        "noise_ang": 0.7,
+        "noise_ang": 0.2,
         
-        "bias_pos": 2.5,
-        "noise_pos": 6.0e-3,
+        "bias_pos": 1.5,
+        "noise_pos": 2.0e-3,
     },
 }
 

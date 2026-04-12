@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.system.estimator.adaptive_kalman import AdaptiveKalmanEstimator
-from src.system.estimator.kalman import KalmanEstimator
 from src.system.actuator.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from src.shared import (
     State,
@@ -111,7 +109,7 @@ class System:
         self.i = 0
         
         # printing stuff hardcoded
-        self.print_every_n_steps = 10
+        self.print_every_n_steps = 20
         
         self._offset_xy = np.zeros(2, dtype=float)
         self._offset_latched_fallback = False
@@ -516,10 +514,28 @@ class System:
 
             
 
-    def _reset_kalman_estimators(self, x_hat: State | None = None) -> None:
+    def _left_acquisition(self, prev_prestart: bool) -> bool:
+        transition = getattr(self.supervisor, "last_transition", None)
+        if transition is not None:
+            return bool(transition.get("left_acquisition", transition.get("left_prestart", False)))
+        return prev_prestart and not bool(getattr(self.supervisor, "is_prestart_state", False))
+
+    def _reset_estimators(self, x_hat: State | None = None) -> None:
         for estimator in self.estimators:
-            if isinstance(estimator, (KalmanEstimator, AdaptiveKalmanEstimator)):
-                estimator.reset(x_hat)
+            estimator.reset(x_hat)
+
+    @staticmethod
+    def _state_from_measurement(y: Measurement) -> State:
+        return State(
+            px=float(y.px),
+            vx=0.0,
+            ax=float(y.ax),
+            wx=0.0,
+            py=float(y.py),
+            vy=0.0,
+            ay=float(y.ay),
+            wy=0.0,
+        )
 
     def step(self, dt, control_tick: bool = True):
         prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
@@ -550,7 +566,7 @@ class System:
         adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
         # self._print_estimator_estimates(est_k)
-        self._print_x_hat_and_true(x_true, dt)
+        # self._print_x_hat_and_true(x_true, dt)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
@@ -565,17 +581,19 @@ class System:
         x_hat_1 = self.last_estimates[1] if len(self.last_estimates) > 1 else x_hat_0
         innovation_1 = self.last_innovations[1] if len(self.last_innovations) > 1 else innovation_0
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
-        if prev_prestart and not bool(getattr(self.supervisor, "is_prestart_state", False)):
-            self._reset_fall_detection()
-            self._reset_kalman_estimators(x_hat_0)
         transition = getattr(self.supervisor, "last_transition", None)
+        x_reset = x_used
+        if self._left_acquisition(prev_prestart):
+            x_reset = self._state_from_measurement(y)
+            self._reset_fall_detection()
+            self._reset_estimators(x_reset)
         if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
             source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
             self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
 
         # 3. system owns the controller swap while estimator usage is blended.
-        self._sync_active_components(ctrl_i, est_k, x_hat=x_used)
+        self._sync_active_components(ctrl_i, est_k, x_hat=x_reset)
 
         self.x = x_true
         self.u = u_cmd

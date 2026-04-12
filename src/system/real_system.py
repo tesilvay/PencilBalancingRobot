@@ -3,7 +3,6 @@ import time
 
 import numpy as np
 from .system import System
-from src.system.estimator.kalman import KalmanEstimator
 from src.system.actuator.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from src.shared import (
     State,
@@ -120,7 +119,7 @@ class RealSystem(System):
         innovation_used = self._blend_innovations(est_k)
         adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
-        #self._print_estimator_estimates(est_k)
+        self._print_estimator_estimates(est_k)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
@@ -133,16 +132,18 @@ class RealSystem(System):
         x_hat_1 = self.last_estimates[1] if len(self.last_estimates) > 1 else x_hat_0
         innovation_1 = self.last_innovations[1] if len(self.last_innovations) > 1 else innovation_0
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
-        if prev_prestart and not bool(getattr(self.supervisor, "is_prestart_state", False)):
-            self._reset_fall_detection()
-            self._reset_kalman_estimators(x_hat_0)
         transition = getattr(self.supervisor, "last_transition", None)
+        x_reset = x_used
+        if self._left_acquisition(prev_prestart):
+            x_reset = self._state_from_measurement(y)
+            self._reset_fall_detection()
+            self._reset_estimators(x_reset)
         if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
             source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
             self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
 
-        self._sync_active_components(ctrl_i, est_k, x_hat=x_used)
+        self._sync_active_components(ctrl_i, est_k, x_hat=x_reset)
 
         self.x = x_true
         self.u = u_cmd

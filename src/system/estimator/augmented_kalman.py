@@ -48,17 +48,18 @@ AUG_KALMAN_PRESETS = {
         "p_init_state": 2e-1,
         "p_init_dist": 5.0,
     },
-    "finger_hold": {
+    "real": {
         "q_y_meas_pos": 1e-6,
         "q_y_meas_ang": 1e-6,
         "q_vel_pos": 1e-3,
         "q_vel_ang": 1e-2,
         "r_y_meas_pos": 1e-2,
-        "r_y_meas_ang": 7e-2,
-        "q_dist_ang": 2.0,
+        "r_y_meas_ang": 1e1,
+        
+        "q_dist_ang": 5.0e-1,
         "dist_decay": 0.99,
         "p_init_state": 2e-1,
-        "p_init_dist": 20.0,
+        "p_init_dist": 5.0,
     },
 }
 
@@ -79,6 +80,8 @@ class AugmentedKalmanEstimator(BaseEstimator):
         super().__init__()
         self._params = params
         self._dt = params.timing.dt
+        self._print_period_s = 1.0 / 24.0
+        self._print_elapsed_s = self._print_period_s
 
         A8, B8 = discretize_AB(params.plant, params.timing)
         H4x8 = measurement_H()
@@ -116,14 +119,37 @@ class AugmentedKalmanEstimator(BaseEstimator):
         self.P = self._update_covariance_joseph(P_pred, K)
 
         x_hat_state = self._extract_state(self.x_hat)
+        self._maybe_print_full_x_hat(dt)
         return x_hat_state, innovation
 
     def reset(self, x_hat: State | None = None):
         self.P = self.P_init.copy()
         self.x_hat = self._build_reset_state(x_hat)
+        self._print_elapsed_s = self._print_period_s
 
     def disturbance_estimate(self) -> tuple[float, float]:
         return float(self.x_hat[8, 0]), float(self.x_hat[9, 0])
+
+    def full_x_hat_str(self) -> str:
+        x_hat_state = self._extract_state(self.x_hat)
+        d_ax, d_ay = self.disturbance_estimate()
+        return (
+            f"{x_hat_state.state_str()} | "
+            f"d_ax={np.rad2deg(d_ax):+.2f} deg/s^2, "
+            f"d_ay={np.rad2deg(d_ay):+.2f} deg/s^2"
+        )
+
+    def _maybe_print_full_x_hat(self, dt: float) -> None:
+        dt = float(dt)
+        if dt <= 0.0:
+            dt = self._dt
+
+        self._print_elapsed_s += dt
+        if self._print_elapsed_s < self._print_period_s:
+            return
+
+        self._print_elapsed_s %= self._print_period_s
+        print(f"x_hat: {self.full_x_hat_str()}")
 
     def _build_augmented_A(
         self,

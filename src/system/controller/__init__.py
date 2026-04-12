@@ -16,6 +16,7 @@ from .smooth_pole_integral import (
     SmoothPoleIntegralParams,
     SMOOTH_POLE_INTEGRAL_PRESETS,
 )
+from .simple_controller import SimpleController, SimpleControllerParams, SIMPLE_CONTROLLER_PRESETS
 from .circle      import CircleController,              CircleParams,     CIRCLE_PRESETS
 from .null        import NullController
 from src.shared   import Spec, NullParams, NULL_PRESETS
@@ -38,6 +39,7 @@ CONTROLLER_REGISTRY = {
         SmoothPoleIntegralParams,
         SMOOTH_POLE_INTEGRAL_PRESETS,
     ),
+    "simple":      Spec(SimpleController,               SimpleControllerParams, SIMPLE_CONTROLLER_PRESETS),
     "circle":      Spec(CircleController,              CircleParams,     CIRCLE_PRESETS),
     "null":        Spec(NullController,                NullParams,       NULL_PRESETS),
 }

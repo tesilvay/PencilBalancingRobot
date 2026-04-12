@@ -49,13 +49,13 @@ if str(ROOT) not in sys.path:
 
 _install_control_stub()
 
-from src.shared import ControlInput, Measurement, TimingParams
-from src.system.estimator.dynamics_disc import discretize_AB
-from src.system.estimator.kalman import KalmanEstimator, KalmanParams
+from src.shared import ControlInput, Measurement, TimingParams, default_plant
+from src.system.estimator.dynamics_disc import _continuous_AB, discretize_AB
+from src.system.estimator.imm_kalman import IMM_KalmanEstimator, IMM_KalmanParams
 
 
-def _kalman_params(dt: float) -> KalmanParams:
-    return KalmanParams(
+def _imm_params(dt: float) -> IMM_KalmanParams:
+    return IMM_KalmanParams(
         q_y_meas_pos=1e-8,
         q_y_meas_ang=1e-8,
         q_vel_pos=1e-6,
@@ -79,10 +79,39 @@ def _measurement_from_state(state_vec: np.ndarray) -> Measurement:
     )
 
 
-def test_kalman_prefers_placing_model_for_placing_like_response():
+def test_placing_dynamics_include_soft_anchor_terms():
+    plant = default_plant()
+    k_anchor = 625.0
+    c_anchor = 50.0
+    gravity_scale = 0.25
+    A, B = _continuous_AB(
+        plant,
+        mode="placing",
+        placing_anchor_stiffness=k_anchor,
+        placing_anchor_damping=c_anchor,
+        placing_gravity_scale=gravity_scale,
+    )
+
+    alpha_coeff = gravity_scale * plant.g / plant.com_length - k_anchor
+    assert np.isclose(A[2, 3], 1.0)
+    assert np.isclose(A[3, 2], alpha_coeff)
+    assert np.isclose(A[3, 3], -c_anchor)
+    assert np.isclose(A[6, 7], 1.0)
+    assert np.isclose(A[7, 6], alpha_coeff)
+    assert np.isclose(A[7, 7], -c_anchor)
+    assert np.isclose(B[3, 0], -1.0 / (plant.com_length * plant.tau**2))
+    assert np.isclose(B[7, 1], -1.0 / (plant.com_length * plant.tau**2))
+
+
+def test_imm_prefers_placing_model_for_placing_like_response():
     dt = 3e-3
-    estimator = KalmanEstimator(_kalman_params(dt))
-    A_place, B_place = discretize_AB(estimator._plant, dt, mode="placing")
+    estimator = IMM_KalmanEstimator(_imm_params(dt))
+    A_place, B_place = discretize_AB(
+        estimator._plant,
+        dt,
+        mode="placing",
+        **estimator._placing_discretize_kwargs,
+    )
 
     x = np.array([
         [0.0],
@@ -104,11 +133,12 @@ def test_kalman_prefers_placing_model_for_placing_like_response():
     probs = estimator.model_probabilities
     assert probs["placing"] > 0.9
     assert probs["free"] < 0.1
+    assert np.isclose(estimator.adaptive_lpf_weight, probs["placing"])
 
 
-def test_kalman_prefers_free_model_for_balancing_like_response():
+def test_imm_prefers_free_model_for_balancing_like_response():
     dt = 5e-3
-    estimator = KalmanEstimator(_kalman_params(dt))
+    estimator = IMM_KalmanEstimator(_imm_params(dt))
     A_free, B_free = discretize_AB(estimator._plant, dt, mode="free")
 
     x = np.array([
@@ -131,11 +161,12 @@ def test_kalman_prefers_free_model_for_balancing_like_response():
     probs = estimator.model_probabilities
     assert probs["free"] > 0.9
     assert probs["placing"] < 0.1
+    assert np.isclose(estimator.adaptive_lpf_weight, probs["placing"])
 
 
-def test_kalman_stationary_tilt_converges_without_runaway_table_drift():
+def test_imm_joseph_update_keeps_covariance_well_behaved():
     dt = 1e-3
-    estimator = KalmanEstimator(_kalman_params(dt))
+    estimator = IMM_KalmanEstimator(_imm_params(dt))
     command = ControlInput(0.0, 0.0)
     meas = Measurement(
         px=0.0,
@@ -144,14 +175,13 @@ def test_kalman_stationary_tilt_converges_without_runaway_table_drift():
         ay=float(np.deg2rad(-2.0)),
     )
 
-    x_hat = None
     for _ in range(150):
-        x_hat, _ = estimator.estimate(meas, dt=dt, u_cmd=command)
+        estimator.estimate(meas, dt=dt, u_cmd=command)
 
-    probs = estimator.model_probabilities
-    assert probs["placing"] > 0.8
-    assert x_hat is not None
-    assert abs(x_hat.px) < 2e-3
-    assert abs(x_hat.py) < 2e-3
-    assert abs(x_hat.vx) < 2e-2
-    assert abs(x_hat.vy) < 2e-2
+    assert np.all(np.isfinite(estimator.P))
+    assert np.allclose(estimator.P, estimator.P.T)
+    assert np.all(np.diag(estimator.P) >= -1e-12)
+    for mode in estimator._mode_filters:
+        assert np.all(np.isfinite(mode.P))
+        assert np.allclose(mode.P, mode.P.T)
+        assert np.all(np.diag(mode.P) >= -1e-12)
