@@ -38,6 +38,7 @@ class DeltaLQRParams:
     
     r_delta_u: float # penalty on control command
     
+    pos_thresh: float
     angle_thresh: float
     rate_thresh: float | None
     ki: float
@@ -73,6 +74,7 @@ DELTA_LQR_PRESETS = {
         "max_delta_u": 4.0e-2,
         "max_command_radius": 8.0e-2,
         
+        "pos_thresh": 2.5e-2,
         "angle_thresh": np.deg2rad(2),
         "rate_thresh": None,
         "ki": 0.5
@@ -153,6 +155,7 @@ class DeltaLQRController(BaseController):
         
         # Integrator: shifting reference
         self._integrator_active = False
+        self.pos_thresh = params.pos_thresh
         self.angle_thresh = params.angle_thresh
         self.rate_thresh = params.rate_thresh
         self.ki = params.ki
@@ -189,18 +192,14 @@ class DeltaLQRController(BaseController):
 
     def _update_integrator(self, state: State):
         
+        pos_ok   = np.hypot(state.px, state.py) < self.pos_thresh
+        angle_ok = np.hypot(state.ax, state.ay) < self.angle_thresh
+
         if self.rate_thresh:
-            condition = (
-                abs(state.ax) < self.angle_thresh and
-                abs(state.ay) < self.angle_thresh and
-                abs(state.wx) < self.rate_thresh and
-                abs(state.wy) < self.rate_thresh
-            )
+            rate_ok = np.hypot(state.wx, state.wy) < self.rate_thresh
+            condition = pos_ok and angle_ok and rate_ok
         else:
-            condition = (
-                abs(state.ax) < self.angle_thresh and
-                abs(state.ay) < self.angle_thresh
-            )
+            condition = pos_ok and angle_ok
         
         if condition:
             self._integrator_active = True
