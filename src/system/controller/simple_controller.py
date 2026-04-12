@@ -27,7 +27,7 @@ SIMPLE_CONTROLLER_PRESETS = {
     "default": {
         "kc": 4.0,
         "kcv": 0.0,
-        "k_alpha": 3.0e-2,
+        "k_alpha": 9.0e-0,
         "k_omega": 0.0e-4,
         
         "max_tilt_ref_deg": 3.0,
@@ -143,7 +143,7 @@ class SimpleController(BaseController):
     def _axis_delta_command(self, pos: float, vel: float, alpha: float, omega: float) -> float:
         alpha_ref = self._tilt_ref(pos, vel)
         return float(
-            self._params.k_alpha * (alpha - alpha_ref)
+            self._params.k_alpha * (alpha - alpha_ref) * abs(alpha - alpha_ref)
             + self._params.k_omega * omega
         )
 

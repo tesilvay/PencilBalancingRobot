@@ -22,12 +22,14 @@ class LPFParams:
     alpha_meas: float
     alpha_vel: float
     history_size: int | None = None
+    history_size_meas: int | None = None
+    history_size_deriv: int | None = None
     plant: PlantParams = field(default_factory=default_plant)
     timing: TimingParams = field(default_factory=default_timing)
 
 
 LPF_PRESETS = {
-    "default": {"alpha_meas": 0.0, "alpha_vel": 0.2, "history_size": 8},
+    "default": {"alpha_meas": 0.0, "alpha_vel": 0.1, "history_size_meas": 8, "history_size_deriv": 4},
     "lead": {"alpha_meas": 0.0, "alpha_vel": 0.1},
     "fde": {"alpha_meas": 0.0, "alpha_vel": 0.1, "history_size": 2},
     "test": {"alpha_meas": 0.75, "alpha_vel": 0.75},
@@ -43,7 +45,17 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
         self.alpha_vel = params.alpha_vel
         self._plant = params.plant
         self._disc_dt = float(params.timing.dt)
-        self.history_size = self._resolve_history_size(params.history_size, params.timing)
+        self.history_size_meas = self._resolve_history_size(
+            params.history_size_meas if params.history_size_meas is not None else params.history_size,
+            params.timing,
+            "history_size_meas",
+        )
+        self.history_size_deriv = self._resolve_history_size(
+            params.history_size_deriv if params.history_size_deriv is not None else params.history_size,
+            params.timing,
+            "history_size_deriv",
+        )
+        self.history_size = max(self.history_size_meas, self.history_size_deriv)
         self.A, self.B = discretize_AB(self._plant, self._disc_dt)
         self.H = measurement_H()
 
@@ -55,11 +67,11 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
         self.prev_vel = np.zeros(4)
 
     @staticmethod
-    def _resolve_history_size(history_size: int | None, timing: TimingParams) -> int:
+    def _resolve_history_size(history_size: int | None, timing: TimingParams, name: str) -> int:
         if history_size is not None:
             history_size = int(history_size)
             if history_size <= 0:
-                raise ValueError("LPF history_size must be positive when provided.")
+                raise ValueError(f"LPF {name} must be positive when provided.")
             return history_size
 
         dt = float(timing.dt)
@@ -78,12 +90,12 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
         self._y_history.append(np.asarray(y_vec, dtype=float).copy())
         self._time_history.append(self._sample_time)
 
-    def _fit_history(self) -> tuple[np.ndarray, np.ndarray]:
-        y_hist = np.vstack(self._y_history)
+    def _fit_history(self, history_size: int) -> tuple[np.ndarray, np.ndarray]:
+        y_hist = np.vstack(list(self._y_history)[-history_size:])
         if y_hist.shape[0] == 1:
             return y_hist[-1].copy(), np.zeros(4)
 
-        tau = np.asarray(self._time_history, dtype=float)
+        tau = np.asarray(list(self._time_history)[-history_size:], dtype=float)
         tau = tau - tau[-1]
         tau_centered = tau - tau.mean()
         denom = float(np.dot(tau_centered, tau_centered))
@@ -116,7 +128,8 @@ class LowPassFiniteDifferenceEstimator(BaseEstimator):
 
         y_vec = y_meas.as_vector()
         self._append_history(y_vec, dt)
-        y_hist_filt, raw_vel = self._fit_history()
+        y_hist_filt, _ = self._fit_history(self.history_size_meas)
+        _, raw_vel = self._fit_history(self.history_size_deriv)
 
         if self.prev_y_filt is None:
             y_filt = y_hist_filt

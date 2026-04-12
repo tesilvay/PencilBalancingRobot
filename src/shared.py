@@ -318,7 +318,7 @@ def plot_logger_chunk(path: str | Path) -> None:
                 1.0,
             )
 
-    for i in range(-450,0,1):
+    for i in range(550, 1100 ,1):
         print(f"step:{i} | alpha_x: {ax_deg[i]:.2f}° cmd_x: {cmd_x_mm[i]:.1f}mm | alpha_y: {ay_deg[i]:.2f}° cmd_y: {cmd_y_mm[i]:.1f}mm")
     
     fig, axes = plt.subplots(2, 1, sharex=True, figsize=(11, 7))

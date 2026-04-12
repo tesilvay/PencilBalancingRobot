@@ -105,6 +105,8 @@ class System:
         
         self.last_estimates: list[State] = []
         self.last_innovations: list[np.ndarray] = []
+        self._state_error_sq_sum = np.zeros(8, dtype=float)
+        self._state_error_count = 0
         
         self.i = 0
         
@@ -188,7 +190,7 @@ class System:
 
     def finalize_command(self, u_raw: ControlInput) -> ControlInput:
         u_applied = clamp_control_input_to_workspace(u_raw, self.workspace)
-        self.active_controller.set_applied_command(u_applied)
+        
         return u_applied
 
     def _compute_command(self, x_used: State) -> ControlInput:
@@ -200,6 +202,7 @@ class System:
 
     def _apply_or_hold_command(self, u_cmd: ControlInput, control_tick: bool) -> np.ndarray:
         if control_tick:
+            self.active_controller.set_applied_command(u_cmd)
             return self.actuator.apply(u_cmd)
         return self.actuator.mech_joint_snapshot(u_cmd)
 
@@ -359,6 +362,23 @@ class System:
         print(f"time: {sim_time:.3f}")
         print(f"est : {self.last_estimates[0].state_str()}")
         print(f"true: {x_true.state_str()}")
+
+    def _print_state_error(self, x_true: State, dt: float) -> None:
+        if self.last_estimates:
+            error = self.last_estimates[0].as_vector() - x_true.as_vector()
+            self._state_error_sq_sum += error ** 2
+            self._state_error_count += 1
+
+        if self.i % self.print_every_n_steps != 0:
+            return
+
+        if self._state_error_count == 0:
+            return
+
+        sim_time = self.i * dt
+        rms_error = State.from_iterable(np.sqrt(self._state_error_sq_sum / self._state_error_count))
+        print(f"time: {sim_time:.3f}")
+        print(f"rms : {rms_error.state_str()}")
 
     def _performance_com_length(self) -> float:
         for owner in (self.active_plant, self.active_controller, self.active_estimator):
@@ -566,7 +586,8 @@ class System:
         adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
         # self._print_estimator_estimates(est_k)
-        # self._print_x_hat_and_true(x_true, dt)
+        # self._print_state_error(x_true, dt)
+        self._print_x_hat_and_true(x_true, dt)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick)
@@ -643,6 +664,8 @@ class System:
         self.last_y_raw = None
         self.last_estimates = []
         self.last_innovations = []
+        self._state_error_sq_sum = np.zeros(8, dtype=float)
+        self._state_error_count = 0
         self.i = 0
         self._offset_latched_fallback = False
         self._offset_xy = self._offset_from_state(self.x)

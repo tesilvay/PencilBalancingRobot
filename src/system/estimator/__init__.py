@@ -19,6 +19,11 @@ from .fde import FDE_PRESETS, FdeParams, FiniteDifferenceEstimator
 from .kalman import KALMAN_PRESETS, KalmanEstimator, KalmanParams
 from .imm_kalman import IMM_KALMAN_PRESETS, IMM_KalmanEstimator, IMM_KalmanParams
 from .lpf import LPFParams, LPF_PRESETS, LowPassFiniteDifferenceEstimator
+from .particle_filter import (
+    PARTICLE_FILTER_PRESETS,
+    ParticleFilterEstimator,
+    ParticleFilterParams,
+)
 from .augmented_kalman import AugKalmanParams, AUG_KALMAN_PRESETS, AugmentedKalmanEstimator
 
 ESTIMATOR_REGISTRY = {
@@ -26,6 +31,11 @@ ESTIMATOR_REGISTRY = {
     "lpf": Spec(LowPassFiniteDifferenceEstimator, LPFParams, LPF_PRESETS),
     "kalman": Spec(KalmanEstimator, KalmanParams, KALMAN_PRESETS),
     "imm_kalman": Spec(IMM_KalmanEstimator, IMM_KalmanParams, IMM_KALMAN_PRESETS),
+    "particle_filter": Spec(
+        ParticleFilterEstimator,
+        ParticleFilterParams,
+        PARTICLE_FILTER_PRESETS,
+    ),
     "adaptive_kalman": Spec(
         AdaptiveKalmanEstimator,
         AdaptiveKalmanParams,
@@ -59,5 +69,8 @@ __all__ = [
     "IMM_KalmanEstimator",
     "IMM_KalmanParams",
     "IMM_KALMAN_PRESETS",
+    "ParticleFilterEstimator",
+    "ParticleFilterParams",
+    "PARTICLE_FILTER_PRESETS",
     "ESTIMATOR_REGISTRY",
 ]

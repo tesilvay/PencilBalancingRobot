@@ -4,6 +4,7 @@ from .accel_lqr   import AccelLQRController,            AccelLQRParams,   ACCEL_
 from .accel_lag_pole import AccelLagPolePlacementController, AccelLagPoleParams, ACCEL_LAG_POLE_PRESETS
 from .pole        import PolePlacementController,       PoleParams,       POLE_PRESETS
 from .lqr         import LQRController,                 LQRParams,        LQR_PRESETS
+from .delta_lqr   import DeltaLQRController,            DeltaLQRParams,   DELTA_LQR_PRESETS
 from .smooth_pole_cmd_state import (
     SmoothPoleCommandStateController,
     SmoothPoleCommandStateParams,
@@ -27,6 +28,7 @@ CONTROLLER_REGISTRY = {
     "accel_lag_pole": Spec(AccelLagPolePlacementController, AccelLagPoleParams, ACCEL_LAG_POLE_PRESETS),
     "pole":        Spec(PolePlacementController,       PoleParams,       POLE_PRESETS),
     "lqr":         Spec(LQRController,                 LQRParams,        LQR_PRESETS),
+    "delta_lqr":   Spec(DeltaLQRController,            DeltaLQRParams,   DELTA_LQR_PRESETS),
     "smooth_pole_cmd_state": Spec(
         SmoothPoleCommandStateController,
         SmoothPoleCommandStateParams,
