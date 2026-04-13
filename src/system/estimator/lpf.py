@@ -29,8 +29,8 @@ class LPFParams:
 
 
 LPF_PRESETS = {
-    "default": {"alpha_meas": 0.0, "alpha_vel": 0.4, "history_size_meas": 3, "history_size_deriv": 12},
-    "lead": {"alpha_meas": 0.0, "alpha_vel": 0.1},
+    "default": {"alpha_meas": 0.0, "alpha_vel": 0.4, "history_size_meas": 2, "history_size_deriv": 8},
+    "1ms": {"alpha_meas": 0.0, "alpha_vel": 0.4, "history_size_meas": 4, "history_size_deriv": 12},
     "fde": {"alpha_meas": 0.0, "alpha_vel": 0.1, "history_size": 2},
     "test": {"alpha_meas": 0.75, "alpha_vel": 0.75},
     "smoother": {"alpha_meas": 0.8, "alpha_vel": 0.8},

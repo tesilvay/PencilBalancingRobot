@@ -112,6 +112,8 @@ def main() -> int:
         RealDvsVisualizerParams(
             width=int(sensor.cam_width_px),
             height=int(sensor.cam_height_px),
+            top_mask_y_cam1=int(sensor._dvs_top_mask_line_y_cam1),
+            top_mask_y_cam2=int(sensor._dvs_top_mask_line_y_cam2),
             mask_y_cam1=int(sensor._dvs_mask_line_y_cam1),
             mask_y_cam2=int(sensor._dvs_mask_line_y_cam2),
             event_frames_fn=sensor.get_event_accumulator_frames,

@@ -61,6 +61,8 @@ class SimEventCameraInterface(VisionModelBase):
 
         self._dvs_mask_line_y_cam1 = int(cam.y_mask_line_1)
         self._dvs_mask_line_y_cam2 = int(cam.y_mask_line_2)
+        self._dvs_top_mask_line_y_cam1 = int(cam.y_mask_top_line_1)
+        self._dvs_top_mask_line_y_cam2 = int(cam.y_mask_top_line_2)
         
         # tuneable noise parameters
         self.event_density_base = 300
@@ -76,6 +78,7 @@ class SimEventCameraInterface(VisionModelBase):
     def generate_events(self, b, s, state_true, cam_id):
 
         mask_line_y = self._get_mask_line_y(cam_id)
+        top_mask_line_y = self._get_top_mask_line_y(cam_id)
 
         s_px, b_px = self._project_to_pixel(b, s)
 
@@ -98,12 +101,15 @@ class SimEventCameraInterface(VisionModelBase):
 
         xs, ys = self._clip_to_image(xs, ys)
 
-        xs, ys = self._apply_sensor_mask(xs, ys, mask_line_y)
+        xs, ys = self._apply_sensor_mask(xs, ys, top_mask_line_y, mask_line_y)
 
         return self._pack_events(xs, ys)
 
     def _get_mask_line_y(self, cam_id):
         return self._dvs_mask_line_y_cam1 if cam_id == 1 else self._dvs_mask_line_y_cam2
+
+    def _get_top_mask_line_y(self, cam_id):
+        return self._dvs_top_mask_line_y_cam1 if cam_id == 1 else self._dvs_top_mask_line_y_cam2
 
 
     def _project_to_pixel(self, b, s):
@@ -195,8 +201,8 @@ class SimEventCameraInterface(VisionModelBase):
 
         return xs[mask], ys[mask]
 
-    def _apply_sensor_mask(self, xs, ys, mask_line_y):
-        keep = ys < mask_line_y
+    def _apply_sensor_mask(self, xs, ys, top_mask_line_y, mask_line_y):
+        keep = (ys >= top_mask_line_y) & (ys < mask_line_y)
         return xs[keep], ys[keep]
 
     def _pack_events(self, xs, ys):

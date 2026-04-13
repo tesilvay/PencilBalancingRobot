@@ -55,7 +55,7 @@ SYSTEM_PRESETS = {
         "gain_schedule": "null:default",
     },
     "dynamic_sim": {
-        "plants":       ["placing:steady_hands", "sim:default"],
+        "plants":       ["placing:shaky", "sim:default"],
         "controllers": ["smooth_pole:default"],
         "estimators":  ["lpf:default", "lpf:default"],
         "sensor":      "sim_analytic:noisy",
@@ -226,7 +226,14 @@ class System:
             return 0
         return 0 if est_k < 0.5 else 1
 
-    def _sync_active_components(self, ctrl_i: int, est_k: float, x_hat: State | None = None) -> None:
+    def _sync_active_components(
+        self,
+        ctrl_i: int,
+        est_k: float,
+        x_hat: State | None = None,
+        *,
+        reset_controller_on_change: bool = True,
+    ) -> None:
         if not self.controllers:
             raise RuntimeError("System requires at least one controller.")
         if not self.plants:
@@ -235,7 +242,7 @@ class System:
         if len(self.controllers) == 1:
             ctrl_i = 0
         new_controller = self.controllers[ctrl_i]
-        if new_controller is not self.active_controller:
+        if reset_controller_on_change and new_controller is not self.active_controller:
             new_controller.reset(x_hat)
 
         plant_i = min(self._dominant_estimator_index(est_k), len(self.plants) - 1)
@@ -546,6 +553,10 @@ class System:
         for estimator in self.estimators:
             estimator.reset(x_hat)
 
+    def _reset_controllers(self, x_hat: State | None = None) -> None:
+        for controller in self.controllers:
+            controller.reset(x_hat)
+
     @staticmethod
     def _state_from_measurement(y: Measurement) -> State:
         return State(
@@ -609,17 +620,24 @@ class System:
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
         transition = getattr(self.supervisor, "last_transition", None)
         x_reset = x_used
-        if self._left_acquisition(prev_prestart):
+        left_acquisition = self._left_acquisition(prev_prestart)
+        if left_acquisition:
             x_reset = self._state_from_measurement(y)
             self._reset_fall_detection()
             self._reset_estimators(x_reset)
+            self._reset_controllers(x_reset)
         if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
             source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
             self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
 
         # 3. system owns the controller swap while estimator usage is blended.
-        self._sync_active_components(ctrl_i, est_k, x_hat=x_reset)
+        self._sync_active_components(
+            ctrl_i,
+            est_k,
+            x_hat=x_reset,
+            reset_controller_on_change=not left_acquisition,
+        )
 
         self.x = x_true
         self.u = u_cmd
@@ -650,8 +668,11 @@ class System:
             self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
         if hasattr(self.supervisor, "reset"):
             self.supervisor.reset()
-        self._sync_active_components(*self._supervisor_active_output())
-        self.active_controller.reset()
+        self._sync_active_components(
+            *self._supervisor_active_output(),
+            reset_controller_on_change=False,
+        )
+        self._reset_controllers()
         for estimator in self.estimators:
             estimator.reset()
         for plant in self.plants:

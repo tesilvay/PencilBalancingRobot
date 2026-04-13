@@ -16,7 +16,7 @@ from src.system.sensor.reader.dvs_camera_reader import (
     DVSReader,
     discover_devices,
 )
-from src.system.sensor.algo.dvs_algorithms import mask_events_below_line
+from src.system.sensor.algo.dvs_algorithms import mask_events_between_y_lines
 
 from src.shared import default_camera_params
 
@@ -94,6 +94,8 @@ class RealEventCameraInterface(VisionModelBase):
         
         self._dvs_mask_line_y_cam1 = int(p.cam_params.y_mask_line_1)
         self._dvs_mask_line_y_cam2 = int(p.cam_params.y_mask_line_2)
+        self._dvs_top_mask_line_y_cam1 = int(p.cam_params.y_mask_top_line_1)
+        self._dvs_top_mask_line_y_cam2 = int(p.cam_params.y_mask_top_line_2)
 
         self._reader1 = DVSReader(cam1_device, noise_filter_duration_ms=noise_filter_duration_ms)
         self._reader2 = DVSReader(cam2_device, noise_filter_duration_ms=noise_filter_duration_ms)
@@ -126,6 +128,7 @@ class RealEventCameraInterface(VisionModelBase):
 
         surface = self._surface1 if _cam_id == 1 else self._surface2
         mask_y = self._dvs_mask_line_y_cam1 if _cam_id == 1 else self._dvs_mask_line_y_cam2
+        top_mask_y = self._dvs_top_mask_line_y_cam1 if _cam_id == 1 else self._dvs_top_mask_line_y_cam2
         while not self._stop.is_set() and reader.is_running():
             batches = []
             while True:
@@ -136,7 +139,12 @@ class RealEventCameraInterface(VisionModelBase):
 
             if batches:
                 events = np.concatenate(batches)
-                events = mask_events_below_line(events, mask_line_y=mask_y, frame_height=self.cam_height_px)
+                events = mask_events_between_y_lines(
+                    events,
+                    min_line_y=top_mask_y,
+                    max_line_y=mask_y,
+                    frame_height=self.cam_height_px,
+                )
                 surface *= self._decay_display
                 if len(events) > 0:
                     np.add.at(surface, (events["y"], events["x"]), 1.0)

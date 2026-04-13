@@ -130,18 +130,18 @@ class Experiment:
         state_name = getattr(self.system.supervisor, "state_name", None)
         if state_name in {"ACQUISITION", "stabilization_ready"}:
             return (
-                "Stabilization Ready | fingertip still constraining the pencil | "
-                f"WASD: tilt trim {self._tilt_trim_text()} | Space: reacquire | Q: quit"
+                "Ready | "
+                f"WASD: tilt trim {self._tilt_trim_text()} | "
             )
         if state_name in {"STABILIZING", "stabilizing"}:
             return (
-                "Stabilizing | released into the balancer plant | "
-                f"WASD: tilt trim {self._tilt_trim_text()} | Space: reset | Q: quit"
+                "Stabilizing | "
+                f"WASD: tilt trim {self._tilt_trim_text()} |"
             )
         if state_name == "BALANCED":
             return (
-                "Balanced | Kalman fully blended | "
-                f"WASD: tilt trim {self._tilt_trim_text()} | Space: reset | Q: quit"
+                "Balanced | "
+                f"WASD: trim {self._tilt_trim_text()} | "
             )
         return None
 

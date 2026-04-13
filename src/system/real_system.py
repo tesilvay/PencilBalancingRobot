@@ -119,7 +119,7 @@ class RealSystem(System):
         innovation_used = self._blend_innovations(est_k)
         adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
-        self._print_estimator_estimates(est_k)
+        #self._print_estimator_estimates(est_k)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
@@ -134,16 +134,23 @@ class RealSystem(System):
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
         transition = getattr(self.supervisor, "last_transition", None)
         x_reset = x_used
-        if self._left_acquisition(prev_prestart):
+        left_acquisition = self._left_acquisition(prev_prestart)
+        if left_acquisition:
             x_reset = self._state_from_measurement(y)
             self._reset_fall_detection()
             self._reset_estimators(x_reset)
+            self._reset_controllers(x_reset)
         if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
             source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
             self._offset_xy = self._offset_from_meas(source_y)
             self._offset_latched_fallback = True
 
-        self._sync_active_components(ctrl_i, est_k, x_hat=x_reset)
+        self._sync_active_components(
+            ctrl_i,
+            est_k,
+            x_hat=x_reset,
+            reset_controller_on_change=not left_acquisition,
+        )
 
         self.x = x_true
         self.u = u_cmd
@@ -173,8 +180,11 @@ class RealSystem(System):
             self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
         if hasattr(self.supervisor, "reset"):
             self.supervisor.reset()
-        self._sync_active_components(*self._supervisor_active_output())
-        self.active_controller.reset()
+        self._sync_active_components(
+            *self._supervisor_active_output(),
+            reset_controller_on_change=False,
+        )
+        self._reset_controllers()
         for estimator in self.estimators:
             estimator.reset()
         for plant in self.plants:

@@ -37,21 +37,42 @@ except ModuleNotFoundError:  # pragma: no cover
         return _decorator
 
 
+def mask_events_between_y_lines(
+    events_np: np.ndarray,
+    min_line_y: int,
+    max_line_y: int,
+    frame_height: int,
+) -> np.ndarray:
+    """
+    Keep only events in the active vertical band: min_line_y <= y < max_line_y.
+
+    Edge cases:
+    - min_line_y <= 0 and max_line_y >= frame_height: no masking
+    - max_line_y <= min_line_y after clipping: return empty array
+    """
+    if events_np is None:
+        return events_np
+    min_y = max(0, int(min_line_y))
+    max_y = min(int(frame_height), int(max_line_y))
+    if min_y <= 0 and max_y >= frame_height:
+        return events_np
+    if max_y <= min_y:
+        return events_np[:0]
+    return events_np[(events_np["y"] >= min_y) & (events_np["y"] < max_y)]
+
+
 def mask_events_below_line(events_np: np.ndarray, mask_line_y: int, frame_height: int) -> np.ndarray:
     """
     Keep only events with y < mask_line_y.
 
-    Edge cases:
-    - mask_line_y <= 0: return empty array (same dtype)
-    - mask_line_y >= frame_height: no masking (return input)
+    Compatibility wrapper for older tools that only have the bottom mask line.
     """
-    if events_np is None:
-        return events_np
-    if mask_line_y >= frame_height:
-        return events_np
-    if mask_line_y <= 0:
-        return events_np[:0]
-    return events_np[events_np["y"] < mask_line_y]
+    return mask_events_between_y_lines(
+        events_np,
+        min_line_y=0,
+        max_line_y=mask_line_y,
+        frame_height=frame_height,
+    )
 
 
 def line_x_at_pixel_y(obs_px: CameraObservation, y: float) -> float:
@@ -317,4 +338,3 @@ class SamLineAlgorithm(DVSLineAlgorithm):
         intercept = (S_x - slope * S_y) / N
 
         return CameraObservation(slope=slope, intercept=intercept)
-

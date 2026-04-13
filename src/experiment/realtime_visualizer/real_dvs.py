@@ -18,6 +18,8 @@ _DEFAULT_CAMERA_PARAMS = default_camera_params()
 class RealDvsVisualizerParams:
     width:          int
     height:         int
+    top_mask_y_cam1: int
+    top_mask_y_cam2: int
     mask_y_cam1:    int
     mask_y_cam2:    int
     event_frames_fn: EventFramesFn | None = None
@@ -27,6 +29,8 @@ REAL_DVS_VISUALIZER_PRESETS = {
     "default": {
         "width":       int(_DEFAULT_CAMERA_PARAMS.DAVIS346_WIDTH),
         "height":      int(_DEFAULT_CAMERA_PARAMS.DAVIS346_HEIGHT),
+        "top_mask_y_cam1": int(_DEFAULT_CAMERA_PARAMS.y_mask_top_line_1),
+        "top_mask_y_cam2": int(_DEFAULT_CAMERA_PARAMS.y_mask_top_line_2),
         "mask_y_cam1": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
         "mask_y_cam2": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
     }
@@ -41,6 +45,8 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
         self.width = params.width
         self.height = params.height
         self.cam = CameraModel(params.width, params.height)
+        self.top_mask_y_cam1 = int(params.top_mask_y_cam1)
+        self.top_mask_y_cam2 = int(params.top_mask_y_cam2)
         self.mask_y_cam1 = int(params.mask_y_cam1)
         self.mask_y_cam2 = int(params.mask_y_cam2)
         self._window_ready = False
@@ -60,7 +66,14 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
         frame2 = np.clip(surface2 * 50, 0, 255).astype(np.uint8)
         return cv2.cvtColor(frame1, cv2.COLOR_GRAY2BGR), cv2.cvtColor(frame2, cv2.COLOR_GRAY2BGR)
 
-    def _draw_line(self, frame: np.ndarray, b: float, s: float, mask_y: int | None = None) -> None:
+    def _draw_line(
+        self,
+        frame: np.ndarray,
+        b: float,
+        s: float,
+        top_mask_y: int | None = None,
+        mask_y: int | None = None,
+    ) -> None:
         obs_px = self.cam.camnorm_to_pixel(CameraObservation(slope=s, intercept=b))
         s_px, b_px = obs_px.slope, obs_px.intercept
         s_px = self._to_finite_scalar(s_px)
@@ -68,10 +81,14 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
         if s_px is None or b_px is None:
             return
         y0 = 0
+        if top_mask_y is not None and 0 < top_mask_y < self.height:
+            y0 = int(top_mask_y)
         if mask_y is not None and 0 < mask_y < self.height:
             y1 = min(mask_y - 1, self.height - 1)
         else:
             y1 = self.height - 1
+        if y1 < y0:
+            return
         x0 = int(round(s_px * y0 + b_px))
         x1 = int(round(s_px * y1 + b_px))
         x0 = max(-10_000, min(10_000, x0))
@@ -100,12 +117,16 @@ class RealDvsVisualizer(RealtimeVisualizerBase):
         frame1, frame2 = self._bgr_from_surfaces()
         if measurement is not None:
             b1, s1, b2, s2 = measurement.unpack()
+            if 0 < self.top_mask_y_cam1 < self.height:
+                cv2.line(frame1, (0, self.top_mask_y_cam1), (self.width - 1, self.top_mask_y_cam1), (255, 0, 255), 2)
+            if 0 < self.top_mask_y_cam2 < self.height:
+                cv2.line(frame2, (0, self.top_mask_y_cam2), (self.width - 1, self.top_mask_y_cam2), (255, 0, 255), 2)
             if 0 < self.mask_y_cam1 < self.height:
                 cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
             if 0 < self.mask_y_cam2 < self.height:
                 cv2.line(frame2, (0, self.mask_y_cam2), (self.width - 1, self.mask_y_cam2), (0, 165, 255), 2)
-            self._draw_line(frame1, b1, s1, mask_y=self.mask_y_cam1)
-            self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
+            self._draw_line(frame1, b1, s1, top_mask_y=self.top_mask_y_cam1, mask_y=self.mask_y_cam1)
+            self._draw_line(frame2, b2, s2, top_mask_y=self.top_mask_y_cam2, mask_y=self.mask_y_cam2)
 
         title_str = title if title is not None else "Experiment | Q: quit"
         title_str = self._append_y_meas_banner(title_str, y_meas)

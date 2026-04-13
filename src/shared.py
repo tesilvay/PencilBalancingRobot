@@ -318,7 +318,7 @@ def plot_logger_chunk(path: str | Path) -> None:
                 1.0,
             )
 
-    for i in range(550, 1100 ,1):
+    for i in range(-800, 0 ,1):
         print(f"step:{i} | alpha_x: {ax_deg[i]:.2f}° cmd_x: {cmd_x_mm[i]:.1f}mm | alpha_y: {ay_deg[i]:.2f}° cmd_y: {cmd_y_mm[i]:.1f}mm")
     
     fig, axes = plt.subplots(2, 1, sharex=True, figsize=(11, 7))
@@ -360,6 +360,8 @@ def plot_logger_chunk(path: str | Path) -> None:
 class CameraParams:
     xr: float
     yr: float
+    y_mask_top_line_1: float
+    y_mask_top_line_2: float
     y_mask_line_1:   float
     y_mask_line_2:   float
     DAVIS346_WIDTH:  float
@@ -369,6 +371,8 @@ CAMERA_PRESETS = {
     "default": {
         "xr": -100,
         "yr": -100,
+        "y_mask_top_line_1": 30,
+        "y_mask_top_line_2": 70,
         "y_mask_line_1":   160,
         "y_mask_line_2":   150,
         "DAVIS346_WIDTH":  346,

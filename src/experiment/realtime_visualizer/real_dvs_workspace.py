@@ -17,6 +17,8 @@ _DEFAULT_CAMERA_PARAMS = default_camera_params()
 class RealDvsWorkspaceVisualizerParams:
     width:           int
     height:          int
+    top_mask_y_cam1: int
+    top_mask_y_cam2: int
     mask_y_cam1:     int
     mask_y_cam2:     int
     workspace:       WorkspaceParams = field(default_factory=default_workspace)
@@ -27,6 +29,8 @@ REAL_DVS_WORKSPACE_VISUALIZER_PRESETS = {
     "default": {
         "width":       int(_DEFAULT_CAMERA_PARAMS.DAVIS346_WIDTH),
         "height":      int(_DEFAULT_CAMERA_PARAMS.DAVIS346_HEIGHT),
+        "top_mask_y_cam1": int(_DEFAULT_CAMERA_PARAMS.y_mask_top_line_1),
+        "top_mask_y_cam2": int(_DEFAULT_CAMERA_PARAMS.y_mask_top_line_2),
         "mask_y_cam1": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_1),
         "mask_y_cam2": int(_DEFAULT_CAMERA_PARAMS.y_mask_line_2),
     }
@@ -40,6 +44,8 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
         super().__init__(RealDvsVisualizerParams(
             width=params.width,
             height=params.height,
+            top_mask_y_cam1=params.top_mask_y_cam1,
+            top_mask_y_cam2=params.top_mask_y_cam2,
             mask_y_cam1=params.mask_y_cam1,
             mask_y_cam2=params.mask_y_cam2,
             event_frames_fn=params.event_frames_fn,
@@ -61,12 +67,16 @@ class RealDvsWorkspaceVisualizer(RealDvsVisualizer):
         frame1, frame2 = self._bgr_from_surfaces()
         if measurement is not None:
             b1, s1, b2, s2 = measurement.unpack()
+            if 0 < self.top_mask_y_cam1 < self.height:
+                cv2.line(frame1, (0, self.top_mask_y_cam1), (self.width - 1, self.top_mask_y_cam1), (255, 0, 255), 2)
+            if 0 < self.top_mask_y_cam2 < self.height:
+                cv2.line(frame2, (0, self.top_mask_y_cam2), (self.width - 1, self.top_mask_y_cam2), (255, 0, 255), 2)
             if 0 < self.mask_y_cam1 < self.height:
                 cv2.line(frame1, (0, self.mask_y_cam1), (self.width - 1, self.mask_y_cam1), (0, 165, 255), 2)
             if 0 < self.mask_y_cam2 < self.height:
                 cv2.line(frame2, (0, self.mask_y_cam2), (self.width - 1, self.mask_y_cam2), (0, 165, 255), 2)
-            self._draw_line(frame1, b1, s1, mask_y=self.mask_y_cam1)
-            self._draw_line(frame2, b2, s2, mask_y=self.mask_y_cam2)
+            self._draw_line(frame1, b1, s1, top_mask_y=self.top_mask_y_cam1, mask_y=self.mask_y_cam1)
+            self._draw_line(frame2, b2, s2, top_mask_y=self.top_mask_y_cam2, mask_y=self.mask_y_cam2)
 
         is_paused = paused is True
         workspace_canvas = self._ws.build(command, paused=is_paused, y_meas=None if is_paused else y_meas)
