@@ -51,10 +51,10 @@ SIM_ANALYTIC_PRESETS = {
         "base": "default",
         "delay_steps": 0,
         
-        "bias_ang": 0.1,
-        "noise_ang": 0.2,
+        "bias_ang": 0.05,
+        "noise_ang": 0.15,
         
-        "bias_pos": 1.5,
+        "bias_pos": 1.0,
         "noise_pos": 2.0e-3,
     },
 }

@@ -20,7 +20,7 @@ DYNAMIC_SUPERVISOR_PRESETS = {
     "default": {
         "radius_ramp_s": 1.0,
         "placing_time_s": 1.0,
-        "min_radius": 0.0,
+        "min_radius": 0.5e-2,
         "max_radius": 4e-2,
     }
 }

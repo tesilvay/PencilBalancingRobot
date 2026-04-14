@@ -69,7 +69,7 @@ DELTA_LQR_PRESETS = {
         "tilt_rate_scale": np.deg2rad(10), # /s
         "delta_u_scale": 1e-3,
         
-        "q_pos": 0.2,
+        "q_pos": 0.05,
         "q_vel": 0,
         "q_tilt": 1.0,
         "q_tilt_rate": 0,
@@ -78,24 +78,24 @@ DELTA_LQR_PRESETS = {
         
         "r_delta_u": 5.0,
         
-        "max_delta_u": 3.0e-3,
+        "max_delta_u": 8.0e-3,
         "max_command_radius": 7.0e-2,
         
-        "pos_thresh": 2.5e-2,
+        "pos_thresh": 1.5e-2,
         "angle_thresh": np.deg2rad(3.6),
         "rate_thresh": None,
-        "ki": 0.0,
+        "ki": 0.1,
         
-        "tilt_stale_time_s": 0.1,
-        "tilt_deadband": np.deg2rad(0.3),
-        "tilt_ki": 0.0,
+        "tilt_stale_time_s": 0.4,
+        "tilt_deadband": np.deg2rad(0.1),
+        "tilt_ki": 0.1,
         "max_tilt_bias": np.deg2rad(2.0),
         
     },
     "gentle": {
         "base": "default",
         
-        "r_delta_u": 350,
+        "r_delta_u": 1050,
     },
     "stronger": {
         "base": "default",
