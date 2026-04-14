@@ -25,30 +25,29 @@ class DeltaLQRParams:
     tilt_scale: float
     tilt_rate_scale: float
     delta_u_scale: float
-    
+
     q_pos: float # cares about bringing table to center
     q_vel: float # tries to eliminate drift
     q_tilt: float # tries to set pencil upright
     q_tilt_rate: float # penalty on angular acceleration
-    
-    
-    # penalizing u_err from u_ref_lqr, which itself is moving. 
+
+
+    # penalizing u_err from u_ref_lqr, which itself is moving.
     # This is fine and actually helpful
     # it stops u_prev from wandering away from the shifted reference.
     q_command: float
-    
+
     r_delta_u: float # penalty on control command
-    
-    pos_thresh: float
-    angle_thresh: float
-    rate_thresh: float | None
-    ki: float
-    
-    tilt_stale_time_s: float
-    tilt_deadband: float
+
+
+    pos_ki: float
+    max_pos_bias: float
+
     tilt_ki: float
     max_tilt_bias: float
-    
+
+    cross_ki: float
+
     max_delta_u: float | None = None
     max_command_radius: float | None = None
     plant: PlantParams = field(default_factory=default_plant)
@@ -58,7 +57,7 @@ class DeltaLQRParams:
 
 DELTA_LQR_PRESETS = {
     "default": {
-        
+
         # “scale of concern”, not “scale of catastrophe”
         # at what scale do they matter?
         # we care about pos when we are about 2cm away right?
@@ -68,33 +67,32 @@ DELTA_LQR_PRESETS = {
         "tilt_scale": np.deg2rad(2.0),
         "tilt_rate_scale": np.deg2rad(10), # /s
         "delta_u_scale": 1e-3,
-        
-        "q_pos": 0.05,
+
+        "q_pos": 0.02,
         "q_vel": 0,
         "q_tilt": 1.0,
-        "q_tilt_rate": 0,
-        
+        "q_tilt_rate": 0.0001,
+
         "q_command": 0.06,
-        
+
         "r_delta_u": 5.0,
-        
-        "max_delta_u": 8.0e-3,
+
+        "max_delta_u": 2.0e-3,
         "max_command_radius": 7.0e-2,
-        
-        "pos_thresh": 1.5e-2,
-        "angle_thresh": np.deg2rad(3.6),
-        "rate_thresh": None,
-        "ki": 0.1,
-        
-        "tilt_stale_time_s": 0.4,
-        "tilt_deadband": np.deg2rad(0.1),
-        "tilt_ki": 0.1,
-        "max_tilt_bias": np.deg2rad(2.0),
-        
+
+
+        "pos_ki": 0.0,
+        "max_pos_bias": 5e-2,
+
+        "tilt_ki": 0.5,
+        "max_tilt_bias": np.deg2rad(4.0),
+
+        "cross_ki": 0.05,
+
     },
     "gentle": {
         "base": "default",
-        
+
         "r_delta_u": 1050,
     },
     "stronger": {
@@ -129,7 +127,7 @@ class DeltaLQRController(BaseController):
         ])
         B_aug = np.vstack([B_d, np.eye(m)])
 
-        
+
         # Normalized Q
         Q_axis = np.diag([
             params.q_pos / params.pos_scale**2,
@@ -137,7 +135,7 @@ class DeltaLQRController(BaseController):
             params.q_tilt / params.tilt_scale**2,
             params.q_tilt_rate / params.tilt_rate_scale**2,
         ])
-        
+
         Q_x = np.block([
             [Q_axis, np.zeros_like(Q_axis)],
             [np.zeros_like(Q_axis), Q_axis],
@@ -152,12 +150,12 @@ class DeltaLQRController(BaseController):
         self.K, _, _ = ct.dlqr(A_aug, B_aug, Q, R)
         self.K = np.asarray(self.K, dtype=float)
 
-        
+
         self._x_ref_true = x_ref.as_vector()  # never changes
         self._x_ref_lqr = x_ref.as_vector().copy()  # drifts with integrator
         self._u_ref_true = -np.linalg.pinv(B_c) @ A_c  # [m x n], computed once
         self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
-        
+
         self._u_prev = self.u_ref_lqr.copy()
         self.max_delta_u = params.max_delta_u
         self.max_command_radius = params.max_command_radius
@@ -165,23 +163,18 @@ class DeltaLQRController(BaseController):
             [float(params.workspace.x_ref), float(params.workspace.y_ref)],
             dtype=float,
         )
-        
+
         # Integrator: shifting reference
-        self._integrator_active = False
-        self._tilt_x_integrator_active = False
-        self._tilt_y_integrator_active = False
-        self._tilt_x_same_sign_time = 0.0
-        self._tilt_y_same_sign_time = 0.0
-        self._tilt_x_prev_sign = 0.0
-        self._tilt_y_prev_sign = 0.0
-        self.pos_thresh = params.pos_thresh
-        self.angle_thresh = params.angle_thresh
-        self.rate_thresh = params.rate_thresh
-        self.ki = params.ki
-        self.tilt_stale_time_s = float(params.tilt_stale_time_s)
-        self.tilt_deadband = float(params.tilt_deadband)
+        self.pos_ki = params.pos_ki
+        self.max_pos_bias = params.max_pos_bias
+
         self.tilt_ki = float(params.tilt_ki)
         self.max_tilt_bias = float(params.max_tilt_bias)
+
+        self.cross_ki = float(params.cross_ki)
+        self._tilt_bias_x = 0
+        self._tilt_bias_y = 0
+
         self.actuator_dt = float(params.timing.actuator_dt)
 
     def _limit_delta_u(self, delta_u: np.ndarray) -> np.ndarray:
@@ -222,111 +215,57 @@ class DeltaLQRController(BaseController):
     def _refresh_u_ref(self) -> None:
         self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
 
-    def _update_pos_integrator(self, state: State):
-        
-        angle_ok = np.hypot(state.ax, state.ay) < self.angle_thresh
-        rate_ok  = np.hypot(state.wx, state.wy) < self.rate_thresh if self.rate_thresh else True
-        pos_outside_thresh = (
-            np.hypot(
-                state.px - self._x_ref_true[0],
-                state.py - self._x_ref_true[4],
-            )
-            > self.pos_thresh
+    def _update_integrator(self, state: State) -> None:
+        # Position
+        pos_err_x = state.px - self._x_ref_true[0]
+        pos_err_y = state.py - self._x_ref_true[4]
+        self._x_ref_lqr[0] -= self.pos_ki * pos_err_x * self.actuator_dt
+        self._x_ref_lqr[4] -= self.pos_ki * pos_err_y * self.actuator_dt
+        self._x_ref_lqr[0] = np.clip(
+            self._x_ref_lqr[0],
+            self._x_ref_true[0] - self.max_pos_bias,
+            self._x_ref_true[0] + self.max_pos_bias,
+        )
+        self._x_ref_lqr[4] = np.clip(
+            self._x_ref_lqr[4],
+            self._x_ref_true[4] - self.max_pos_bias,
+            self._x_ref_true[4] + self.max_pos_bias,
         )
 
-        if self._integrator_active:
-            # looser condition to stay active: only angle and rate
-            condition = angle_ok and rate_ok
-        else:
-            # tighter condition to activate: must also be off-center enough to bother
-            condition = pos_outside_thresh and angle_ok and rate_ok
-        
-        if condition:
-            self._integrator_active = True
-            pos_err_x = state.px - self._x_ref_true[0]  # true center error
-            pos_err_y = state.py - self._x_ref_true[4]
-            # shift reference AWAY from current position
-            # so LQR sees a bigger error and pushes harder toward true center
-            self._x_ref_lqr[0] -= self.ki * pos_err_x * self.actuator_dt
-            self._x_ref_lqr[4] -= self.ki * pos_err_y * self.actuator_dt
+        # Tilt — use bias-corrected measurement
+        tilt_err_x = (state.ax - self._tilt_bias_x) - self._x_ref_true[2]
+        tilt_err_y = (state.ay - self._tilt_bias_y) - self._x_ref_true[6]
+        self._x_ref_lqr[2] -= self.tilt_ki * tilt_err_x * self.actuator_dt
+        self._x_ref_lqr[6] -= self.tilt_ki * tilt_err_y * self.actuator_dt
 
-            # must follow x_ref_lqr
-            self._refresh_u_ref()
-            
-            #self._print_ref()
 
-    def _update_tilt_integrator(self, state: State):
-        ax_stale = self._update_tilt_x_stale(state.ax)
-        ay_stale = self._update_tilt_y_stale(state.ay)
+        # Tilt bias using pos #MAYBE CLAMP IT????????????????????????????????
+        self._tilt_bias_x -= self.cross_ki * pos_err_x * self.actuator_dt
+        self._tilt_bias_y -= self.cross_ki * pos_err_y * self.actuator_dt
 
-        if self._tilt_x_integrator_active:
-            ax_condition = abs(state.ax) > self.tilt_deadband
-        else:
-            ax_condition = ax_stale
+        # Clamp max bias
+        self._x_ref_lqr[2] = np.clip(
+            self._x_ref_lqr[2],
+            self._x_ref_true[2] - self.max_tilt_bias,
+            self._x_ref_true[2] + self.max_tilt_bias,
+        )
+        self._x_ref_lqr[6] = np.clip(
+            self._x_ref_lqr[6],
+            self._x_ref_true[6] - self.max_tilt_bias,
+            self._x_ref_true[6] + self.max_tilt_bias,
+        )
 
-        if self._tilt_y_integrator_active:
-            ay_condition = abs(state.ay) > self.tilt_deadband
-        else:
-            ay_condition = ay_stale
-
-        if ax_condition:
-            self._tilt_x_integrator_active = True
-            tilt_err_x = state.ax - self._x_ref_true[2]
-            self._x_ref_lqr[2] -= self.tilt_ki * tilt_err_x * self.actuator_dt
-            self._x_ref_lqr[2] = np.clip(
-                self._x_ref_lqr[2],
-                self._x_ref_true[2] - self.max_tilt_bias,
-                self._x_ref_true[2] + self.max_tilt_bias,
-            )
-            self._refresh_u_ref()            
-
-        if ay_condition:
-            self._tilt_y_integrator_active = True
-            tilt_err_y = state.ay - self._x_ref_true[6]
-            self._x_ref_lqr[6] -= self.tilt_ki * tilt_err_y * self.actuator_dt
-            self._x_ref_lqr[6] = np.clip(
-                self._x_ref_lqr[6],
-                self._x_ref_true[6] - self.max_tilt_bias,
-                self._x_ref_true[6] + self.max_tilt_bias,
-            )
-            self._refresh_u_ref()
-        
-        if ay_condition or ax_condition:
-            pass
-            #self._print_ref()
-
-    def _update_tilt_x_stale(self, angle: float) -> bool:
-        if abs(angle) <= self.tilt_deadband:
-            self._tilt_x_same_sign_time = 0.0
-            self._tilt_x_prev_sign = 0.0
-            return False
-
-        sign = float(np.sign(angle))
-        if sign == self._tilt_x_prev_sign:
-            self._tilt_x_same_sign_time += self.actuator_dt
-        else:
-            self._tilt_x_same_sign_time = self.actuator_dt
-            self._tilt_x_prev_sign = sign
-
-        return self._tilt_x_same_sign_time >= self.tilt_stale_time_s
-
-    def _update_tilt_y_stale(self, angle: float) -> bool:
-        if abs(angle) <= self.tilt_deadband:
-            self._tilt_y_same_sign_time = 0.0
-            self._tilt_y_prev_sign = 0.0
-            return False
-
-        sign = float(np.sign(angle))
-        if sign == self._tilt_y_prev_sign:
-            self._tilt_y_same_sign_time += self.actuator_dt
-        else:
-            self._tilt_y_same_sign_time = self.actuator_dt
-            self._tilt_y_prev_sign = sign
-
-        return self._tilt_y_same_sign_time >= self.tilt_stale_time_s
+        self._refresh_u_ref()
+        #self._print_ref()
 
     def compute(self, state: State) -> ControlInput:
+
         x_err = state.as_vector() - self._x_ref_lqr
+
+        # remove estimated sensor bias
+        x_err[2] -= self._tilt_bias_x
+        x_err[6] -= self._tilt_bias_y
+
         u_err = self._u_prev - self.u_ref_lqr
         xi_err = np.concatenate([x_err, u_err])
 
@@ -339,9 +278,8 @@ class DeltaLQRController(BaseController):
 
     def set_applied_command(self, u: ControlInput, state: State) -> None:
         self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
-        self._update_pos_integrator(state)
-        self._update_tilt_integrator(state)
-        
+        self._update_integrator(state)
+
     def reset(self, x_hat: State | None = None):
         print("delta_lqr reset", x_hat)
 
@@ -349,17 +287,13 @@ class DeltaLQRController(BaseController):
         self._x_ref_lqr = self._x_ref_true.copy()
         self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
         self._integrator_active = False
-        self._tilt_x_integrator_active = False
-        self._tilt_y_integrator_active = False
-        self._tilt_x_same_sign_time = 0.0
-        self._tilt_y_same_sign_time = 0.0
-        self._tilt_x_prev_sign = 0.0
-        self._tilt_y_prev_sign = 0.0
-        
+
+        self._tilt_bias_x = 0
+        self._tilt_bias_y = 0
+
         self._u_prev = self.u_ref_lqr.copy()
         if x_hat is not None:
             u = self.compute(x_hat)
             self._u_prev = np.array([u.px_cmd, u.py_cmd], dtype=float)
 
 
-        

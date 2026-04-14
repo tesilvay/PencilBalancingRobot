@@ -15,6 +15,7 @@ from src.shared import (
     WorkspaceParams,
     clamp_control_input_to_workspace,
     default_workspace,
+    make_reference_state,
 )
 
 
@@ -32,6 +33,7 @@ class RealSystemParams:
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
     fall_angle_deg: float            = 20.0
     fall_hold_s: float               = 0.03
+    fall_pos_threshold_m: float      = 3e-2
 
 
 
@@ -106,6 +108,8 @@ class RealSystem(System):
         y_raw = self.sensor.get_y(self.x)
         y_shaped = self.gain_schedule.apply(y_raw)
         self.last_y_raw = y_shaped
+        if hasattr(self.supervisor, "note_unoffset_measurement"):
+            self.supervisor.note_unoffset_measurement(y_shaped)
 
         if not self._is_offset_latched():
             self._offset_xy = self._offset_from_meas(y_shaped)
@@ -122,11 +126,12 @@ class RealSystem(System):
         adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
         #self._print_estimator_estimates(est_k)
+        self._print_x_hat_and_ref(x_used, dt)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
         x_true, acc = self.active_plant.step(self.x, u_cmd, dt)
-        if self._update_fall_detection(x_used, dt):
+        if self._update_fall_detection(x_used, u_cmd, dt):
             self.supervisor.notify_fall_detected()
 
         x_hat_0 = self.last_estimates[0] if self.last_estimates else x_used
@@ -173,6 +178,19 @@ class RealSystem(System):
             adaptive_lpf_weight=adaptive_lpf_weight_used,
             top_radius=top_radius_applied,
         )
+        self.i += 1
+
+    def _print_x_hat_and_ref(self, x_hat: State, dt: float) -> None:
+        if self.i % self.print_every_n_steps != 0:
+            return
+
+        sim_time = self.i * dt
+        x_ref = self._controller_reference_state()
+        if x_ref is None:
+            x_ref = make_reference_state(self.workspace)
+        print(f"time: {sim_time:.3f}")
+        print(f"est : {self._state_pos_tilt_str(x_hat)}")
+        print(f"ref : {self._state_pos_tilt_str(x_ref)}")
 
     def reset(self):
         self._maybe_run_startup_calibration()
@@ -210,6 +228,7 @@ class RealSystem(System):
         self.last_estimates = []
         self.last_innovations = []
         self._last_estimator_print_t = 0.0
+        self.i = 0
         self._offset_latched_fallback = False
         self._offset_xy = np.zeros(2, dtype=float)
         self._reset_fall_detection()

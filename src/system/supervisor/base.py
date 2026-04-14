@@ -76,6 +76,9 @@ class Supervisor:
     def note_applied_command(self, command: ControlInput) -> None:
         del command
 
+    def note_unoffset_measurement(self, measurement) -> None:
+        del measurement
+
     def notify_fall_detected(self) -> None:
         pass
 
@@ -116,6 +119,7 @@ class RealServoSupervisorBase(Supervisor):
         self._t_stable = 0.0
         self._last_transition: dict | None = None
         self._tilt_trim_rad = np.zeros(2, dtype=float)
+        self._latest_unoffset_position: np.ndarray | None = None
         self._load_tilt_trim()
 
     @property
@@ -214,6 +218,7 @@ class RealServoSupervisorBase(Supervisor):
         self.state = "ACQUISITION"
         self._t_stable = 0.0
         self._last_transition = None
+        self._latest_unoffset_position = None
         self._last_applied_command = self._workspace_center_command()
         self._reacquire_start_command = self._workspace_center_command()
         self._reacquire_elapsed_s = 0.0
@@ -222,6 +227,12 @@ class RealServoSupervisorBase(Supervisor):
 
     def note_applied_command(self, command: ControlInput) -> None:
         self._last_applied_command = command
+
+    def note_unoffset_measurement(self, measurement) -> None:
+        self._latest_unoffset_position = np.array(
+            [float(measurement.px), float(measurement.py)],
+            dtype=float,
+        )
 
     def _update_startup(self, x_est, dt: float) -> None:
         if self.state != "ACQUISITION":
@@ -344,8 +355,11 @@ class RealServoSupervisorBase(Supervisor):
             self._reset_to_acquisition_state()
 
     def _is_upright(self, x_est) -> bool:
-        px = float(x_est.px - self.workspace.x_ref)
-        py = float(x_est.py - self.workspace.y_ref)
+        position = self._latest_unoffset_position
+        if position is None:
+            position = np.array([float(x_est.px), float(x_est.py)], dtype=float)
+        px = float(position[0] - self.workspace.x_ref)
+        py = float(position[1] - self.workspace.y_ref)
         ax = float(x_est.ax)
         ay = float(x_est.ay)
         

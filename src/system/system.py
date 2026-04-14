@@ -29,8 +29,9 @@ class SystemParams:
     gain_schedule: object
     init_spread: InitConditionsSpread = field(default_factory=default_spread)
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
-    fall_angle_deg: float            = 20.0
-    fall_hold_s: float               = 0.03
+    fall_angle_deg: float            = 16.0
+    fall_hold_s: float               = 30e-3
+    fall_pos_threshold_m: float      = 6e-2
 
 
 
@@ -117,6 +118,7 @@ class System:
         self._offset_latched_fallback = False
         self.fall_angle_rad = float(np.deg2rad(params.fall_angle_deg))
         self.fall_hold_s = float(params.fall_hold_s)
+        self.fall_pos_threshold_m = float(params.fall_pos_threshold_m)
         self._fall_detected = False
         self._fall_timer_s = 0.0
         self._startup_calibration_done = False
@@ -240,11 +242,26 @@ class System:
         if not self.plants:
             raise RuntimeError("System requires at least one plant.")
 
-        del ctrl_i, est_k, x_hat, reset_controller_on_change
-        self.active_plant = self.plants[0]
-        self.active_controller = self.controllers[0]
-        self.active_estimator = self.estimators[0]
-        self.active_est_k = 0.0
+        ctrl_i = int(ctrl_i)
+        if ctrl_i < 0 or ctrl_i >= len(self.controllers):
+            raise IndexError(
+                f"Supervisor selected controller index {ctrl_i}, "
+                f"but System has {len(self.controllers)} controller(s)."
+            )
+        if ctrl_i >= len(self.plants):
+            raise IndexError(
+                f"Supervisor selected plant index {ctrl_i}, "
+                f"but System has {len(self.plants)} plant(s)."
+            )
+
+        prev_controller = self.active_controller
+        self.active_plant = self.plants[ctrl_i]
+        self.active_controller = self.controllers[ctrl_i]
+        self.active_est_k = float(np.clip(est_k, 0.0, 1.0))
+        self.active_estimator = self.estimators[self._dominant_estimator_index(self.active_est_k)]
+
+        if reset_controller_on_change and self.active_controller is not prev_controller:
+            self.active_controller.reset(x_hat)
 
     def _apply_supervisor_top_radius(self) -> None:
         radius = getattr(self.supervisor, "top_radius", None)
@@ -271,13 +288,17 @@ class System:
         self._fall_detected = False
         self._fall_timer_s = 0.0
 
-    def _update_fall_detection(self, x_used: State, dt: float) -> bool:
+    def _update_fall_detection(self, x_used: State, u_cmd: ControlInput, dt: float) -> bool:
         if getattr(self.supervisor, "is_prestart_state", False):
             self._reset_fall_detection()
             return False
 
         angle_norm = float(np.linalg.norm([x_used.ax, x_used.ay]))
-        if angle_norm >= self.fall_angle_rad:
+        pos_error = float(np.linalg.norm([
+            x_used.px - u_cmd.px_cmd,
+            x_used.py - u_cmd.py_cmd,
+        ]))
+        if angle_norm >= self.fall_angle_rad or pos_error >= self.fall_pos_threshold_m:
             self._fall_timer_s += dt
         else:
             self._fall_timer_s = 0.0
@@ -621,6 +642,8 @@ class System:
         y_raw = self.sensor.get_y(x_true)
         y_shaped = self.gain_schedule.apply(y_raw)
         self.last_y_raw = y_shaped
+        if hasattr(self.supervisor, "note_unoffset_measurement"):
+            self.supervisor.note_unoffset_measurement(y_shaped)
 
         if not self._is_offset_latched():
             self._offset_xy = self._offset_from_meas(y_shaped)
@@ -646,7 +669,7 @@ class System:
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
         #self._update_performance_history(y, u_cmd, dt)
         #self._print_performance_indicators(dt)
-        if self._update_fall_detection(x_used, dt):
+        if self._update_fall_detection(x_used, u_cmd, dt):
             self.supervisor.notify_fall_detected()
 
         # 2. supervisor decides next controller + estimator blend

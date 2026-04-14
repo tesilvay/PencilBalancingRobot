@@ -20,6 +20,10 @@ import numpy as np
 from src.shared import ControlInput, WorkspaceParams, Measurement
 
 
+class _CalibrationSkipped(Exception):
+    """Internal signal used to leave curses cleanly without saving points."""
+
+
 def _read_y_meas_from_vision(vision) -> Measurement | None:
     if vision is None:
         return None
@@ -208,6 +212,8 @@ def _curses_calibration_loop(
                     }
                     last_action = "Accepted point."
                     break
+                elif key == ord(" "):
+                    raise _CalibrationSkipped
                 elif key in (ord("q"), ord("Q")):
                     raise RuntimeError("5-point servo calibration aborted by user (q).")
 
@@ -218,7 +224,11 @@ def _curses_calibration_loop(
                     last_send_t = now
 
             _draw_line(stdscr, 0, "Pre-run 5-point servo calibration")
-            _draw_line(stdscr, 1, "WASD/arrows: nudge raw servo command | Enter: accept | R: reset | Q: abort")
+            _draw_line(
+                stdscr,
+                1,
+                "WASD/arrows: nudge | Enter: accept | Space: skip/start experiment | R: reset | Q: abort",
+            )
             _draw_line(stdscr, 2, f"Nudge step: {nudge_step_m:.4f} m | Cardinal delta: {cardinal_delta_m:.4f} m")
             _draw_line(stdscr, 4, _point_banner(name, idx, total, desired_xy))
             _draw_line(
@@ -252,6 +262,19 @@ def _curses_calibration_loop(
             stdscr.refresh()
 
     return accepted
+
+
+def _existing_center_delta(mechanism) -> tuple[float, float]:
+    points = mechanism.calibration_points() if hasattr(mechanism, "calibration_points") else {}
+    center = points.get("center")
+    if center is None:
+        return 0.0, 0.0
+
+    center_delta = (
+        np.asarray(center["servo_xy_m"], dtype=float).reshape(2)
+        - np.asarray(center["desired_xy_m"], dtype=float).reshape(2)
+    )
+    return float(center_delta[0]), float(center_delta[1])
 
 
 def calibrate_servo_workspace_offset(
@@ -292,6 +315,12 @@ def calibrate_servo_workspace_offset(
         raise RuntimeError(
             f"Curses UI failed (terminal may be too small or unsupported): {exc}"
         ) from exc
+    except _CalibrationSkipped:
+        print(
+            "Calibration skipped with Space; using saved calibration from "
+            f"{getattr(mechanism, 'calibration_path', 'configured file')}."
+        )
+        return _existing_center_delta(mechanism)
     finally:
         if hasattr(actuator, "set_calibration_enabled"):
             actuator.set_calibration_enabled(True)
