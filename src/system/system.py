@@ -37,7 +37,7 @@ class SystemParams:
 
 SYSTEM_PRESETS = {
     "simple_sim": {
-        "plants":       ["sim:default"],
+        "plants":       ["placing:angle_only"],
         "controllers": ["smooth_pole:default"],
         "estimators":  ["lpf:test"],
         "sensor":      "sim_analytic:noisy",
@@ -46,7 +46,7 @@ SYSTEM_PRESETS = {
         "gain_schedule": "null:default",
     },
     "placing_only": {
-        "plants":       ["sim:default"],#["placing:angle_only"],
+        "plants":       ["placing:angle_only"],
         "controllers": ["smooth_pole:default"],
         "estimators":  ["kalman:default"],
         "sensor":      "sim_dvs:hough",
@@ -55,9 +55,9 @@ SYSTEM_PRESETS = {
         "gain_schedule": "null:default",
     },
     "dynamic_sim": {
-        "plants":       ["placing:shaky", "sim:default"],
+        "plants":       ["placing:steady_hands"],
         "controllers": ["smooth_pole:default"],
-        "estimators":  ["lpf:default", "lpf:default"],
+        "estimators":  ["lpf:default"],
         "sensor":      "sim_analytic:noisy",
         "actuator":    "mock:default",
         "supervisor":  "dynamic:default",
@@ -67,7 +67,7 @@ SYSTEM_PRESETS = {
         "base": "simple_sim",
         "estimators":  ["lpf:lead"],
         "sensor":      "sim_analytic:noisy",
-        "plants": ["accel_sim:default"],
+        "plants": ["placing:angle_only"],
         "controllers": ["accel_pole:default"],
         "gain_schedule": "null:default",
     },
@@ -131,6 +131,7 @@ class System:
         self._perf_settling_eps_m = 2e-3
         if hasattr(self.supervisor, "attach_runtime"):
             self.supervisor.attach_runtime(actuator=self.actuator, workspace=self.workspace)
+        self._apply_supervisor_top_radius()
 
     @property
     def is_simulation(self) -> bool:
@@ -239,17 +240,28 @@ class System:
         if not self.plants:
             raise RuntimeError("System requires at least one plant.")
 
-        if len(self.controllers) == 1:
-            ctrl_i = 0
-        new_controller = self.controllers[ctrl_i]
-        if reset_controller_on_change and new_controller is not self.active_controller:
-            new_controller.reset(x_hat)
+        del ctrl_i, est_k, x_hat, reset_controller_on_change
+        self.active_plant = self.plants[0]
+        self.active_controller = self.controllers[0]
+        self.active_estimator = self.estimators[0]
+        self.active_est_k = 0.0
 
-        plant_i = min(self._dominant_estimator_index(est_k), len(self.plants) - 1)
-        self.active_plant = self.plants[plant_i]
-        self.active_controller = new_controller
-        self.active_estimator = self.estimators[self._dominant_estimator_index(est_k)]
-        self.active_est_k = float(np.clip(est_k, 0.0, 1.0))
+    def _apply_supervisor_top_radius(self) -> None:
+        radius = getattr(self.supervisor, "top_radius", None)
+        if radius is None:
+            return
+        for plant in self.plants:
+            if hasattr(plant, "set_top_radius"):
+                plant.set_top_radius(float(radius))
+
+    def _current_top_radius(self) -> float | None:
+        radius = getattr(self.supervisor, "top_radius", None)
+        if radius is not None:
+            return float(radius)
+        radius = getattr(self.active_plant, "top_radius", None)
+        if radius is not None:
+            return float(radius)
+        return None
 
     @property
     def fall_detected(self) -> bool:
@@ -368,9 +380,35 @@ class System:
             return
 
         sim_time = self.i * dt
+        x_ref = self._controller_reference_state()
         print(f"time: {sim_time:.3f}")
-        print(f"est : {self.last_estimates[0].state_str()}")
-        print(f"true: {x_true.state_str()}")
+        print(f"est : {self._state_pos_tilt_str(self.last_estimates[0])}")
+        print(f"true: {self._state_pos_tilt_str(x_true)}")
+        if x_ref is not None:
+            print(f"ref : {self._state_pos_tilt_str(x_ref)}")
+
+    @staticmethod
+    def _state_pos_tilt_str(state: State) -> str:
+        return (
+            f"px={state.px*1000:+.2f} mm, "
+            f"py={state.py*1000:+.2f} mm, "
+            f"ax={np.rad2deg(state.ax):+.2f} deg, "
+            f"ay={np.rad2deg(state.ay):+.2f} deg"
+        )
+
+    def _controller_reference_state(self) -> State | None:
+        reference_state = getattr(self.active_controller, "reference_state", None)
+        if callable(reference_state):
+            ref = reference_state()
+            if isinstance(ref, State):
+                return ref
+            return State.from_iterable(np.asarray(ref, dtype=float).reshape(-1))
+
+        x_ref = getattr(self.active_controller, "_x_ref_lqr", None)
+        if x_ref is not None:
+            return State.from_iterable(np.asarray(x_ref, dtype=float).reshape(-1))
+
+        return None
 
     def _print_state_error(self, x_true: State, dt: float) -> None:
         if self.last_estimates:
@@ -574,6 +612,8 @@ class System:
         prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
         ctrl_i, est_k = self._supervisor_active_output()
         self._sync_active_components(ctrl_i, est_k)
+        self._apply_supervisor_top_radius()
+        top_radius_applied = self._current_top_radius()
 
         x_true, acc = self.active_plant.step(self.x, self.u, dt)
 
@@ -581,12 +621,9 @@ class System:
         y_raw = self.sensor.get_y(x_true)
         y_shaped = self.gain_schedule.apply(y_raw)
         self.last_y_raw = y_shaped
-        
-        # no latch, keep updating offset
+
         if not self._is_offset_latched():
             self._offset_xy = self._offset_from_meas(y_shaped)
-            
-        # NOT USING THIS!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
         y = self._measurement_with_offset(
             y_shaped,
             self._offset_xy,
@@ -618,19 +655,14 @@ class System:
         x_hat_1 = self.last_estimates[1] if len(self.last_estimates) > 1 else x_hat_0
         innovation_1 = self.last_innovations[1] if len(self.last_innovations) > 1 else innovation_0
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
-        transition = getattr(self.supervisor, "last_transition", None)
+        self._apply_supervisor_top_radius()
         x_reset = x_used
         left_acquisition = self._left_acquisition(prev_prestart)
         if left_acquisition:
             x_reset = self._state_from_measurement(y)
             self._reset_fall_detection()
             self._reset_estimators(x_reset)
-            self._reset_controllers(x_reset)
-        if transition and transition.get("left_prestart", False) and not hasattr(self.supervisor, "is_offset_latched"):
-            source_y = self.last_y_raw if self.last_y_raw is not None else self.last_y_meas
-            self._offset_xy = self._offset_from_meas(source_y)
-            self._offset_latched_fallback = True
-
+            #self._reset_controllers(x_reset)
         # 3. system owns the controller swap while estimator usage is blended.
         self._sync_active_components(
             ctrl_i,
@@ -655,6 +687,7 @@ class System:
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=adaptive_lpf_weight_used,
+            top_radius=top_radius_applied,
         )
         self.i += 1
 
@@ -678,6 +711,7 @@ class System:
         for plant in self.plants:
             if hasattr(plant, "reset"):
                 plant.reset()
+        self._apply_supervisor_top_radius()
         if hasattr(self.sensor, "reset"):
             self.sensor.reset()
         if hasattr(self.gain_schedule, "reset"):
@@ -694,7 +728,7 @@ class System:
         self._state_error_count = 0
         self.i = 0
         self._offset_latched_fallback = False
-        self._offset_xy = self._offset_from_state(self.x)
+        self._offset_xy = np.zeros(2, dtype=float)
         self._reset_fall_detection()
         self._perf_tip_history = []
         self._perf_tip_ref_history = []
@@ -716,6 +750,7 @@ class System:
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=self._blend_adaptive_lpf_weight(self.active_est_k),
+            top_radius=self._current_top_radius(),
         )
     
     

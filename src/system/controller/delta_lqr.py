@@ -78,16 +78,16 @@ DELTA_LQR_PRESETS = {
         
         "r_delta_u": 5.0,
         
-        "max_delta_u": 8.00e-3,
+        "max_delta_u": 3.0e-3,
         "max_command_radius": 7.0e-2,
         
-        "pos_thresh": 1.5e-2,
+        "pos_thresh": 2.5e-2,
         "angle_thresh": np.deg2rad(3.6),
         "rate_thresh": None,
-        "ki": 0.1,
+        "ki": 0.0,
         
-        "tilt_stale_time_s": 0.4,
-        "tilt_deadband": np.deg2rad(0.05),
+        "tilt_stale_time_s": 0.1,
+        "tilt_deadband": np.deg2rad(0.3),
         "tilt_ki": 0.0,
         "max_tilt_bias": np.deg2rad(2.0),
         
@@ -95,7 +95,7 @@ DELTA_LQR_PRESETS = {
     "gentle": {
         "base": "default",
         
-        "r_delta_u": 150,
+        "r_delta_u": 350,
     },
     "stronger": {
         "base": "default",
@@ -214,7 +214,10 @@ class DeltaLQRController(BaseController):
         return self.workspace_ref + radial * (max_radius / radius)
 
     def _print_ref(self) -> None:
-        print(f"ref: px: {self._x_ref_lqr[0]*1000:.1f} py: {self._x_ref_lqr[4]*1000:.1f} ax: {np.rad2deg(self._x_ref_lqr[2]):.1f} ay: {np.rad2deg(self._x_ref_lqr[6]):.1f}")
+        print(f"ref: px: {self._x_ref_lqr[0]*1000:.2f} py: {self._x_ref_lqr[4]*1000:.2f} ax: {np.rad2deg(self._x_ref_lqr[2]):.3f} ay: {np.rad2deg(self._x_ref_lqr[6]):.3f}")
+
+    def reference_state(self) -> State:
+        return State.from_iterable(self._x_ref_lqr)
 
     def _refresh_u_ref(self) -> None:
         self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
@@ -249,6 +252,7 @@ class DeltaLQRController(BaseController):
 
             # must follow x_ref_lqr
             self._refresh_u_ref()
+            
             #self._print_ref()
 
     def _update_tilt_integrator(self, state: State):
@@ -274,8 +278,7 @@ class DeltaLQRController(BaseController):
                 self._x_ref_true[2] - self.max_tilt_bias,
                 self._x_ref_true[2] + self.max_tilt_bias,
             )
-            self._refresh_u_ref()
-            #self._print_ref()
+            self._refresh_u_ref()            
 
         if ay_condition:
             self._tilt_y_integrator_active = True
@@ -287,6 +290,9 @@ class DeltaLQRController(BaseController):
                 self._x_ref_true[6] + self.max_tilt_bias,
             )
             self._refresh_u_ref()
+        
+        if ay_condition or ax_condition:
+            pass
             #self._print_ref()
 
     def _update_tilt_x_stale(self, angle: float) -> bool:
@@ -337,6 +343,8 @@ class DeltaLQRController(BaseController):
         self._update_tilt_integrator(state)
         
     def reset(self, x_hat: State | None = None):
+        print("delta_lqr reset", x_hat)
+
         # reset integrator
         self._x_ref_lqr = self._x_ref_true.copy()
         self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()

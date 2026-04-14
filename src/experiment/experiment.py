@@ -128,12 +128,12 @@ class Experiment:
 
     def _supervisor_title(self) -> str | None:
         state_name = getattr(self.system.supervisor, "state_name", None)
-        if state_name in {"ACQUISITION", "stabilization_ready"}:
+        if state_name == "ACQUISITION":
             return (
                 "Ready | "
                 f"WASD: tilt trim {self._tilt_trim_text()} | "
             )
-        if state_name in {"STABILIZING", "stabilizing"}:
+        if state_name in {"STABILIZATION", "STABILIZING", "stabilizing"}:
             return (
                 "Stabilizing | "
                 f"WASD: tilt trim {self._tilt_trim_text()} |"

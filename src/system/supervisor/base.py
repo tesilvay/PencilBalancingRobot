@@ -150,6 +150,13 @@ class RealServoSupervisorBase(Supervisor):
     def manual_target(self) -> ControlInput:
         return self._manual_target
 
+    @property
+    def top_radius(self) -> float:
+        """Real experiments do not know the top constraint, so keep it fully open."""
+        if self.workspace.safe_radius is None:
+            return 0.0
+        return max(float(self.workspace.safe_radius), 0.0)
+
     def attach_runtime(self, actuator=None, workspace=None):
         if actuator is not None:
             self.actuator = actuator

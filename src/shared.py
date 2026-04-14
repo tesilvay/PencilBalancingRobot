@@ -56,7 +56,7 @@ class TimingParams:
     actuator_dt: float
 
 TIMING_PRESETS = {
-    "default": {"total_time": 10.0, "dt": 3e-3, "actuator_dt": 3e-3},
+    "default": {"total_time": 20.0, "dt": 3e-3, "actuator_dt": 3e-3},
     "ideal": {"total_time": 5.0, "dt": 1e-3},
     "long":    {"total_time": 30.0, "dt": 4e-3},
 }
@@ -233,6 +233,8 @@ class StepData:
     supervisor_state: str | None = None
     # Adaptive-Kalman LPF fallback weight in [0, 1]: 0 = Kalman-like, 1 = LPF-like.
     adaptive_lpf_weight: float | None = None
+    # Current PlacingPlant top constraint radius, meters. NaN in logs when unavailable.
+    top_radius: float | None = None
 
 
 def plot_logger_chunk(path: str | Path) -> None:

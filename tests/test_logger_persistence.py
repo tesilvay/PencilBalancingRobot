@@ -62,7 +62,13 @@ def _state(*, px: float = 0.0, py: float = 0.0) -> State:
     return State(px=px, vx=0.0, ax=0.0, wx=0.0, py=py, vy=0.0, ay=0.0, wy=0.0)
 
 
-def _step(state_name: str | None, *, px: float = 0.0, py: float = 0.0) -> StepData:
+def _step(
+    state_name: str | None,
+    *,
+    px: float = 0.0,
+    py: float = 0.0,
+    top_radius: float | None = None,
+) -> StepData:
     return StepData(
         x=_state(px=px, py=py),
         u=ControlInput(px_cmd=px, py_cmd=py),
@@ -71,16 +77,17 @@ def _step(state_name: str | None, *, px: float = 0.0, py: float = 0.0) -> StepDa
         innovation=np.zeros(4),
         mech_joints=np.full((3, 2), np.nan),
         offset_xy=np.zeros(2),
-        offset_latched=True,
+        offset_latched=False,
         supervisor_state=state_name,
+        top_radius=top_radius,
     )
 
 
 def test_logger_saves_full_trial_for_static_runs(tmp_path: Path):
     logger = Logger(LoggerParams(save_dir=str(tmp_path)))
-    logger.reset(_step("STATIC", px=0.0, py=0.0))
-    logger.record(_step("STATIC", px=0.01, py=-0.02))
-    logger.record(_step("STATIC", px=0.02, py=-0.01))
+    logger.reset(_step("STATIC", px=0.0, py=0.0, top_radius=0.01))
+    logger.record(_step("STATIC", px=0.01, py=-0.02, top_radius=0.02))
+    logger.record(_step("STATIC", px=0.02, py=-0.01, top_radius=0.03))
 
     logger.flush_pending_chunks()
 
@@ -96,6 +103,7 @@ def test_logger_saves_full_trial_for_static_runs(tmp_path: Path):
     result = payload["result"]
     assert result.state_history.shape == (3, 8)
     np.testing.assert_allclose(result.cmd_history[-1], [0.02, -0.01], atol=1e-12)
+    np.testing.assert_allclose(result.top_radius_history, [0.01, 0.02, 0.03], atol=1e-12)
 
 
 def test_logger_does_not_save_full_trial_for_real_pre_acquisition_runs(tmp_path: Path):

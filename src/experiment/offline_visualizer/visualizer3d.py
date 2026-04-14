@@ -29,6 +29,7 @@ class Visualizer3DParams:
     mech:         Any = None
     mech_history: np.ndarray | None = None
     cmd_history:  np.ndarray | None = None
+    top_radius_history: np.ndarray | None = None
     
 
 
@@ -70,7 +71,10 @@ class Visualizer3D(OfflineVisualizerBase):
         # Logged actuator geometry (often command-based); kept for debugging only.
         self.mech_history_cmd: np.ndarray | None = params.mech_history
         self.cmd_history = params.cmd_history
+        self.top_radius_history = params.top_radius_history
         self.add_trail = params.add_trail
+        self._top_anchor_xy: np.ndarray | None = None
+        self._rebuild_top_anchor()
 
         w = params.workspace
         self.x_ref = w.x_ref
@@ -128,6 +132,14 @@ class Visualizer3D(OfflineVisualizerBase):
                 color='gray',
                 linewidth=1.5
             )
+
+        # --- Top constraint circle ---
+        self.top_radius_circle, = self.ax.plot(
+            [], [], [],
+            linestyle=':',
+            color='gray',
+            linewidth=1.5
+        )
 
         # --- Reference point ---
         self.ref_point, = self.ax.plot(
@@ -195,6 +207,46 @@ class Visualizer3D(OfflineVisualizerBase):
         if need:
             self._build_mech_history_from_state()
 
+    def _rebuild_top_anchor(self) -> None:
+        if self.history is None or self.history.size == 0:
+            self._top_anchor_xy = None
+            return
+        first = np.asarray(self.history[0], dtype=float).reshape(-1)
+        if first.shape[0] < 8:
+            self._top_anchor_xy = None
+            return
+        self._top_anchor_xy = np.array(
+            [
+                float(first[0] + self.L * first[2]),
+                float(first[4] + self.L * first[6]),
+            ],
+            dtype=float,
+        )
+
+    def _top_radius_at(self, sim_index: int) -> float | None:
+        if self.top_radius_history is None:
+            return None
+        if not (0 <= sim_index < len(self.top_radius_history)):
+            return None
+        radius = float(self.top_radius_history[sim_index])
+        if not np.isfinite(radius):
+            return None
+        return max(radius, 0.0)
+
+    def _update_top_radius_circle(self, sim_index: int) -> None:
+        radius = self._top_radius_at(sim_index)
+        if self._top_anchor_xy is None or radius is None:
+            self.top_radius_circle.set_data([], [])
+            self.top_radius_circle.set_3d_properties([])
+            return
+
+        theta = np.linspace(0, 2 * np.pi, 64)
+        circle_x = self._top_anchor_xy[0] + radius * np.cos(theta)
+        circle_y = self._top_anchor_xy[1] + radius * np.sin(theta)
+        circle_z = np.full_like(circle_x, self.L)
+        self.top_radius_circle.set_data(circle_x, circle_y)
+        self.top_radius_circle.set_3d_properties(circle_z)
+
     def finalize(self, result: SimulationResult, *, dt: float) -> None:
         """Load trajectories from a trial and play back interactively (no file write)."""
         self.history = np.asarray(result.state_history, dtype=float)
@@ -208,7 +260,12 @@ class Visualizer3D(OfflineVisualizerBase):
             self.mech_history_cmd = np.asarray(result.mech_history, dtype=float)
         else:
             self.mech_history_cmd = None
+        if result.top_radius_history is not None and len(result.top_radius_history) > 0:
+            self.top_radius_history = np.asarray(result.top_radius_history, dtype=float)
+        else:
+            self.top_radius_history = None
         self.mech_history = None
+        self._rebuild_top_anchor()
         if self.history.size == 0:
             return
         self.total_sim_time = float(self.history.shape[0] * self.dt)
@@ -244,6 +301,7 @@ class Visualizer3D(OfflineVisualizerBase):
             cmd_x, cmd_y = self.x_ref, self.y_ref
         self.table_cmd_plot.set_data([x, cmd_x], [y, cmd_y])
         self.table_cmd_plot.set_3d_properties([0, 0])
+        self._update_top_radius_circle(sim_index)
 
         # --- Pencil ---
         base = np.array([x, y, 0.0])
@@ -313,13 +371,16 @@ class Visualizer3D(OfflineVisualizerBase):
         if self.cmd_history is None or not (0 <= sim_index < len(self.cmd_history)):
             cmd_x = getattr(self, "x_ref", 0.0)
             cmd_y = getattr(self, "y_ref", 0.0)
+        top_radius = self._top_radius_at(sim_index)
+        top_radius_text = "N/A" if top_radius is None else f"{top_radius * 1000:.2f} mm"
         self.info_text.set_text(
             f"Sim Time: {sim_time:.3f} s\n"
-            f"x: {x:.3f}\n"
-            f"y: {y:.3f}\n"
-            f"αx: {alpha_x:.3f}\n"
-            f"αy: {alpha_y:.3f}\n"
-            f"Table cmd: ({cmd_x:.3f}, {cmd_y:.3f})"
+            f"x: {x*1000:.2f} mm\n"
+            f"y: {y*1000:.2f} mm\n"
+            f"αx: {np.rad2deg(alpha_x):.2f} deg\n"
+            f"αy: {np.rad2deg(alpha_y):.2f} deg\n"
+            f"Table cmd: ({cmd_x*1000:.2f} mm, {cmd_y*1000:.2f} mm)\n"
+            f"Top radius: {top_radius_text}"
         )
 
         if interactive:
@@ -356,6 +417,7 @@ class Visualizer3D(OfflineVisualizerBase):
         total_sim_time = self.history.shape[0] * self.dt
 
         self._ensure_mech_history_aligned()
+        self._rebuild_top_anchor()
 
         print("Rendering...")
 

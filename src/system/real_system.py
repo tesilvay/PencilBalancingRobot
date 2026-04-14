@@ -38,7 +38,7 @@ class RealSystemParams:
 
 REAL_SYSTEM_PRESETS = {
     "real_vision": {
-        "plants":       ["sim:default"],
+        "plants":       ["placing:angle_only"],
         "controllers": ["smooth_pole:smoother"],
         "estimators":  ["lpf:test"],
         "sensor":      "real_dvs:hough",
@@ -52,7 +52,7 @@ REAL_SYSTEM_PRESETS = {
         "gain_schedule": "null:default",
     },
     "real_supervised_best": {
-        "plants": ["sim:default", "sim:default"],
+        "plants": ["placing:angle_only", "placing:angle_only"],
         "sensor":      "real_dvs:hough",
         "controllers": ["null:default", "smooth_pole:test1"],
         "estimators":  ["lpf:default", "kalman:test1"],
@@ -79,7 +79,7 @@ REAL_SYSTEM_PRESETS = {
     "real_new_sim": {
         "base": "real_supervised_best",
         "estimators":  ["lpf:lead"],
-        "plants": ["accel_sim:default", "accel_sim:default"],
+        "plants": ["placing:angle_only", "placing:angle_only"],
         "controllers": ["null:default", "accel_pole:default"],
     },
 }
@@ -98,6 +98,8 @@ class RealSystem(System):
         prev_prestart = bool(getattr(self.supervisor, "is_prestart_state", False))
         ctrl_i, est_k = self._supervisor_active_output()
         self._sync_active_components(ctrl_i, est_k)
+        self._apply_supervisor_top_radius()
+        top_radius_applied = self._current_top_radius()
 
         # Preserve the real DVS startup fallback path: before both trackers lock,
         # the sensor can synthesize a measurement from the internal state.
@@ -132,6 +134,7 @@ class RealSystem(System):
         x_hat_1 = self.last_estimates[1] if len(self.last_estimates) > 1 else x_hat_0
         innovation_1 = self.last_innovations[1] if len(self.last_innovations) > 1 else innovation_0
         ctrl_i, est_k = self.supervisor.update(x_hat_0, innovation_0, x_hat_1, innovation_1, dt)
+        self._apply_supervisor_top_radius()
         transition = getattr(self.supervisor, "last_transition", None)
         x_reset = x_used
         left_acquisition = self._left_acquisition(prev_prestart)
@@ -168,6 +171,7 @@ class RealSystem(System):
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=adaptive_lpf_weight_used,
+            top_radius=top_radius_applied,
         )
 
     def reset(self):
@@ -190,6 +194,7 @@ class RealSystem(System):
         for plant in self.plants:
             if hasattr(plant, "reset"):
                 plant.reset()
+        self._apply_supervisor_top_radius()
         if hasattr(self.sensor, "reset"):
             self.sensor.reset()
 
@@ -221,4 +226,5 @@ class RealSystem(System):
             offset_latched=self._is_offset_latched(),
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=self._blend_adaptive_lpf_weight(self.active_est_k),
+            top_radius=self._current_top_radius(),
         )

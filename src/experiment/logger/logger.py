@@ -32,6 +32,7 @@ class SimulationResult:
     offset_history: np.ndarray | None = None
     offset_latched_history: np.ndarray | None = None
     supervisor_state_history: np.ndarray | None = None
+    top_radius_history: np.ndarray | None = None
     terminal: TerminalInfo | None = None
 
 
@@ -78,6 +79,15 @@ def _adaptive_lpf_weight_to_value(adaptive_lpf_weight: float | None) -> float:
     return float(np.clip(value, 0.0, 1.0))
 
 
+def _top_radius_to_value(top_radius: float | None) -> float:
+    if top_radius is None:
+        return float("nan")
+    value = float(top_radius)
+    if not np.isfinite(value):
+        return float("nan")
+    return max(value, 0.0)
+
+
 class Logger:
     def __init__(self, params: LoggerParams):
         self.params = params
@@ -92,6 +102,7 @@ class Logger:
         self._offset_latched = None
         self._supervisor_states = None
         self._adaptive_lpf_weight = None
+        self._top_radius = None
         self._active_chunk_start_idx: int | None = None
         self._saved_chunks: set[tuple[int, int]] = set()
 
@@ -111,6 +122,7 @@ class Logger:
         self._adaptive_lpf_weight = [
             _adaptive_lpf_weight_to_value(initial_step_data.adaptive_lpf_weight)
         ]
+        self._top_radius = [_top_radius_to_value(initial_step_data.top_radius)]
         self._active_chunk_start_idx = None
         self._saved_chunks = set()
 
@@ -131,6 +143,7 @@ class Logger:
         self._adaptive_lpf_weight.append(
             _adaptive_lpf_weight_to_value(step_data.adaptive_lpf_weight)
         )
+        self._top_radius.append(_top_radius_to_value(step_data.top_radius))
 
         current_idx = len(self._supervisor_states) - 1
         if (not prev_offset_latched) and current_offset_latched:
@@ -185,6 +198,12 @@ class Logger:
         )
         if not np.isfinite(adaptive_lpf_weight_history).any():
             adaptive_lpf_weight_history = None
+        top_radius_history = np.array(
+            self._top_radius[start_idx:stop_idx],
+            dtype=float,
+        )
+        if not np.isfinite(top_radius_history).any():
+            top_radius_history = None
 
         acc_start = min(start_idx, len(self._acc))
         acc_stop = min(max(stop_idx - 1, acc_start), len(self._acc))
@@ -211,6 +230,7 @@ class Logger:
             offset_history=offset_history,
             offset_latched_history=offset_latched_history,
             supervisor_state_history=supervisor_state_history,
+            top_radius_history=top_radius_history,
         )
 
     def _normalize_state_name(self, state_name: str | None) -> str:
@@ -236,6 +256,7 @@ class Logger:
         chunk_logger._adaptive_lpf_weight = list(
             self._adaptive_lpf_weight[start_idx:stop_idx]
         )
+        chunk_logger._top_radius = list(self._top_radius[start_idx:stop_idx])
 
         acc_start = min(start_idx, len(self._acc))
         acc_stop = min(max(stop_idx - 1, acc_start), len(self._acc))
