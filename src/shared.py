@@ -235,6 +235,11 @@ class StepData:
     adaptive_lpf_weight: float | None = None
     # Current PlacingPlant top constraint radius, meters. NaN in logs when unavailable.
     top_radius: float | None = None
+    # Controller reference offsets [px, ax, py, ay] relative to workspace/upright.
+    # Meters for position channels, radians for angle channels.
+    x_ref: np.ndarray | None = None
+    # Controller tilt bias [ax, ay], radians.
+    tilt_bias: np.ndarray | None = None
 
 
 def plot_logger_chunk(path: str | Path) -> None:
@@ -258,10 +263,12 @@ def plot_logger_chunk(path: str | Path) -> None:
         tilt_label: str,
         cmd_line,
         cmd_label: str,
+        vel_line,
+        vel_label: str,
     ) -> None:
         if mode_weight is None or x_data.size < 2:
             tilt_line = ax_plot.plot(x_data, y_data, color="tab:blue", label=tilt_label)
-            lines = tilt_line + [cmd_line]
+            lines = tilt_line + [cmd_line, vel_line]
             labels = [line.get_label() for line in lines]
             ax_plot.legend(lines, labels, loc="upper right")
             return
@@ -282,8 +289,65 @@ def plot_logger_chunk(path: str | Path) -> None:
             Line2D([0], [0], color=kalman_color, linewidth=2.0, label=f"{tilt_label} Kalman"),
             Line2D([0], [0], color=lpf_color, linewidth=2.0, label=f"{tilt_label} LPF"),
             cmd_line,
+            vel_line,
         ]
         ax_plot.legend(legend_handles, [handle.get_label() for handle in legend_handles], loc="upper right")
+
+    def _history_or_zeros(
+        result,
+        attr_name: str,
+        n_rows: int,
+        n_cols: int,
+        chunk_path: Path,
+    ) -> np.ndarray:
+        history = getattr(result, attr_name, None)
+        if history is None:
+            return np.zeros((n_rows, n_cols), dtype=float)
+        history = np.asarray(history, dtype=float)
+        if history.shape != (n_rows, n_cols):
+            raise ValueError(f"Invalid {attr_name} in {chunk_path}")
+        return np.nan_to_num(history, nan=0.0, posinf=0.0, neginf=0.0)
+
+    def _plot_reference_drift(
+        ax_plot,
+        x_data: np.ndarray,
+        ref_angle_deg: np.ndarray,
+        tilt_bias_deg: np.ndarray,
+        ref_pos_mm: np.ndarray,
+        title: str,
+        ref_angle_label: str,
+        tilt_bias_label: str,
+        ref_pos_label: str,
+    ) -> None:
+        pos_ax = ax_plot.twinx()
+        ref_angle_line = ax_plot.plot(
+            x_data,
+            ref_angle_deg,
+            color="tab:green",
+            label=ref_angle_label,
+        )[0]
+        tilt_bias_line = ax_plot.plot(
+            x_data,
+            tilt_bias_deg,
+            color="tab:purple",
+            label=tilt_bias_label,
+        )[0]
+        ref_pos_line = pos_ax.plot(
+            x_data,
+            ref_pos_mm,
+            color="tab:brown",
+            label=ref_pos_label,
+        )[0]
+
+        ax_plot.set_title(title)
+        ax_plot.set_ylabel("Angle (deg)", color="tab:green")
+        pos_ax.set_ylabel("Position (mm)", color="tab:brown")
+        ax_plot.set_ylim(-3.0, 3.0)
+        pos_ax.set_ylim(-10.0, 10.0)
+        ax_plot.grid(True, alpha=0.3)
+
+        lines = [ref_angle_line, tilt_bias_line, ref_pos_line]
+        ax_plot.legend(lines, [line.get_label() for line in lines], loc="upper right")
 
     chunk_path = Path(path)
     with chunk_path.open("rb") as fh:
@@ -297,16 +361,38 @@ def plot_logger_chunk(path: str | Path) -> None:
     )
     cmd_history = np.asarray(result.cmd_history, dtype=float)
     adaptive_lpf_weight_history = getattr(result, "adaptive_lpf_weight_history", None)
-    if state_history.ndim != 2 or state_history.shape[1] < 7:
+    if state_history.ndim != 2 or state_history.shape[1] < 8:
         raise ValueError(f"Invalid state_history in {chunk_path}")
     if cmd_history.ndim != 2 or cmd_history.shape[1] < 2:
         raise ValueError(f"Invalid cmd_history in {chunk_path}")
 
     sample_idx = np.arange(state_history.shape[0], dtype=float)
+    x_ref_history = _history_or_zeros(
+        result,
+        "x_ref_history",
+        state_history.shape[0],
+        4,
+        chunk_path,
+    )
+    tilt_bias_history = _history_or_zeros(
+        result,
+        "tilt_bias_history",
+        state_history.shape[0],
+        2,
+        chunk_path,
+    )
     ax_deg = np.rad2deg(state_history[:, 2])
     ay_deg = np.rad2deg(state_history[:, 6])
+    vx_mm_s = 1000.0 * state_history[:, 1]
+    vy_mm_s = 1000.0 * state_history[:, 5]
     cmd_x_mm = 1000.0 * cmd_history[:, 0]
     cmd_y_mm = 1000.0 * cmd_history[:, 1]
+    x_ref_px_mm = 1000.0 * x_ref_history[:, 0]
+    x_ref_ax_deg = np.rad2deg(x_ref_history[:, 1])
+    x_ref_py_mm = 1000.0 * x_ref_history[:, 2]
+    x_ref_ay_deg = np.rad2deg(x_ref_history[:, 3])
+    tilt_bias_x_deg = np.rad2deg(tilt_bias_history[:, 0])
+    tilt_bias_y_deg = np.rad2deg(tilt_bias_history[:, 1])
     if adaptive_lpf_weight_history is not None:
         adaptive_lpf_weight_history = np.asarray(adaptive_lpf_weight_history, dtype=float).reshape(-1)
         if adaptive_lpf_weight_history.shape[0] != state_history.shape[0]:
@@ -320,20 +406,30 @@ def plot_logger_chunk(path: str | Path) -> None:
                 1.0,
             )
 
-    for i in range(-800, 0 ,1):
+    for i in range(-min(800, len(sample_idx)), 0 ,1):
         print(f"step:{i} | alpha_x: {ax_deg[i]:.2f}° cmd_x: {cmd_x_mm[i]:.1f}mm | alpha_y: {ay_deg[i]:.2f}° cmd_y: {cmd_y_mm[i]:.1f}mm")
     
-    fig, axes = plt.subplots(2, 1, sharex=True, figsize=(11, 7))
+    fig, axes = plt.subplots(4, 1, sharex=True, figsize=(11, 11))
     fig.suptitle(f"Logger Chunk: {chunk_path.name}")
 
     axis_specs = [
-        (axes[0], ax_deg, cmd_x_mm, "X Axis", "Tilt ax (deg)", "Cmd x (mm)"),
-        (axes[1], ay_deg, cmd_y_mm, "Y Axis", "Tilt ay (deg)", "Cmd y (mm)"),
+        (axes[0], ax_deg, cmd_x_mm, vx_mm_s, "X Axis", "Tilt ax (deg)", "Cmd x (mm)", "Pencil vx (mm/s)"),
+        (axes[1], ay_deg, cmd_y_mm, vy_mm_s, "Y Axis", "Tilt ay (deg)", "Cmd y (mm)", "Pencil vy (mm/s)"),
     ]
 
-    for ax_plot, tilt_deg, cmd_mm, title, tilt_label, cmd_label in axis_specs:
+    for ax_plot, tilt_deg, cmd_mm, vel_mm_s, title, tilt_label, cmd_label, vel_label in axis_specs:
+        vel_ax = ax_plot.twinx()
+        vel_ax.spines["right"].set_position(("outward", 52))
+        vel_line = vel_ax.plot(
+            sample_idx,
+            vel_mm_s,
+            color="tab:orange",
+            alpha=0.35,
+            label=vel_label,
+            zorder=1,
+        )[0]
         cmd_ax = ax_plot.twinx()
-        cmd_line = cmd_ax.plot(sample_idx, cmd_mm, color="tab:orange", label=cmd_label)[0]
+        cmd_line = cmd_ax.plot(sample_idx, cmd_mm, color="tab:green", label=cmd_label, zorder=3)[0]
         _plot_tilt_with_mode_color(
             ax_plot,
             sample_idx,
@@ -342,14 +438,41 @@ def plot_logger_chunk(path: str | Path) -> None:
             tilt_label,
             cmd_line,
             cmd_label,
+            vel_line,
+            vel_label,
         )
 
         ax_plot.set_title(title)
         ax_plot.set_ylabel("Angle (deg)", color="tab:blue")
-        cmd_ax.set_ylabel("Command (mm)", color="tab:orange")
+        cmd_ax.set_ylabel("Command (mm)", color="tab:green")
+        vel_ax.set_ylabel("Velocity (mm/s)", color="tab:orange")
         ax_plot.set_ylim(-15.0, 15.0)
         cmd_ax.set_ylim(-70.0, 70.0)
+        vel_ax.set_ylim(-100.0, 100.0)
         ax_plot.grid(True, alpha=0.3)
+
+    _plot_reference_drift(
+        axes[2],
+        sample_idx,
+        x_ref_ax_deg,
+        tilt_bias_x_deg,
+        x_ref_px_mm,
+        "X Ref / Bias",
+        "x_ref ax offset (deg)",
+        "tilt bias x (deg)",
+        "x_ref px offset (mm)",
+    )
+    _plot_reference_drift(
+        axes[3],
+        sample_idx,
+        x_ref_ay_deg,
+        tilt_bias_y_deg,
+        x_ref_py_mm,
+        "Y Ref / Bias",
+        "x_ref ay offset (deg)",
+        "tilt bias y (deg)",
+        "x_ref py offset (mm)",
+    )
 
     axes[-1].set_xlabel("Sample")
     fig.tight_layout()

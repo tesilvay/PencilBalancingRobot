@@ -40,13 +40,15 @@ class DeltaLQRParams:
     r_delta_u: float # penalty on control command
 
 
-    pos_ki: float
-    max_pos_bias: float
+    pos_ref_ki: float
+    max_pos_ref_shift: float
 
-    tilt_ki: float
-    max_tilt_bias: float
+    tilt_ref_ki: float
+    max_tilt_ref_shift: float
 
-    cross_ki: float
+    tilt_calib_ki: float
+    max_tilt_calib: float
+    min_pos_activate_calib: float
 
     max_delta_u: float | None = None
     max_command_radius: float | None = None
@@ -69,9 +71,9 @@ DELTA_LQR_PRESETS = {
         "delta_u_scale": 1e-3,
 
         "q_pos": 0.02,
-        "q_vel": 0,
+        "q_vel": 0.015,
         "q_tilt": 1.0,
-        "q_tilt_rate": 0.0001,
+        "q_tilt_rate": 0.01,
 
         "q_command": 0.06,
 
@@ -81,13 +83,15 @@ DELTA_LQR_PRESETS = {
         "max_command_radius": 7.0e-2,
 
 
-        "pos_ki": 0.0,
-        "max_pos_bias": 5e-2,
+        "pos_ref_ki": 0.0,
+        "max_pos_ref_shift": 50e-2,
 
-        "tilt_ki": 0.5,
-        "max_tilt_bias": np.deg2rad(4.0),
+        "tilt_ref_ki": 0.8,
+        "max_tilt_ref_shift": np.deg2rad(4.0),
 
-        "cross_ki": 0.05,
+        "tilt_calib_ki": 0.8,
+        "max_tilt_calib": np.deg2rad(0.3),
+        "min_pos_activate_calib": 2.0e-2,
 
     },
     "gentle": {
@@ -152,9 +156,9 @@ class DeltaLQRController(BaseController):
 
 
         self._x_ref_true = x_ref.as_vector()  # never changes
-        self._x_ref_lqr = x_ref.as_vector().copy()  # drifts with integrator
+        self.x_ref_lqr = x_ref.as_vector().copy()  # drifts with integrator
         self._u_ref_true = -np.linalg.pinv(B_c) @ A_c  # [m x n], computed once
-        self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
+        self.u_ref_lqr = (self._u_ref_true @ self.x_ref_lqr).ravel()
 
         self._u_prev = self.u_ref_lqr.copy()
         self.max_delta_u = params.max_delta_u
@@ -165,15 +169,21 @@ class DeltaLQRController(BaseController):
         )
 
         # Integrator: shifting reference
-        self.pos_ki = params.pos_ki
-        self.max_pos_bias = params.max_pos_bias
+        self.pos_ref_ki = params.pos_ref_ki
+        self.max_pos_ref_shift = params.max_pos_ref_shift
 
-        self.tilt_ki = float(params.tilt_ki)
-        self.max_tilt_bias = float(params.max_tilt_bias)
+        self.tilt_ref_ki = float(params.tilt_ref_ki)
+        self.max_tilt_ref_shift = float(params.max_tilt_ref_shift)
 
-        self.cross_ki = float(params.cross_ki)
-        self._tilt_bias_x = 0
-        self._tilt_bias_y = 0
+        self.tilt_calib_ki = float(params.tilt_calib_ki)
+        self.max_tilt_calib = float(params.max_tilt_calib)
+        self.min_pos_activate_calib = float(params.min_pos_activate_calib)
+        self.calib_dwell_time = 0.4  # seconds
+        self._calib_far_timer = 0.0
+        self._calib_active = False
+
+        self.tilt_calib_x = 0
+        self.tilt_calib_y = 0
 
         self.actuator_dt = float(params.timing.actuator_dt)
 
@@ -207,64 +217,86 @@ class DeltaLQRController(BaseController):
         return self.workspace_ref + radial * (max_radius / radius)
 
     def _print_ref(self) -> None:
-        print(f"ref: px: {self._x_ref_lqr[0]*1000:.2f} py: {self._x_ref_lqr[4]*1000:.2f} ax: {np.rad2deg(self._x_ref_lqr[2]):.3f} ay: {np.rad2deg(self._x_ref_lqr[6]):.3f}")
+        print(f"ref: px: {self.x_ref_lqr[0]*1000:.2f} py: {self.x_ref_lqr[4]*1000:.2f} ax: {np.rad2deg(self.x_ref_lqr[2]):.3f} ay: {np.rad2deg(self.x_ref_lqr[6]):.3f}")
 
     def reference_state(self) -> State:
-        return State.from_iterable(self._x_ref_lqr)
+        return State.from_iterable(self.x_ref_lqr)
 
     def _refresh_u_ref(self) -> None:
-        self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
+        self.u_ref_lqr = (self._u_ref_true @ self.x_ref_lqr).ravel()
+        
+    def _clamp(self, value: float, max_value: float, init_val:float) ->  float:
+        clamped_value = np.clip(
+            value,
+            init_val - max_value,
+            init_val + max_value,
+        )
+        return clamped_value
 
     def _update_integrator(self, state: State) -> None:
         # Position
         pos_err_x = state.px - self._x_ref_true[0]
         pos_err_y = state.py - self._x_ref_true[4]
-        self._x_ref_lqr[0] -= self.pos_ki * pos_err_x * self.actuator_dt
-        self._x_ref_lqr[4] -= self.pos_ki * pos_err_y * self.actuator_dt
-        self._x_ref_lqr[0] = np.clip(
-            self._x_ref_lqr[0],
-            self._x_ref_true[0] - self.max_pos_bias,
-            self._x_ref_true[0] + self.max_pos_bias,
-        )
-        self._x_ref_lqr[4] = np.clip(
-            self._x_ref_lqr[4],
-            self._x_ref_true[4] - self.max_pos_bias,
-            self._x_ref_true[4] + self.max_pos_bias,
-        )
+        self.x_ref_lqr[0] -= self.pos_ref_ki * pos_err_x * self.actuator_dt
+        self.x_ref_lqr[4] -= self.pos_ref_ki * pos_err_y * self.actuator_dt
+        
+        # clamp
+        self.x_ref_lqr[0] = self._clamp(self.x_ref_lqr[0], self.max_pos_ref_shift, self._x_ref_true[0])
+        self.x_ref_lqr[4] = self._clamp(self.x_ref_lqr[4], self.max_pos_ref_shift, self._x_ref_true[4])
 
         # Tilt — use bias-corrected measurement
-        tilt_err_x = (state.ax - self._tilt_bias_x) - self._x_ref_true[2]
-        tilt_err_y = (state.ay - self._tilt_bias_y) - self._x_ref_true[6]
-        self._x_ref_lqr[2] -= self.tilt_ki * tilt_err_x * self.actuator_dt
-        self._x_ref_lqr[6] -= self.tilt_ki * tilt_err_y * self.actuator_dt
+        tilt_err_x = (state.ax + self.tilt_calib_x) - self._x_ref_true[2]
+        tilt_err_y = (state.ay + self.tilt_calib_y) - self._x_ref_true[6]
+        self.x_ref_lqr[2] -= self.tilt_ref_ki * tilt_err_x * self.actuator_dt
+        self.x_ref_lqr[6] -= self.tilt_ref_ki * tilt_err_y * self.actuator_dt
+        
+        # clamp
+        self.x_ref_lqr[2] = self._clamp(self.x_ref_lqr[2], self.max_tilt_ref_shift, self._x_ref_true[2])
+        self.x_ref_lqr[6] = self._clamp(self.x_ref_lqr[6], self.max_tilt_ref_shift, self._x_ref_true[6])
 
 
-        # Tilt bias using pos #MAYBE CLAMP IT????????????????????????????????
-        self._tilt_bias_x -= self.cross_ki * pos_err_x * self.actuator_dt
-        self._tilt_bias_y -= self.cross_ki * pos_err_y * self.actuator_dt
 
-        # Clamp max bias
-        self._x_ref_lqr[2] = np.clip(
-            self._x_ref_lqr[2],
-            self._x_ref_true[2] - self.max_tilt_bias,
-            self._x_ref_true[2] + self.max_tilt_bias,
-        )
-        self._x_ref_lqr[6] = np.clip(
-            self._x_ref_lqr[6],
-            self._x_ref_true[6] - self.max_tilt_bias,
-            self._x_ref_true[6] + self.max_tilt_bias,
-        )
+        # positive because the positive x error, means we are tilted too positively
+        # if we add tilt bias positively, we correct the bias saying we are "upright" when we aren't
+        # the bias is essentially left, so we need to add right
+        pos_err = np.array([pos_err_x, pos_err_y])
+        pos_norm = np.linalg.norm(pos_err)
+        
+        activate_threshold = self.min_pos_activate_calib
+        deactivate_threshold = 0.8 * self.min_pos_activate_calib
+        
+        if self._calib_active:
+            # stay active until clearly back near center
+            if pos_norm <= deactivate_threshold:
+                self._calib_active = False
+                self._calib_far_timer = 0.0
+        else:
+            # only activate if far for long enough
+            if pos_norm >= activate_threshold:
+                self._calib_far_timer += self.actuator_dt
+                if self._calib_far_timer >= self.calib_dwell_time:
+                    self._calib_active = True
+            else:
+                self._calib_far_timer = 0.0
+        
+        if self._calib_active:
+            self.tilt_calib_x += self.tilt_calib_ki * pos_err_x * self.actuator_dt
+            self.tilt_calib_y += self.tilt_calib_ki * pos_err_y * self.actuator_dt
+
+        # clamp
+        self.tilt_calib_x = self._clamp(self.tilt_calib_x, self.max_tilt_calib, init_val=0)
+        self.tilt_calib_y = self._clamp(self.tilt_calib_y, self.max_tilt_calib, init_val=0)
 
         self._refresh_u_ref()
         #self._print_ref()
 
     def compute(self, state: State) -> ControlInput:
 
-        x_err = state.as_vector() - self._x_ref_lqr
+        x_err = state.as_vector() - self.x_ref_lqr
 
         # remove estimated sensor bias
-        x_err[2] -= self._tilt_bias_x
-        x_err[6] -= self._tilt_bias_y
+        x_err[2] += self.tilt_calib_x
+        x_err[6] += self.tilt_calib_y
 
         u_err = self._u_prev - self.u_ref_lqr
         xi_err = np.concatenate([x_err, u_err])
@@ -284,12 +316,15 @@ class DeltaLQRController(BaseController):
         print("delta_lqr reset", x_hat)
 
         # reset integrator
-        self._x_ref_lqr = self._x_ref_true.copy()
-        self.u_ref_lqr = (self._u_ref_true @ self._x_ref_lqr).ravel()
+        self.x_ref_lqr = self._x_ref_true.copy()
+        self.u_ref_lqr = (self._u_ref_true @ self.x_ref_lqr).ravel()
         self._integrator_active = False
 
-        self._tilt_bias_x = 0
-        self._tilt_bias_y = 0
+        self.tilt_calib_x = 0
+        self.tilt_calib_y = 0
+        
+        self._calib_far_timer = 0.0
+        self._calib_active = False
 
         self._u_prev = self.u_ref_lqr.copy()
         if x_hat is not None:

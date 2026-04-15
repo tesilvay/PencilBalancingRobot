@@ -32,7 +32,7 @@ class RealSystemParams:
     init_spread: InitConditionsSpread = field(default_factory=default_spread)
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
     fall_angle_deg: float            = 20.0
-    fall_hold_s: float               = 0.03
+    fall_hold_s: float               = 0.5
     fall_pos_threshold_m: float      = 3e-2
 
 
@@ -130,6 +130,7 @@ class RealSystem(System):
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
+        x_ref_log, tilt_bias_log = self._controller_diagnostics()
         x_true, acc = self.active_plant.step(self.x, u_cmd, dt)
         if self._update_fall_detection(x_used, u_cmd, dt):
             self.supervisor.notify_fall_detected()
@@ -177,6 +178,8 @@ class RealSystem(System):
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=adaptive_lpf_weight_used,
             top_radius=top_radius_applied,
+            x_ref=x_ref_log,
+            tilt_bias=tilt_bias_log,
         )
         self.i += 1
 
@@ -186,11 +189,20 @@ class RealSystem(System):
 
         sim_time = self.i * dt
         x_ref = self._controller_reference_state()
+        x_ref_lqr = getattr(self.active_controller, "x_ref_lqr", None)
+        if x_ref_lqr is not None:
+            x_ref = State.from_iterable(np.asarray(x_ref_lqr, dtype=float).reshape(-1))
+
         if x_ref is None:
             x_ref = make_reference_state(self.workspace)
+
+        x_bias_x = getattr(self.active_controller, "tilt_calib_x", 0)
+        x_bias_y = getattr(self.active_controller, "tilt_calib_y", 0)
+
         print(f"time: {sim_time:.3f}")
-        print(f"est : {self._state_pos_tilt_str(x_hat)}")
+        x_hat.print_est()
         print(f"ref : {self._state_pos_tilt_str(x_ref)}")
+        print(f"bias: ax={np.rad2deg(x_bias_x):+.2f}, ay={np.rad2deg(x_bias_y):+.2f}")
 
     def reset(self):
         self._maybe_run_startup_calibration()
@@ -234,6 +246,7 @@ class RealSystem(System):
         self._reset_fall_detection()
 
         mj0 = self.actuator.mech_joint_snapshot(self.u)
+        x_ref_log, tilt_bias_log = self._controller_diagnostics()
         self.step_data = StepData(
             x=self.x,
             u=self.u,
@@ -246,4 +259,6 @@ class RealSystem(System):
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=self._blend_adaptive_lpf_weight(self.active_est_k),
             top_radius=self._current_top_radius(),
+            x_ref=x_ref_log,
+            tilt_bias=tilt_bias_log,
         )

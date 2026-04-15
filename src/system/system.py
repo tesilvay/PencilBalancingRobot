@@ -29,9 +29,9 @@ class SystemParams:
     gain_schedule: object
     init_spread: InitConditionsSpread = field(default_factory=default_spread)
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
-    fall_angle_deg: float            = 16.0
-    fall_hold_s: float               = 30e-3
-    fall_pos_threshold_m: float      = 6e-2
+    fall_angle_deg: float            = 20.0
+    fall_hold_s: float               = 0.2
+    fall_pos_threshold_m: float      = 5e-2
 
 
 
@@ -431,6 +431,33 @@ class System:
 
         return None
 
+    def _controller_reference_offsets(self) -> np.ndarray:
+        x_ref = self._controller_reference_state()
+        if x_ref is None:
+            return np.zeros(4, dtype=float)
+
+        return np.array(
+            [
+                float(x_ref.px - self.workspace.x_ref),
+                float(x_ref.ax),
+                float(x_ref.py - self.workspace.y_ref),
+                float(x_ref.ay),
+            ],
+            dtype=float,
+        )
+
+    def _controller_tilt_bias(self) -> np.ndarray:
+        return np.array(
+            [
+                float(getattr(self.active_controller, "tilt_calib_x", 0.0)),
+                float(getattr(self.active_controller, "tilt_calib_y", 0.0)),
+            ],
+            dtype=float,
+        )
+
+    def _controller_diagnostics(self) -> tuple[np.ndarray, np.ndarray]:
+        return self._controller_reference_offsets(), self._controller_tilt_bias()
+
     def _print_state_error(self, x_true: State, dt: float) -> None:
         if self.last_estimates:
             error = self.last_estimates[0].as_vector() - x_true.as_vector()
@@ -667,6 +694,7 @@ class System:
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
+        x_ref_log, tilt_bias_log = self._controller_diagnostics()
         #self._update_performance_history(y, u_cmd, dt)
         #self._print_performance_indicators(dt)
         if self._update_fall_detection(x_used, u_cmd, dt):
@@ -711,6 +739,8 @@ class System:
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=adaptive_lpf_weight_used,
             top_radius=top_radius_applied,
+            x_ref=x_ref_log,
+            tilt_bias=tilt_bias_log,
         )
         self.i += 1
 
@@ -762,6 +792,7 @@ class System:
         self._perf_lp_tip = None
 
         mj0 = self.actuator.mech_joint_snapshot(self.u)
+        x_ref_log, tilt_bias_log = self._controller_diagnostics()
         self.step_data = StepData(
             x=self.x,
             u=self.u,
@@ -774,6 +805,8 @@ class System:
             supervisor_state=getattr(self.supervisor, "state_name", None),
             adaptive_lpf_weight=self._blend_adaptive_lpf_weight(self.active_est_k),
             top_radius=self._current_top_radius(),
+            x_ref=x_ref_log,
+            tilt_bias=tilt_bias_log,
         )
     
     

@@ -33,6 +33,8 @@ class SimulationResult:
     offset_latched_history: np.ndarray | None = None
     supervisor_state_history: np.ndarray | None = None
     top_radius_history: np.ndarray | None = None
+    x_ref_history: np.ndarray | None = None
+    tilt_bias_history: np.ndarray | None = None
     terminal: TerminalInfo | None = None
 
 
@@ -88,6 +90,24 @@ def _top_radius_to_value(top_radius: float | None) -> float:
     return max(value, 0.0)
 
 
+def _x_ref_to_row(x_ref: np.ndarray | None) -> np.ndarray:
+    if x_ref is None:
+        return np.zeros(4, dtype=float)
+    a = np.asarray(x_ref, dtype=float).reshape(-1)
+    if a.size != 4:
+        raise ValueError(f"x_ref must have 4 elements, got shape {a.shape}")
+    return np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)
+
+
+def _tilt_bias_to_row(tilt_bias: np.ndarray | None) -> np.ndarray:
+    if tilt_bias is None:
+        return np.zeros(2, dtype=float)
+    a = np.asarray(tilt_bias, dtype=float).reshape(-1)
+    if a.size != 2:
+        raise ValueError(f"tilt_bias must have 2 elements, got shape {a.shape}")
+    return np.nan_to_num(a, nan=0.0, posinf=0.0, neginf=0.0)
+
+
 class Logger:
     def __init__(self, params: LoggerParams):
         self.params = params
@@ -103,6 +123,8 @@ class Logger:
         self._supervisor_states = None
         self._adaptive_lpf_weight = None
         self._top_radius = None
+        self._x_ref = None
+        self._tilt_bias = None
         self._active_chunk_start_idx: int | None = None
         self._saved_chunks: set[tuple[int, int]] = set()
 
@@ -123,6 +145,8 @@ class Logger:
             _adaptive_lpf_weight_to_value(initial_step_data.adaptive_lpf_weight)
         ]
         self._top_radius = [_top_radius_to_value(initial_step_data.top_radius)]
+        self._x_ref = [_x_ref_to_row(initial_step_data.x_ref)]
+        self._tilt_bias = [_tilt_bias_to_row(initial_step_data.tilt_bias)]
         self._active_chunk_start_idx = None
         self._saved_chunks = set()
 
@@ -144,6 +168,8 @@ class Logger:
             _adaptive_lpf_weight_to_value(step_data.adaptive_lpf_weight)
         )
         self._top_radius.append(_top_radius_to_value(step_data.top_radius))
+        self._x_ref.append(_x_ref_to_row(step_data.x_ref))
+        self._tilt_bias.append(_tilt_bias_to_row(step_data.tilt_bias))
 
         current_idx = len(self._supervisor_states) - 1
         if (not prev_offset_latched) and current_offset_latched:
@@ -204,6 +230,8 @@ class Logger:
         )
         if not np.isfinite(top_radius_history).any():
             top_radius_history = None
+        x_ref_history = np.array(self._x_ref[start_idx:stop_idx], dtype=float)
+        tilt_bias_history = np.array(self._tilt_bias[start_idx:stop_idx], dtype=float)
 
         acc_start = min(start_idx, len(self._acc))
         acc_stop = min(max(stop_idx - 1, acc_start), len(self._acc))
@@ -231,6 +259,8 @@ class Logger:
             offset_latched_history=offset_latched_history,
             supervisor_state_history=supervisor_state_history,
             top_radius_history=top_radius_history,
+            x_ref_history=x_ref_history,
+            tilt_bias_history=tilt_bias_history,
         )
 
     def _normalize_state_name(self, state_name: str | None) -> str:
@@ -257,6 +287,8 @@ class Logger:
             self._adaptive_lpf_weight[start_idx:stop_idx]
         )
         chunk_logger._top_radius = list(self._top_radius[start_idx:stop_idx])
+        chunk_logger._x_ref = list(self._x_ref[start_idx:stop_idx])
+        chunk_logger._tilt_bias = list(self._tilt_bias[start_idx:stop_idx])
 
         acc_start = min(start_idx, len(self._acc))
         acc_stop = min(max(stop_idx - 1, acc_start), len(self._acc))
