@@ -7,9 +7,11 @@ from .simple_dvs import (
     SIMPLE_REG_PRESETS,
 )
 from .simple_dvs_regression_model import SimpleDVSRegressionModel
+from .analytic import AnalyticModel, AnalyticModelParams, ANALYTIC_PRESETS
 from src.shared  import Spec, NullParams, NULL_PRESETS
 
 REG_MODEL_REGISTRY = {
     "null":   Spec(NullRegression,                NullParams,                      NULL_PRESETS),
     "simple": Spec(SimpleDVSRegressionModelLoader, SimpleDVSRegressionModelParams, SIMPLE_REG_PRESETS),
+    "analytic": Spec(AnalyticModel, AnalyticModelParams, ANALYTIC_PRESETS),
 }

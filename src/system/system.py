@@ -407,6 +407,9 @@ class System:
         print(f"true: {self._state_pos_tilt_str(x_true)}")
         if x_ref is not None:
             print(f"ref : {self._state_pos_tilt_str(x_ref)}")
+        u_ref = self._controller_reference_command()
+        if u_ref is not None:
+            print(f"u_ref: {self._control_input_str(u_ref)}")
 
     @staticmethod
     def _state_pos_tilt_str(state: State) -> str:
@@ -417,6 +420,13 @@ class System:
             f"ay={np.rad2deg(state.ay):+.2f} deg"
         )
 
+    @staticmethod
+    def _control_input_str(u: ControlInput) -> str:
+        return (
+            f"px_cmd={u.px_cmd*1000:+.2f} mm, "
+            f"py_cmd={u.py_cmd*1000:+.2f} mm"
+        )
+
     def _controller_reference_state(self) -> State | None:
         reference_state = getattr(self.active_controller, "reference_state", None)
         if callable(reference_state):
@@ -425,9 +435,30 @@ class System:
                 return ref
             return State.from_iterable(np.asarray(ref, dtype=float).reshape(-1))
 
-        x_ref = getattr(self.active_controller, "_x_ref_lqr", None)
+        x_ref = getattr(self.active_controller, "x_ref_lqr", None)
         if x_ref is not None:
             return State.from_iterable(np.asarray(x_ref, dtype=float).reshape(-1))
+
+        return None
+
+    def _controller_reference_command(self) -> ControlInput | None:
+        reference_command = getattr(self.active_controller, "reference_command", None)
+        if callable(reference_command):
+            u_ref = reference_command()
+            if isinstance(u_ref, ControlInput):
+                return u_ref
+            a = np.asarray(u_ref, dtype=float).reshape(-1)
+            return ControlInput(float(a[0]), float(a[1]))
+
+        u_ref_lqr = getattr(self.active_controller, "u_ref_lqr", None)
+        if u_ref_lqr is not None:
+            a = np.asarray(u_ref_lqr, dtype=float).reshape(-1)
+            return ControlInput(float(a[0]), float(a[1]))
+
+        u_ref = getattr(self.active_controller, "u_ref", None)
+        if u_ref is not None:
+            a = np.asarray(u_ref, dtype=float).reshape(-1)
+            return ControlInput(float(a[0]), float(a[1]))
 
         return None
 

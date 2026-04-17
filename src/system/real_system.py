@@ -33,7 +33,7 @@ class RealSystemParams:
     workspace:   WorkspaceParams     = field(default_factory=default_workspace)
     fall_angle_deg: float            = 20.0
     fall_hold_s: float               = 0.5
-    fall_pos_threshold_m: float      = 3e-2
+    fall_pos_threshold_m: float      = 300e-2
 
 
 
@@ -126,7 +126,7 @@ class RealSystem(System):
         adaptive_lpf_weight_used = self._blend_adaptive_lpf_weight(est_k)
 
         #self._print_estimator_estimates(est_k)
-        self._print_x_hat_and_ref(x_used, dt)
+        #self._print_x_hat_and_ref(x_used, dt)
 
         u_cmd = self._compute_command(x_used) if control_tick else self.u
         mech_joints = self._apply_or_hold_command(u_cmd, control_tick, x_used)
@@ -196,13 +196,35 @@ class RealSystem(System):
         if x_ref is None:
             x_ref = make_reference_state(self.workspace)
 
-        x_bias_x = getattr(self.active_controller, "tilt_calib_x", 0)
-        x_bias_y = getattr(self.active_controller, "tilt_calib_y", 0)
-
         print(f"time: {sim_time:.3f}")
         x_hat.print_est()
         print(f"ref : {self._state_pos_tilt_str(x_ref)}")
-        print(f"bias: ax={np.rad2deg(x_bias_x):+.2f}, ay={np.rad2deg(x_bias_y):+.2f}")
+        u_ref = self._real_print_reference_command()
+        print(f"u_ref: {self._control_input_str(u_ref)}")
+
+    def _real_print_reference_command(self) -> ControlInput:
+        u_ref_lqr = getattr(self.active_controller, "u_ref_lqr", None)
+        if u_ref_lqr is not None:
+            a = np.asarray(u_ref_lqr, dtype=float).reshape(-1)
+            return ControlInput(float(a[0]), float(a[1]))
+
+        u_ref = getattr(self.active_controller, "u_ref", None)
+        if u_ref is not None:
+            a = np.asarray(u_ref, dtype=float).reshape(-1)
+            return ControlInput(float(a[0]), float(a[1]))
+
+        reference_command = getattr(self.active_controller, "reference_command", None)
+        if callable(reference_command):
+            u_ref = reference_command()
+            if isinstance(u_ref, ControlInput):
+                return u_ref
+            a = np.asarray(u_ref, dtype=float).reshape(-1)
+            return ControlInput(float(a[0]), float(a[1]))
+
+        return ControlInput(
+            px_cmd=float(self.workspace.x_ref),
+            py_cmd=float(self.workspace.y_ref),
+        )
 
     def reset(self):
         self._maybe_run_startup_calibration()

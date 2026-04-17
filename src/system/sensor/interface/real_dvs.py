@@ -44,6 +44,10 @@ REAL_DVS_PRESETS = {
         "algo":                     "sam:default",
         "noise_filter_duration_ms": 5,
     },
+    "analytic_hough": {
+        "base":                     "hough",
+        "obs_model":                "analytic:default",
+    },
 }
 
 
@@ -86,7 +90,7 @@ class RealEventCameraInterface(VisionModelBase):
 
         self.cam = CameraModel()
 
-        self.dvs_regression_model = p.obs_model
+        self.obs_model = p.obs_model
   
         noise_filter_duration_ms = p.noise_filter_duration_ms
         
@@ -214,7 +218,7 @@ class RealEventCameraInterface(VisionModelBase):
             cam2=self.cam.camnorm_to_pixel(cams_camnorm.cam2),
         )
 
-        y_meas = self.dvs_regression_model.estimate(cams_px)
+        y_meas = self.obs_model.estimate(cams_px)
 
         if y_meas is not None and self.is_valid_y_meas(y_meas):
             return y_meas

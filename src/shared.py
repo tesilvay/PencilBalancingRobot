@@ -312,11 +312,9 @@ def plot_logger_chunk(path: str | Path) -> None:
         ax_plot,
         x_data: np.ndarray,
         ref_angle_deg: np.ndarray,
-        tilt_bias_deg: np.ndarray,
         ref_pos_mm: np.ndarray,
         title: str,
         ref_angle_label: str,
-        tilt_bias_label: str,
         ref_pos_label: str,
     ) -> None:
         pos_ax = ax_plot.twinx()
@@ -325,12 +323,6 @@ def plot_logger_chunk(path: str | Path) -> None:
             ref_angle_deg,
             color="tab:green",
             label=ref_angle_label,
-        )[0]
-        tilt_bias_line = ax_plot.plot(
-            x_data,
-            tilt_bias_deg,
-            color="tab:purple",
-            label=tilt_bias_label,
         )[0]
         ref_pos_line = pos_ax.plot(
             x_data,
@@ -346,7 +338,7 @@ def plot_logger_chunk(path: str | Path) -> None:
         pos_ax.set_ylim(-10.0, 10.0)
         ax_plot.grid(True, alpha=0.3)
 
-        lines = [ref_angle_line, tilt_bias_line, ref_pos_line]
+        lines = [ref_angle_line, ref_pos_line]
         ax_plot.legend(lines, [line.get_label() for line in lines], loc="upper right")
 
     chunk_path = Path(path)
@@ -374,13 +366,6 @@ def plot_logger_chunk(path: str | Path) -> None:
         4,
         chunk_path,
     )
-    tilt_bias_history = _history_or_zeros(
-        result,
-        "tilt_bias_history",
-        state_history.shape[0],
-        2,
-        chunk_path,
-    )
     ax_deg = np.rad2deg(state_history[:, 2])
     ay_deg = np.rad2deg(state_history[:, 6])
     vx_mm_s = 1000.0 * state_history[:, 1]
@@ -391,8 +376,6 @@ def plot_logger_chunk(path: str | Path) -> None:
     x_ref_ax_deg = np.rad2deg(x_ref_history[:, 1])
     x_ref_py_mm = 1000.0 * x_ref_history[:, 2]
     x_ref_ay_deg = np.rad2deg(x_ref_history[:, 3])
-    tilt_bias_x_deg = np.rad2deg(tilt_bias_history[:, 0])
-    tilt_bias_y_deg = np.rad2deg(tilt_bias_history[:, 1])
     if adaptive_lpf_weight_history is not None:
         adaptive_lpf_weight_history = np.asarray(adaptive_lpf_weight_history, dtype=float).reshape(-1)
         if adaptive_lpf_weight_history.shape[0] != state_history.shape[0]:
@@ -455,22 +438,18 @@ def plot_logger_chunk(path: str | Path) -> None:
         axes[2],
         sample_idx,
         x_ref_ax_deg,
-        tilt_bias_x_deg,
         x_ref_px_mm,
-        "X Ref / Bias",
+        "X Reference",
         "x_ref ax offset (deg)",
-        "tilt bias x (deg)",
         "x_ref px offset (mm)",
     )
     _plot_reference_drift(
         axes[3],
         sample_idx,
         x_ref_ay_deg,
-        tilt_bias_y_deg,
         x_ref_py_mm,
-        "Y Ref / Bias",
+        "Y Reference",
         "x_ref ay offset (deg)",
-        "tilt bias y (deg)",
         "x_ref py offset (mm)",
     )
 
@@ -494,8 +473,8 @@ class CameraParams:
 
 CAMERA_PRESETS = {
     "default": {
-        "xr": -100,
-        "yr": -100,
+        "xr": -160,
+        "yr": -150,
         "y_mask_top_line_1": 30,
         "y_mask_top_line_2": 70,
         "y_mask_line_1":   160,

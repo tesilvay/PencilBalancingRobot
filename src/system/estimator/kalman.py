@@ -30,12 +30,13 @@ class KalmanParams:
 
 KALMAN_PRESETS = {
     "default": {
-        "q_y_meas_pos": 1e-6,
-        "q_y_meas_ang": 1e-6,
-        "q_vel_pos": 1e-3,
-        "q_vel_ang": 1e-2,
-        "r_y_meas_pos": 1e-2,
-        "r_y_meas_ang": 7e-2,
+        "q_y_meas_pos": 1e-2,
+        "q_y_meas_ang": 1e-2,
+        "q_vel_pos": 1e-5,
+        "q_vel_ang": 1e-5,
+        
+        "r_y_meas_pos": 1e-5,
+        "r_y_meas_ang": 7e-5,
     },
     "test":{
         "q_y_meas_pos": 1e-4,
@@ -72,8 +73,8 @@ class KalmanEstimator(BaseEstimator):
             p.r_y_meas_pos, p.r_y_meas_ang,
             p.r_y_meas_pos, p.r_y_meas_ang,
         ])
-
-        self.P_init = np.eye(8) * 2e-1
+        self.I = np.eye(8)
+        self.P_init = self.I * 2e-1
         self.x_hat_init_0 = np.zeros((8, 1))
         self.P = self.P_init.copy()
         self.x_hat = self.x_hat_init_0.copy()
@@ -92,10 +93,11 @@ class KalmanEstimator(BaseEstimator):
         P_pred = self.A @ self.P @ self.A.T + self.Q
 
         S = self.H @ P_pred @ self.H.T + self.R
-        K = P_pred @ self.H.T @ np.linalg.inv(S)
+        #K = P_pred @ self.H.T @ np.linalg.inv(S)
+        K = np.linalg.solve(S.T, (self.H @ P_pred.T)).T
 
         self.x_hat = x_pred + K @ innovation.reshape(-1, 1)
-        self.P = (np.eye(8) - K @ self.H) @ P_pred
+        self.P = (self.I - K @ self.H) @ P_pred @ (self.I - K @ self.H).T + K @ self.R @ K.T
 
         x_hat = State.from_iterable(self.x_hat.flatten())
 
