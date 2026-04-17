@@ -20,10 +20,12 @@ from src.system.sensor.reader.dvs_camera_reader import (
 from src.system.sensor.observation_model.simple_dvs_regression_model import (
     default_affine_calibration_path,
     save_affine_v1_calibration,
+    save_bilinear_v2_calibration,
 )
 from src.experiment.realtime_visualizer import OneDvsVisualizer, OneDvsVisualizerParams
 
 
+_MIDPOINT_PX = DAVIS346_WIDTH / 2
 
 
 def x_positions_from_safe_radius(safe_radius_m: float, step_m: float = 0.01) -> list[float]:
@@ -35,6 +37,20 @@ def x_positions_from_safe_radius(safe_radius_m: float, step_m: float = 0.01) -> 
     if n < 0:
         n = 0
     return [k * step for k in range(-n, n + 1)]
+
+
+def xy_grid_positions(safe_radius_m: float, step_m: float) -> list[tuple[float, float]]:
+    """All (px_m, py_m) grid points within the circular workspace, sorted by (py, px)."""
+    r = float(safe_radius_m)
+    step = float(step_m)
+    n = int(math.floor((r - 1e-9) / step))
+    positions = []
+    for j in range(-n, n + 1):
+        for i in range(-n, n + 1):
+            x, y = i * step, j * step
+            if math.hypot(x, y) <= r + 1e-9:
+                positions.append((x, y))
+    return positions
 
 
 # Default tilt grid for both cameras (deg), converted to rad at runtime.
@@ -97,6 +113,16 @@ class AX_Samples:
 class AY_Samples:
     ay_pos_rad: list[float]
     s_px: list[float | None]
+
+
+@dataclass
+class XY_Grid_Samples:
+    """2D grid data: both cameras' intercepts at each (px_m, py_m) position."""
+    positions: list[tuple[float, float]]
+    b1_px: list[float | None]   # cam1 x_at_mask for each position
+    b2_px: list[float | None]   # cam2 x_at_mask for each position
+    mask_y_cam1: int
+    mask_y_cam2: int
 
 
 @dataclass
@@ -170,6 +196,35 @@ def _affine_sample_arrays(samples: Samples) -> tuple[list[float], list[float], l
     )
 
 
+def _v2_sample_arrays(
+    grid: XY_Grid_Samples,
+    ax_samples: AX_Samples,
+    ay_samples: AY_Samples,
+) -> tuple[
+    list[tuple[float, float]], list[float], list[float],
+    list[float], list[float], list[float], list[float],
+]:
+    """Raises ValueError if any grid slot is unset."""
+    def floats_no_none(vals: list[float | None], label: str) -> list[float]:
+        if any(v is None for v in vals):
+            raise ValueError(f"Incomplete calibration: unset entries in {label}")
+        return [float(v) for v in vals]  # type: ignore[misc]
+
+    b1 = floats_no_none(grid.b1_px, "grid cam1 b1_px")
+    b2 = floats_no_none(grid.b2_px, "grid cam2 b2_px")
+    s_ax = floats_no_none(ax_samples.s_px, "cam1 tilt slope_px")
+    s_ay = floats_no_none(ay_samples.s_px, "cam2 tilt slope_px")
+    return (
+        list(grid.positions),
+        b1,
+        b2,
+        s_ax,
+        [float(v) for v in ax_samples.ax_pos_rad],
+        s_ay,
+        [float(v) for v in ay_samples.ay_pos_rad],
+    )
+
+
 def _calibration_title(prefix: str, idx: int, total: int, extras: str, adjust_hint: str) -> str:
     return (
         f"{prefix} | {idx + 1}/{total} | {extras} | {adjust_hint} | "
@@ -235,10 +290,9 @@ class XStage(Stage):
 
     def title(self, idx: int, total: int, state: ManualLineState) -> str:
         obs = state.to_obs_px(mask_y=self.samples.mask_y)
-        ang = math.degrees(math.atan(obs.slope))
         x = self.samples.x_pos_m[idx]
         extras = (
-            f"target X={x * 100:+.1f} cm | deg={ang:+.2f} | "
+            f"target X={x * 100:+.1f} cm | "
             f"b1_px={obs.intercept:+.2f} | x@mask={state.x_at_mask_px:+.1f}"
         )
         return _calibration_title("X cam1", idx, total, extras, "A/D move")
@@ -254,6 +308,7 @@ class XStage(Stage):
         return len(self.samples.x_pos_m)
 
     def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        state.slope_px = 0.0  # position calibration always uses a vertical line
         v = self.samples.x_at_mask_px[idx]
         if v is not None:
             state.x_at_mask_px = float(v)
@@ -275,10 +330,9 @@ class YStage(Stage):
 
     def title(self, idx: int, total: int, state: ManualLineState) -> str:
         obs = state.to_obs_px(mask_y=self.samples.mask_y)
-        ang = math.degrees(math.atan(obs.slope))
         y = self.samples.y_pos_m[idx]
         extras = (
-            f"target Y={y * 100:+.1f} cm | deg={ang:+.2f} | "
+            f"target Y={y * 100:+.1f} cm | "
             f"b2_px={obs.intercept:+.2f} | x@mask={state.x_at_mask_px:+.1f}"
         )
         return _calibration_title("Y cam2", idx, total, extras, "A/D move")
@@ -294,6 +348,7 @@ class YStage(Stage):
         return len(self.samples.y_pos_m)
 
     def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        state.slope_px = 0.0  # position calibration always uses a vertical line
         v = self.samples.x_at_mask_px[idx]
         if v is not None:
             state.x_at_mask_px = float(v)
@@ -303,7 +358,7 @@ class YStage(Stage):
 
 
 class AXStage(Stage):
-    """AX on camera 1; mask y matches X stage (events below mask discarded)."""
+    """AX on camera 1. Intercept locked to image midpoint; A/D adjust slope only."""
 
     def __init__(self, cam_model: CameraModel, samples: AX_Samples, mask_y_cam1: int) -> None:
         super().__init__("AX", "x", cam_index=0, surface_index=0, cam_model=cam_model)
@@ -333,6 +388,7 @@ class AXStage(Stage):
         return len(self.samples.ax_pos_rad)
 
     def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        state.x_at_mask_px = _MIDPOINT_PX  # tilt calibration always uses midpoint intercept
         v = self.samples.s_px[idx]
         if v is not None:
             state.slope_px = float(v)
@@ -342,7 +398,7 @@ class AXStage(Stage):
 
 
 class AYStage(Stage):
-    """AY on camera 2."""
+    """AY on camera 2. Intercept locked to image midpoint; A/D adjust slope only."""
 
     def __init__(self, cam_model: CameraModel, samples: AY_Samples, mask_y_cam2: int) -> None:
         super().__init__("AY", "y", cam_index=1, surface_index=1, cam_model=cam_model)
@@ -372,12 +428,103 @@ class AYStage(Stage):
         return len(self.samples.ay_pos_rad)
 
     def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        state.x_at_mask_px = _MIDPOINT_PX  # tilt calibration always uses midpoint intercept
         v = self.samples.s_px[idx]
         if v is not None:
             state.slope_px = float(v)
 
     def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
         self.samples.s_px[idx] = state.slope_px
+
+
+class XYGridCam1Stage(Stage):
+    """
+    Records cam1 intercept (b1) at each (px_m, py_m) grid position.
+    Slope is always 0 — position calibration uses vertical lines only.
+    """
+
+    def __init__(self, cam_model: CameraModel, grid: XY_Grid_Samples) -> None:
+        super().__init__("XYGrid-cam1", "x", cam_index=0, surface_index=0, cam_model=cam_model)
+        self.grid = grid
+
+    def measure(self, state: ManualLineState):
+        return manual_state_to_cam1_pair(state, self.grid.mask_y_cam1, self.cam_model)
+
+    def mask(self) -> int:
+        return int(self.grid.mask_y_cam1)
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        px_m, py_m = self.grid.positions[idx]
+        obs = state.to_obs_px(mask_y=self.grid.mask_y_cam1)
+        extras = (
+            f"Move to X={px_m * 100:+.1f}cm Y={py_m * 100:+.1f}cm | cam1 | "
+            f"b1_px={obs.intercept:+.2f} | x@mask={state.x_at_mask_px:+.1f}"
+        )
+        return _calibration_title("XYGrid", idx, total, extras, "A/D move")
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        del step_s
+        if key == "a":
+            state.x_at_mask_px -= step_x
+        elif key == "d":
+            state.x_at_mask_px += step_x
+
+    def size(self) -> int:
+        return len(self.grid.positions)
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        state.slope_px = 0.0  # always vertical
+        v = self.grid.b1_px[idx]
+        if v is not None:
+            state.x_at_mask_px = float(v)
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        self.grid.b1_px[idx] = state.x_at_mask_px
+
+
+class XYGridCam2Stage(Stage):
+    """
+    Records cam2 intercept (b2) at each (px_m, py_m) grid position.
+    Slope is always 0 — position calibration uses vertical lines only.
+    """
+
+    def __init__(self, cam_model: CameraModel, grid: XY_Grid_Samples) -> None:
+        super().__init__("XYGrid-cam2", "y", cam_index=1, surface_index=1, cam_model=cam_model)
+        self.grid = grid
+
+    def measure(self, state: ManualLineState):
+        return manual_state_to_cam2_pair(state, self.grid.mask_y_cam2, self.cam_model)
+
+    def mask(self) -> int:
+        return int(self.grid.mask_y_cam2)
+
+    def title(self, idx: int, total: int, state: ManualLineState) -> str:
+        px_m, py_m = self.grid.positions[idx]
+        obs = state.to_obs_px(mask_y=self.grid.mask_y_cam2)
+        extras = (
+            f"Move to X={px_m * 100:+.1f}cm Y={py_m * 100:+.1f}cm | cam2 | "
+            f"b2_px={obs.intercept:+.2f} | x@mask={state.x_at_mask_px:+.1f}"
+        )
+        return _calibration_title("XYGrid", idx, total, extras, "A/D move")
+
+    def apply_key(self, state: ManualLineState, key: str, step_x: float, step_s: float) -> None:
+        del step_s
+        if key == "a":
+            state.x_at_mask_px -= step_x
+        elif key == "d":
+            state.x_at_mask_px += step_x
+
+    def size(self) -> int:
+        return len(self.grid.positions)
+
+    def load_sample_into_state(self, state: ManualLineState, idx: int) -> None:
+        state.slope_px = 0.0  # always vertical
+        v = self.grid.b2_px[idx]
+        if v is not None:
+            state.x_at_mask_px = float(v)
+
+    def save_state_to_sample(self, idx: int, state: ManualLineState) -> None:
+        self.grid.b2_px[idx] = state.x_at_mask_px
 
 
 def _drain_events(reader: DVSReader) -> np.ndarray | None:
@@ -461,7 +608,7 @@ class Calibrator:
         self.current_stage().load_sample_into_state(self.state, self.sample_idx)
 
     def _clamp_x_at_mask(self, stage: Stage) -> None:
-        if isinstance(stage, (XStage, YStage)):
+        if isinstance(stage, (XStage, YStage, XYGridCam1Stage, XYGridCam2Stage)):
             self.state.x_at_mask_px = float(max(0.0, min(DAVIS346_WIDTH - 1.0, self.state.x_at_mask_px)))
 
     def run(self) -> bool:
@@ -550,7 +697,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--surface-intensity-gain", type=float, default=50.0, help="Surface brightness (matches OneDvsVisualizer)")
     p.add_argument("--display-fps", type=float, default=30.0, help="GUI refresh rate")
     p.add_argument("--workspace-radius", type=float, default=DEFAULT_WORKSPACE.safe_radius, help="Workspace radius (m)")
-    p.add_argument("--x-step-m", type=float, default=0.01, help="B1/B2 grid step along axis (m)")
+    p.add_argument("--x-step-m", type=float, default=0.01, help="B1/B2 grid step along axis (m), used in v1 mode")
     p.add_argument("--port", type=str, default="none", help="Servo port or 'none' for manual move")
     p.add_argument("--settle", type=float, default=2.0, metavar="SEC", help="Settle time after move (seconds)")
     p.add_argument("--tilt-deg-min", type=float, default=-10.0)
@@ -561,7 +708,7 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=str,
         default=str(default_affine_calibration_path()),
-        help="Output path for simple_dvs_regression_v1 affine JSON (default: perception/calibration_files/ next to package)",
+        help="Output path for calibration JSON (default: perception/calibration_files/ next to package)",
     )
     p.add_argument(
         "--dataset-output",
@@ -574,7 +721,20 @@ def parse_args() -> argparse.Namespace:
         "--step-s",
         type=float,
         default=0.005,
-        help="S1/S2: A/D step for slope (px/px); legacy full regression uses W/S with same step",
+        help="S1/S2: A/D step for slope (px/px)",
+    )
+    p.add_argument(
+        "--v2",
+        action="store_true",
+        default=False,
+        help="Use v2 bilinear calibration (2D grid instead of 1D axis sweeps)",
+    )
+    p.add_argument(
+        "--grid-step",
+        type=float,
+        default=0.04,
+        metavar="M",
+        help="Grid step size in meters for v2 2D position calibration (default: 0.04 = 4cm)",
     )
     return p.parse_args()
 
@@ -610,23 +770,45 @@ def main():
 
     cam_model = CameraModel(width=DAVIS346_WIDTH, height=DAVIS346_HEIGHT)
 
-    init_state = ManualLineState(
-        slope_px=0.0,
-        x_at_mask_px=DAVIS346_WIDTH / 2,
-    )
-
-    r = float(args.workspace_radius)
-    position_targets = x_positions_from_safe_radius(r, step_m=args.x_step_m)
     tilt_degs = list(DEFAULT_TILT_CALIB_DEGS)
+    tilt_rads = tilt_degs_to_rads(tilt_degs)
+    n_tilt = len(tilt_rads)
 
-    samples = build_samples(args, init_state, position_targets, tilt_degs)
+    ax_samples = AX_Samples(ax_pos_rad=list(tilt_rads), s_px=[0.0] + [None] * (n_tilt - 1))
+    ay_samples = AY_Samples(ay_pos_rad=list(tilt_rads), s_px=[0.0] + [None] * (n_tilt - 1))
 
-    stages: list[Stage] = [
-        XStage("X", "x", 0, 0, cam_model, samples.x),
-        YStage("Y", "y", 1, 1, cam_model, samples.y),
-        AXStage(cam_model, samples.ax, args.mask_y_cam1),
-        AYStage(cam_model, samples.ay, args.mask_y_cam2),
-    ]
+    if args.v2:
+        positions = xy_grid_positions(args.workspace_radius, args.grid_step)
+        if len(positions) < 3:
+            raise SystemExit(
+                f"Grid too coarse: only {len(positions)} points within radius "
+                f"{args.workspace_radius}m at step {args.grid_step}m. Need at least 3."
+            )
+        print(f"v2 mode: {len(positions)} grid points at step={args.grid_step}m")
+        grid = XY_Grid_Samples(
+            positions=positions,
+            b1_px=[None] * len(positions),
+            b2_px=[None] * len(positions),
+            mask_y_cam1=args.mask_y_cam1,
+            mask_y_cam2=args.mask_y_cam2,
+        )
+        stages: list[Stage] = [
+            XYGridCam1Stage(cam_model, grid),
+            XYGridCam2Stage(cam_model, grid),
+            AXStage(cam_model, ax_samples, args.mask_y_cam1),
+            AYStage(cam_model, ay_samples, args.mask_y_cam2),
+        ]
+    else:
+        init_state = ManualLineState(slope_px=0.0, x_at_mask_px=DAVIS346_WIDTH / 2)
+        r = float(args.workspace_radius)
+        position_targets = x_positions_from_safe_radius(r, step_m=args.x_step_m)
+        samples = build_samples(args, init_state, position_targets, tilt_degs)
+        stages = [
+            XStage("X", "x", 0, 0, cam_model, samples.x),
+            YStage("Y", "y", 1, 1, cam_model, samples.y),
+            AXStage(cam_model, samples.ax, args.mask_y_cam1),
+            AYStage(cam_model, samples.ay, args.mask_y_cam2),
+        ]
 
     calibrator = Calibrator(
         stages=stages,
@@ -644,29 +826,53 @@ def main():
         if success:
             print("Calibration complete")
             try:
-                x1, xp, x2, yp, s1, axr, s2, ayr = _affine_sample_arrays(samples)
-                save_affine_v1_calibration(
-                    args.output,
-                    mask_y_cam1=args.mask_y_cam1,
-                    mask_y_cam2=args.mask_y_cam2,
-                    x_at_mask_px_cam1=x1,
-                    x_pos_m=xp,
-                    x_at_mask_px_cam2=x2,
-                    y_pos_m=yp,
-                    slope_px_cam1=s1,
-                    alpha_x_rad=axr,
-                    slope_px_cam2=s2,
-                    alpha_y_rad=ayr,
-                    metadata={
-                        "workspace_radius_m": float(args.workspace_radius),
-                        "x_step_m": float(args.x_step_m),
-                        "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
-                        "source": "simple_dvs_regression_calibrator",
-                    },
-                )
+                if args.v2:
+                    positions_out, b1, b2, s_ax, axr, s_ay, ayr = _v2_sample_arrays(
+                        grid, ax_samples, ay_samples
+                    )
+                    save_bilinear_v2_calibration(
+                        args.output,
+                        mask_y_cam1=args.mask_y_cam1,
+                        mask_y_cam2=args.mask_y_cam2,
+                        positions=positions_out,
+                        b1_px=b1,
+                        b2_px=b2,
+                        slope_px_cam1=s_ax,
+                        alpha_x_rad=axr,
+                        slope_px_cam2=s_ay,
+                        alpha_y_rad=ayr,
+                        metadata={
+                            "workspace_radius_m": float(args.workspace_radius),
+                            "grid_step_m": float(args.grid_step),
+                            "n_grid_points": len(positions_out),
+                            "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
+                            "source": "simple_dvs_regression_calibrator_v2",
+                        },
+                    )
+                else:
+                    x1, xp, x2, yp, s1, axr, s2, ayr = _affine_sample_arrays(samples)
+                    save_affine_v1_calibration(
+                        args.output,
+                        mask_y_cam1=args.mask_y_cam1,
+                        mask_y_cam2=args.mask_y_cam2,
+                        x_at_mask_px_cam1=x1,
+                        x_pos_m=xp,
+                        x_at_mask_px_cam2=x2,
+                        y_pos_m=yp,
+                        slope_px_cam1=s1,
+                        alpha_x_rad=axr,
+                        slope_px_cam2=s2,
+                        alpha_y_rad=ayr,
+                        metadata={
+                            "workspace_radius_m": float(args.workspace_radius),
+                            "x_step_m": float(args.x_step_m),
+                            "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
+                            "source": "simple_dvs_regression_calibrator",
+                        },
+                    )
             except ValueError as e:
-                raise SystemExit(f"Affine save failed: {e}") from e
-            print(f"Saved affine model to {args.output}")
+                raise SystemExit(f"Calibration save failed: {e}") from e
+            print(f"Saved {'v2 bilinear' if args.v2 else 'v1 affine'} model to {args.output}")
     finally:
         reader1.close()
         reader2.close()

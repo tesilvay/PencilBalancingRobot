@@ -8,7 +8,12 @@ Two artifact kinds:
    ``save_affine_v1_calibration`` after interactive calibration; loaded at runtime via
    ``load``.
 
-2) **Calibration dataset** (`hardware/.../dvs_calibration_dataset.json`): staged b1/b2/s1/s2
+2) **Bilinear** (`model_type: simple_dvs_regression_v2`): joint bilinear position model
+   using both cameras' intercepts to correct for perspective cross-coupling.
+   Position: px = a0 + a1*b1 + a2*b2, py = c0 + c1*b2 + c2*b1.
+   Tilt uses same per-camera affine as v1. Written by ``save_bilinear_v2_calibration``.
+
+3) **Calibration dataset** (`hardware/.../dvs_calibration_dataset.json`): staged b1/b2/s1/s2
    tables; runtime uses four 1D linear interpolations after converting camnorm lines to pixels.
 
 Public estimate API: ``estimate(cams: CameraPair)`` — pixel-space observations per camera;
@@ -50,6 +55,31 @@ class SimpleDVSCameraCalibration:
         pos = self.k_pos * x_at_mask + self.b_pos
         alpha = self.k_alpha * s_px + self.b_alpha
         return pos, alpha
+
+
+@dataclass(frozen=True)
+class SimpleDVSV2PositionCalibration:
+    """
+    Bilinear position model using both cameras jointly.
+
+    Corrects perspective cross-coupling: when the pencil is off-axis, each camera's
+    intercept is distorted by the perpendicular offset. The cross-terms (a2, c2) capture
+    this predictable shift so position is accurate across the full 2D workspace.
+
+      px = a0 + a1*b1 + a2*b2
+      py = c0 + c1*b2 + c2*b1
+    """
+    a0: float  # px intercept
+    a1: float  # px: cam1 (own) coefficient
+    a2: float  # px: cam2 (cross) coefficient
+    c0: float  # py intercept
+    c1: float  # py: cam2 (own) coefficient
+    c2: float  # py: cam1 (cross) coefficient
+
+    def estimate_position(self, b1: float, b2: float) -> tuple[float, float]:
+        px = self.a0 + self.a1 * b1 + self.a2 * b2
+        py = self.c0 + self.c1 * b2 + self.c2 * b1
+        return px, py
 
 
 def _prepare_interp_table(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -110,11 +140,16 @@ def _clamp_measurement(
 @dataclass(frozen=True)
 class SimpleDVSRegressionModel:
     """
-    Affine calibration (cam1/cam2) **or** dataset interpolation tables — mutually exclusive.
+    Affine calibration (cam1/cam2), bilinear v2, or dataset interpolation tables.
 
     Conventions:
     - cam1 estimates X and alpha_x
     - cam2 estimates Y and alpha_y
+
+    Modes (mutually exclusive):
+    - v1 affine: cam1 + cam2 set, pos_v2 is None
+    - v2 bilinear: cam1 + cam2 set (tilt only), pos_v2 set
+    - dataset: interp_X/Y/alpha_x/alpha_y set, cam1/cam2/pos_v2 are None
     """
 
     mask_y_cam1: int
@@ -122,9 +157,12 @@ class SimpleDVSRegressionModel:
     metadata: Dict[str, Any] | None = None
     max_tilt_rad: float = _SIMPLEDVS_MAX_TILT_RAD
 
-    # Affine mode (legacy v1)
+    # Affine mode (v1) or tilt-only for v2
     cam1: SimpleDVSCameraCalibration | None = None
     cam2: SimpleDVSCameraCalibration | None = None
+
+    # Bilinear position correction (v2); requires cam1+cam2 for tilt
+    pos_v2: SimpleDVSV2PositionCalibration | None = None
 
     # Dataset mode: each is (xp, fp) sorted for np.interp
     interp_X: tuple[np.ndarray, np.ndarray] | None = None  # x_at_mask cam1 -> X [m]
@@ -140,12 +178,25 @@ class SimpleDVSRegressionModel:
             and self.interp_alpha_x is not None
             and self.interp_alpha_y is not None
         )
-        if has_affine == has_ds:
+        if self.pos_v2 is not None:
+            if not has_affine:
+                raise ValueError("v2 bilinear mode requires cam1 and cam2 (for tilt estimation)")
+        elif has_affine == has_ds:
             raise ValueError("Set exactly one of: (cam1, cam2) affine pair or full dataset tables")
 
     def estimate(self, cams: CameraPair) -> Measurement:
         obs1_px = cams.cam1
         obs2_px = cams.cam2
+
+        if self.pos_v2 is not None:
+            b1 = float(line_x_at_pixel_y(obs1_px, float(self.mask_y_cam1)))
+            b2 = float(line_x_at_pixel_y(obs2_px, float(self.mask_y_cam2)))
+            X, Y = self.pos_v2.estimate_position(b1, b2)
+            alpha_x = self.cam1.k_alpha * float(obs1_px.slope) + self.cam1.b_alpha  # type: ignore[union-attr]
+            alpha_y = self.cam2.k_alpha * float(obs2_px.slope) + self.cam2.b_alpha  # type: ignore[union-attr]
+            raw = Measurement(px=float(X), py=float(Y), ax=float(alpha_x), ay=float(alpha_y))
+            return _clamp_measurement(raw, self.metadata, self.max_tilt_rad)
+
         if self.cam1 is not None and self.cam2 is not None:
             X, alpha_x = self.cam1.estimate_axis(obs1_px, mask_y=int(self.mask_y_cam1))
             Y, alpha_y = self.cam2.estimate_axis(obs2_px, mask_y=int(self.mask_y_cam2))
@@ -170,27 +221,46 @@ class SimpleDVSRegressionModel:
         return _clamp_measurement(raw, self.metadata, self.max_tilt_rad)
 
     # ------------------------------------------------------------
-    # Serialization (affine only)
+    # Serialization
     # ------------------------------------------------------------
     def to_dict(self) -> Dict[str, Any]:
         if self.cam1 is None or self.cam2 is None:
-            raise TypeError("to_dict() is only supported for affine (v1) models")
+            raise TypeError("to_dict() is only supported for affine (v1/v2) models")
+        cam1_dict = {
+            "k_pos": float(self.cam1.k_pos),
+            "b_pos": float(self.cam1.b_pos),
+            "k_alpha": float(self.cam1.k_alpha),
+            "b_alpha": float(self.cam1.b_alpha),
+        }
+        cam2_dict = {
+            "k_pos": float(self.cam2.k_pos),
+            "b_pos": float(self.cam2.b_pos),
+            "k_alpha": float(self.cam2.k_alpha),
+            "b_alpha": float(self.cam2.b_alpha),
+        }
+        if self.pos_v2 is not None:
+            return {
+                "model_type": "simple_dvs_regression_v2",
+                "mask_y_cam1": int(self.mask_y_cam1),
+                "mask_y_cam2": int(self.mask_y_cam2),
+                "pos_v2": {
+                    "a0": float(self.pos_v2.a0),
+                    "a1": float(self.pos_v2.a1),
+                    "a2": float(self.pos_v2.a2),
+                    "c0": float(self.pos_v2.c0),
+                    "c1": float(self.pos_v2.c1),
+                    "c2": float(self.pos_v2.c2),
+                },
+                "cam1": cam1_dict,
+                "cam2": cam2_dict,
+                "metadata": dict(self.metadata or {}),
+            }
         return {
             "model_type": "simple_dvs_regression_v1",
             "mask_y_cam1": int(self.mask_y_cam1),
             "mask_y_cam2": int(self.mask_y_cam2),
-            "cam1": {
-                "k_pos": float(self.cam1.k_pos),
-                "b_pos": float(self.cam1.b_pos),
-                "k_alpha": float(self.cam1.k_alpha),
-                "b_alpha": float(self.cam1.b_alpha),
-            },
-            "cam2": {
-                "k_pos": float(self.cam2.k_pos),
-                "b_pos": float(self.cam2.b_pos),
-                "k_alpha": float(self.cam2.k_alpha),
-                "b_alpha": float(self.cam2.b_alpha),
-            },
+            "cam1": cam1_dict,
+            "cam2": cam2_dict,
             "metadata": dict(self.metadata or {}),
         }
 
@@ -238,11 +308,42 @@ class SimpleDVSRegressionModel:
                 ),
             )
 
+        if data.get("model_type") == "simple_dvs_regression_v2":
+            cam1 = data["cam1"]
+            cam2 = data["cam2"]
+            pv2 = data["pos_v2"]
+            return cls(
+                mask_y_cam1=int(data["mask_y_cam1"]),
+                mask_y_cam2=int(data["mask_y_cam2"]),
+                metadata=data.get("metadata") or {},
+                max_tilt_rad=max_tilt_rad,
+                cam1=SimpleDVSCameraCalibration(
+                    k_pos=float(cam1["k_pos"]),
+                    b_pos=float(cam1["b_pos"]),
+                    k_alpha=float(cam1["k_alpha"]),
+                    b_alpha=float(cam1["b_alpha"]),
+                ),
+                cam2=SimpleDVSCameraCalibration(
+                    k_pos=float(cam2["k_pos"]),
+                    b_pos=float(cam2["b_pos"]),
+                    k_alpha=float(cam2["k_alpha"]),
+                    b_alpha=float(cam2["b_alpha"]),
+                ),
+                pos_v2=SimpleDVSV2PositionCalibration(
+                    a0=float(pv2["a0"]),
+                    a1=float(pv2["a1"]),
+                    a2=float(pv2["a2"]),
+                    c0=float(pv2["c0"]),
+                    c1=float(pv2["c1"]),
+                    c2=float(pv2["c2"]),
+                ),
+            )
+
         if "stages" in data and all(k in data for k in ("b1", "b2", "s1", "s2")):
             return cls._from_calibration_dataset_dict(data, max_tilt_rad=max_tilt_rad)
 
         raise ValueError(
-            f"Unrecognized JSON in {path}: expected simple_dvs_regression_v1 or "
+            f"Unrecognized JSON in {path}: expected simple_dvs_regression_v1/v2 or "
             f"calibration dataset with stages b1/b2/s1/s2"
         )
 
@@ -357,5 +458,80 @@ def save_affine_v1_calibration(
         metadata=dict(metadata or {}),
         cam1=SimpleDVSCameraCalibration(k_pos=k1p, b_pos=b1p, k_alpha=k1a, b_alpha=b1a),
         cam2=SimpleDVSCameraCalibration(k_pos=k2p, b_pos=b2p, k_alpha=k2a, b_alpha=b2a),
+    )
+    model.save(path)
+
+
+def save_bilinear_v2_calibration(
+    path: str | Path,
+    *,
+    mask_y_cam1: int,
+    mask_y_cam2: int,
+    positions: Sequence[tuple[float, float]],
+    b1_px: Sequence[float],
+    b2_px: Sequence[float],
+    slope_px_cam1: Sequence[float],
+    alpha_x_rad: Sequence[float],
+    slope_px_cam2: Sequence[float],
+    alpha_y_rad: Sequence[float],
+    metadata: Dict[str, Any] | None = None,
+) -> None:
+    """
+    Fit bilinear position model and affine tilt maps, write ``simple_dvs_regression_v2`` JSON.
+
+    Position model uses both cameras' intercepts jointly:
+      px = a0 + a1*b1 + a2*b2
+      py = c0 + c1*b2 + c2*b1
+
+    Requires at least 3 grid points (for a well-determined 3-parameter fit); recommend 9+.
+    """
+    pos_arr = np.asarray(positions, dtype=float)
+    b1_arr = np.asarray(b1_px, dtype=float).reshape(-1)
+    b2_arr = np.asarray(b2_px, dtype=float).reshape(-1)
+
+    n = len(b1_arr)
+    if len(b2_arr) != n or len(pos_arr) != n:
+        raise ValueError("positions, b1_px, b2_px must all have the same length")
+    if n < 3:
+        raise ValueError("Need at least 3 grid samples to fit bilinear position model")
+    if not np.all(np.isfinite(b1_arr)) or not np.all(np.isfinite(b2_arr)):
+        raise ValueError("All b1_px and b2_px values must be finite")
+
+    px_m = pos_arr[:, 0]
+    py_m = pos_arr[:, 1]
+
+    # Design matrix columns: [1, b1, b2]
+    # lstsq result layout: [intercept, coeff_of_b1, coeff_of_b2]
+    A = np.column_stack([np.ones(n), b1_arr, b2_arr])
+    px_coeffs, *_ = np.linalg.lstsq(A, px_m, rcond=None)
+    py_coeffs, *_ = np.linalg.lstsq(A, py_m, rcond=None)
+
+    # px = a0 + a1*b1 + a2*b2  (a1=own, a2=cross)
+    a0, a1, a2 = float(px_coeffs[0]), float(px_coeffs[1]), float(px_coeffs[2])
+    # py = c0 + c1*b2 + c2*b1  (c1=own, c2=cross)  → swap b1/b2 coeffs
+    c0 = float(py_coeffs[0])
+    c1 = float(py_coeffs[2])  # coeff of b2 (col 2) → c1 (cam2 own)
+    c2 = float(py_coeffs[1])  # coeff of b1 (col 1) → c2 (cam1 cross)
+
+    s1 = np.asarray(slope_px_cam1, dtype=float).reshape(-1)
+    ax = np.asarray(alpha_x_rad, dtype=float).reshape(-1)
+    s2 = np.asarray(slope_px_cam2, dtype=float).reshape(-1)
+    ay = np.asarray(alpha_y_rad, dtype=float).reshape(-1)
+
+    k1a, b1a = _fit_affine_ls(s1, ax)
+    k2a, b2a = _fit_affine_ls(s2, ay)
+
+    # k_pos/b_pos are set to the on-axis affine approximation (b2=0 → py ≈ c0 + c2*b1)
+    # kept for reference but unused in v2 position estimation
+    model = SimpleDVSRegressionModel(
+        mask_y_cam1=int(mask_y_cam1),
+        mask_y_cam2=int(mask_y_cam2),
+        metadata=dict(metadata or {}),
+        cam1=SimpleDVSCameraCalibration(k_pos=float(a1), b_pos=float(a0), k_alpha=k1a, b_alpha=b1a),
+        cam2=SimpleDVSCameraCalibration(k_pos=float(c1), b_pos=float(c0), k_alpha=k2a, b_alpha=b2a),
+        pos_v2=SimpleDVSV2PositionCalibration(
+            a0=float(a0), a1=float(a1), a2=float(a2),
+            c0=float(c0), c1=c1, c2=c2,
+        ),
     )
     model.save(path)
