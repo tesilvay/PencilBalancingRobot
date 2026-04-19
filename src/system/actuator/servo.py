@@ -15,7 +15,7 @@ class ServoParams:
 
 SERVO_PRESETS = {
     "default": {
-        "mechanism": "five_bar:default",
+        "mechanism": "five_bar_tps:default",
         "port":      "/dev/ttyUSB0",
         "baud":      115200,
         "frequency": 333.0,

@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from src.system.actuator.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from src.shared import (
     State,
     Measurement,
@@ -121,7 +120,6 @@ class System:
         self.fall_pos_threshold_m = float(params.fall_pos_threshold_m)
         self._fall_detected = False
         self._fall_timer_s = 0.0
-        self._startup_calibration_done = False
         self._perf_tip_history: list[np.ndarray] = []
         self._perf_tip_ref_history: list[np.ndarray] = []
         self._perf_orientation_history: list[np.ndarray] = []
@@ -138,23 +136,6 @@ class System:
     @property
     def is_simulation(self) -> bool:
         return True
-
-    def _maybe_run_startup_calibration(self) -> None:
-        if self._startup_calibration_done:
-            return
-
-        mechanism = getattr(self.actuator, "mechanism", None)
-        serial_handle = getattr(self.actuator, "_serial", None)
-        if mechanism is None or serial_handle is None:
-            self._startup_calibration_done = True
-            return
-
-        calibrate_servo_workspace_offset(
-            system=self,
-            actuator=self.actuator,
-            workspace=self.workspace,
-        )
-        self._startup_calibration_done = True
 
     def _offset_from_state(self, x_true: State) -> np.ndarray:
         return np.array(
@@ -776,7 +757,6 @@ class System:
         self.i += 1
 
     def reset(self):
-        self._maybe_run_startup_calibration()
         self.active_plant = self.plants[0]
         self.active_controller = self.controllers[0]
         self.active_estimator = self.estimators[0]

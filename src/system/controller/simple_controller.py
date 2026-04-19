@@ -17,8 +17,8 @@ class SimpleControllerParams:
 
 SIMPLE_CONTROLLER_PRESETS = {
     "default": {
-        "g_p": 1.45,
-        "g_a": 0.32,
+        "g_p": 1.35,
+        "g_a": 0.29,
         "g_d": 0.0,
     },
     "pos": {

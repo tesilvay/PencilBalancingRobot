@@ -3,7 +3,6 @@ import time
 
 import numpy as np
 from .system import System
-from src.system.actuator.servo_workspace_offset_calibrator import calibrate_servo_workspace_offset
 from src.shared import (
     State,
     Measurement,
@@ -227,7 +226,6 @@ class RealSystem(System):
         )
 
     def reset(self):
-        self._maybe_run_startup_calibration()
         self.active_plant = self.plants[0]
         self.active_controller = self.controllers[0]
         self.active_estimator = self.estimators[0]
