@@ -273,10 +273,10 @@ class MechanismTPS:
         self._mech = FiveBarMechanism(tf, la=params.la, lb=params.lb)
         self.workspace_offset = (0.0, 0.0)
         self.calibration_path = self._resolve_calibration_path(params.calibration_file)
-        self._rbf_theta1 = None
-        self._rbf_theta4 = None
+        self._interp_theta1 = None
+        self._interp_theta4 = None
         self._calibration_xy = None
-        self._workspace_radius = 0.07
+        self._half_side = 0.07
         self.load_calibration()
 
     @property
@@ -300,7 +300,7 @@ class MechanismTPS:
             return False
 
         import json
-        from scipy.interpolate import RBFInterpolator
+        from scipy.interpolate import LinearNDInterpolator
 
         data = json.loads(self.calibration_path.read_text(encoding="utf-8"))
         if data.get("version") != "v1_tps_actuator":
@@ -311,10 +311,10 @@ class MechanismTPS:
         theta1     = np.array([p["theta1_deg"]   for p in points], dtype=float)
         theta4     = np.array([p["theta4_deg"]   for p in points], dtype=float)
 
-        self._rbf_theta1 = RBFInterpolator(desired_xy, theta1, kernel="thin_plate_spline")
-        self._rbf_theta4 = RBFInterpolator(desired_xy, theta4, kernel="thin_plate_spline")
+        self._interp_theta1 = LinearNDInterpolator(desired_xy, theta1)
+        self._interp_theta4 = LinearNDInterpolator(desired_xy, theta4)
         self._calibration_xy = desired_xy
-        self._workspace_radius = float(data.get("workspace_radius_m", 0.07))
+        self._half_side = float(data.get("workspace_half_side_m", 0.07))
         return True
 
     def _fk_ik_solve(
@@ -338,17 +338,18 @@ class MechanismTPS:
         x = float(command.px_cmd) + self.workspace_offset[0]
         y = float(command.py_cmd) + self.workspace_offset[1]
 
-        if self._rbf_theta1 is None:
+        if self._interp_theta1 is None:
             return self._fk_ik_solve(x, y)
 
-        r = float(np.hypot(x, y))
-        if r > self._workspace_radius:
-            scale = self._workspace_radius / r
-            x, y = x * scale, y * scale
+        x = float(np.clip(x, -self._half_side, self._half_side))
+        y = float(np.clip(y, -self._half_side, self._half_side))
 
         pt = np.array([[x, y]])
-        theta1_deg = float(self._rbf_theta1(pt)[0])
-        theta4_deg = float(self._rbf_theta4(pt)[0])
+        theta1_deg = float(self._interp_theta1(pt)[0])
+        theta4_deg = float(self._interp_theta4(pt)[0])
+
+        if np.isnan(theta1_deg) or np.isnan(theta4_deg):
+            return self._fk_ik_solve(x, y)
 
         A_l, C_l, P1_l, P2_l = self._mech.fk(
             np.deg2rad(theta1_deg), np.deg2rad(theta4_deg)

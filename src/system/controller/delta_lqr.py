@@ -83,21 +83,21 @@ DELTA_LQR_PRESETS = {
         # Tilt feedforward: slow I-term on position error -> injected into u
         # Units: [actuator_units / (m * s)] — tune this carefully,
         # start very small and increase until you see compensation
-        "tilt_ff_ki": 1.0,
+        "tilt_ff_ki": 0.0,
         "max_tilt_ff": 5.0e-2,
     },
     "gentle": {
         "base": "default",
-        "r_delta_u": 1050,
+        "r_delta_u": 850,
     },
     "strong": {
         "base": "default",
-        "q_pos": 20.0,
-        "q_vel": 0.1,
-        "q_tilt": 1.0,
-        "q_tilt_rate": 0.1,
+        "q_pos": 5.0,
+        "q_vel": 0.0,
+        "q_tilt": 3.0,
+        "q_tilt_rate": 0.0,
         "max_delta_u": 8.0e-3,
-        "r_delta_u": 50,
+        "r_delta_u": 100,
     },
 }
 

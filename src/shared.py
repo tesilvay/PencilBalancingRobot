@@ -477,8 +477,8 @@ CAMERA_PRESETS = {
         "yr": -150,
         "y_mask_top_line_1": 30,
         "y_mask_top_line_2": 70,
-        "y_mask_line_1":   160,
-        "y_mask_line_2":   150,
+        "y_mask_line_1":   162, #160
+        "y_mask_line_2":   170, #150
         "DAVIS346_WIDTH":  346,
         "DAVIS346_HEIGHT": 260,
     },

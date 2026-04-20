@@ -241,7 +241,6 @@ class Samples:
 
 def build_samples(args, init_state, position_targets, tilt_degs, existing_model=None):
     tilt_rads = tilt_degs_to_rads(tilt_degs)
-    n_tilt = len(tilt_rads)
 
     # Pre-fill pixel intercept predictions from the existing model for each position.
     # v1 X stage sweeps along x with y=0; Y stage sweeps along y with x=0.
@@ -267,11 +266,11 @@ def build_samples(args, init_state, position_targets, tilt_degs, existing_model=
         ),
         ax=AX_Samples(
             ax_pos_rad=list(tilt_rads),
-            s_px=[init_state.slope_px] + [None] * (n_tilt - 1),
+            s_px=[_predict_tilt_slopes(existing_model, r)[0] for r in tilt_rads],
         ),
         ay=AY_Samples(
             ay_pos_rad=list(tilt_rads),
-            s_px=[init_state.slope_px] + [None] * (n_tilt - 1),
+            s_px=[_predict_tilt_slopes(existing_model, r)[1] for r in tilt_rads],
         ),
     )
 
@@ -1172,81 +1171,80 @@ def main():
 
     try:
         success = calibrator.run()
-        if success:
-            print("Calibration complete")
-            try:
-                if args.v3:
-                    positions_out, b1, b2, tilt_pos_out, tilt_alphas, s1, s2 = _v3_sample_arrays(
-                        grid, tilt_grid
-                    )
-                    save_tps_v3_calibration(
-                        args.output,
-                        mask_y_cam1=args.mask_y_cam1,
-                        mask_y_cam2=args.mask_y_cam2,
-                        positions=positions_out,
-                        b1_px=b1,
-                        b2_px=b2,
-                        tilt_positions=tilt_pos_out,
-                        tilt_alphas_rad=tilt_alphas,
-                        tilt_s_px_cam1=s1,
-                        tilt_s_px_cam2=s2,
-                        metadata={
-                            "workspace_radius_m": float(args.workspace_radius),
-                            "grid_step_m": float(args.grid_step_v3),
-                            "tilt_offset_m": float(args.tilt_offset_v3),
-                            "tilt_position_pattern": args.tilt_positions_v3,
-                            "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
-                            "source": "simple_dvs_regression_calibrator_v3",
-                        },
-                    )
-                elif args.v2:
-                    positions_out, b1, b2, s_ax, axr, s_ay, ayr = _v2_sample_arrays(
-                        grid, ax_samples, ay_samples
-                    )
-                    save_bilinear_v2_calibration(
-                        args.output,
-                        mask_y_cam1=args.mask_y_cam1,
-                        mask_y_cam2=args.mask_y_cam2,
-                        positions=positions_out,
-                        b1_px=b1,
-                        b2_px=b2,
-                        slope_px_cam1=s_ax,
-                        alpha_x_rad=axr,
-                        slope_px_cam2=s_ay,
-                        alpha_y_rad=ayr,
-                        metadata={
-                            "workspace_radius_m": float(args.workspace_radius),
-                            "grid_step_m": float(args.grid_step),
-                            "n_grid_points": len(positions_out),
-                            "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
-                            "source": "simple_dvs_regression_calibrator_v2",
-                        },
-                    )
-                else:
-                    x1, xp, x2, yp, s1, axr, s2, ayr = _affine_sample_arrays(samples)
-                    save_affine_v1_calibration(
-                        args.output,
-                        mask_y_cam1=args.mask_y_cam1,
-                        mask_y_cam2=args.mask_y_cam2,
-                        x_at_mask_px_cam1=x1,
-                        x_pos_m=xp,
-                        x_at_mask_px_cam2=x2,
-                        y_pos_m=yp,
-                        slope_px_cam1=s1,
-                        alpha_x_rad=axr,
-                        slope_px_cam2=s2,
-                        alpha_y_rad=ayr,
-                        metadata={
-                            "workspace_radius_m": float(args.workspace_radius),
-                            "x_step_m": float(args.x_step_m),
-                            "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
-                            "source": "simple_dvs_regression_calibrator",
-                        },
-                    )
-            except ValueError as e:
-                raise SystemExit(f"Calibration save failed: {e}") from e
-            mode_str = "v3 TPS" if args.v3 else ("v2 bilinear" if args.v2 else "v1 affine")
-            print(f"Saved {mode_str} model to {args.output}")
+        print("Calibration complete." if success else "Calibration interrupted — saving progress so far.")
+        try:
+            if args.v3:
+                positions_out, b1, b2, tilt_pos_out, tilt_alphas, s1, s2 = _v3_sample_arrays(
+                    grid, tilt_grid
+                )
+                save_tps_v3_calibration(
+                    args.output,
+                    mask_y_cam1=args.mask_y_cam1,
+                    mask_y_cam2=args.mask_y_cam2,
+                    positions=positions_out,
+                    b1_px=b1,
+                    b2_px=b2,
+                    tilt_positions=tilt_pos_out,
+                    tilt_alphas_rad=tilt_alphas,
+                    tilt_s_px_cam1=s1,
+                    tilt_s_px_cam2=s2,
+                    metadata={
+                        "workspace_radius_m": float(args.workspace_radius),
+                        "grid_step_m": float(args.grid_step_v3),
+                        "tilt_offset_m": float(args.tilt_offset_v3),
+                        "tilt_position_pattern": args.tilt_positions_v3,
+                        "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
+                        "source": "simple_dvs_regression_calibrator_v3",
+                    },
+                )
+            elif args.v2:
+                positions_out, b1, b2, s_ax, axr, s_ay, ayr = _v2_sample_arrays(
+                    grid, ax_samples, ay_samples
+                )
+                save_bilinear_v2_calibration(
+                    args.output,
+                    mask_y_cam1=args.mask_y_cam1,
+                    mask_y_cam2=args.mask_y_cam2,
+                    positions=positions_out,
+                    b1_px=b1,
+                    b2_px=b2,
+                    slope_px_cam1=s_ax,
+                    alpha_x_rad=axr,
+                    slope_px_cam2=s_ay,
+                    alpha_y_rad=ayr,
+                    metadata={
+                        "workspace_radius_m": float(args.workspace_radius),
+                        "grid_step_m": float(args.grid_step),
+                        "n_grid_points": len(positions_out),
+                        "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
+                        "source": "simple_dvs_regression_calibrator_v2",
+                    },
+                )
+            else:
+                x1, xp, x2, yp, s1, axr, s2, ayr = _affine_sample_arrays(samples)
+                save_affine_v1_calibration(
+                    args.output,
+                    mask_y_cam1=args.mask_y_cam1,
+                    mask_y_cam2=args.mask_y_cam2,
+                    x_at_mask_px_cam1=x1,
+                    x_pos_m=xp,
+                    x_at_mask_px_cam2=x2,
+                    y_pos_m=yp,
+                    slope_px_cam1=s1,
+                    alpha_x_rad=axr,
+                    slope_px_cam2=s2,
+                    alpha_y_rad=ayr,
+                    metadata={
+                        "workspace_radius_m": float(args.workspace_radius),
+                        "x_step_m": float(args.x_step_m),
+                        "tilt_grid_deg": list(DEFAULT_TILT_CALIB_DEGS),
+                        "source": "simple_dvs_regression_calibrator",
+                    },
+                )
+        except ValueError as e:
+            raise SystemExit(f"Calibration save failed: {e}") from e
+        mode_str = "v3 TPS" if args.v3 else ("v2 bilinear" if args.v2 else "v1 affine")
+        print(f"Saved {mode_str} model to {args.output}")
     finally:
         reader1.close()
         reader2.close()
