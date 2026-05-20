@@ -19,7 +19,7 @@ EXPERIMENT_PRESETS = {
         "scheduler":           "realtime:default",
         "n_trials":            1,
     },
-    "new_sim": {
+    "sim_accel": {
         "base": "sim",
         "system":"default:new_sim",
         "stop_condition":  "max_steps:default",
@@ -82,6 +82,18 @@ EXPERIMENT_PRESETS = {
     "real_supervised_dynamic": {
         "base":   "real_vision",
         "system": "real:real_dynamic_supervised",
+    },
+    "best_real": {
+        "system":              "real:best_real",
+        
+        "stop_condition":      "infinite:default",
+        "realtime_visualizer": "real_ws:default",
+        "offline_visualizer":  "null:default",
+        "pacing":              "realtime:default",
+        "logger":              "default:default",
+        "progress":            "default:default",
+        "scheduler":           "realtime:default",
+        "n_trials":            1,
     },
 }
 

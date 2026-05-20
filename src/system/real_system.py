@@ -83,6 +83,16 @@ REAL_SYSTEM_PRESETS = {
         "plants": ["placing:angle_only", "placing:angle_only"],
         "controllers": ["null:default", "accel_pole:default"],
     },
+    "best_real": {
+        "plants": ["placing:angle_only", "placing:angle_only"],
+        "sensor":     "real_dvs:hough",
+        "actuator":   "servo:default",
+        "supervisor": "real:default",
+        "gain_schedule": "null:default",
+        
+        "controllers": ["null:default", "delta_lqr:default"],
+        "estimators":  ["kalman:default"],
+    },
 }
 
 
